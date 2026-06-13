@@ -2,8 +2,13 @@ import { Search, Bell, ChevronDown, Plus } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { useUser } from '@clerk/react'
+import { useNavigate } from 'react-router-dom'
 
 export const Topbar = () => {
+  const { user } = useUser()
+  const navigate = useNavigate()
+
   return (
     <header className="h-16 glass-morphism border-b flex items-center justify-between px-8 z-40">
       <div className="flex-1 max-w-xl">
@@ -17,7 +22,7 @@ export const Topbar = () => {
       </div>
 
       <div className="flex items-center gap-4">
-        <Button className="hidden md:flex items-center gap-2">
+        <Button className="hidden md:flex items-center gap-2" onClick={() => navigate('/compose')}>
           <Plus className="w-4 h-4" />
           Quick Compose
         </Button>
@@ -31,12 +36,12 @@ export const Topbar = () => {
 
         <div className="flex items-center gap-3 pl-4 border-l border-white/10">
           <Avatar className="w-8 h-8 border border-white/20">
-            <AvatarImage src="https://github.com/shadcn.png" />
-            <AvatarFallback>AA</AvatarFallback>
+            <AvatarImage src={user?.imageUrl} />
+            <AvatarFallback>{user?.firstName?.[0] || 'U'}</AvatarFallback>
           </Avatar>
           <div className="hidden lg:block text-left">
-            <p className="text-xs font-semibold text-white">Aditya Anand</p>
-            <p className="text-[10px] text-muted-foreground">Admin</p>
+            <p className="text-xs font-semibold text-white truncate max-w-[100px]">{user?.fullName || user?.username || 'User'}</p>
+            <p className="text-[10px] text-muted-foreground">Workspace Admin</p>
           </div>
           <ChevronDown className="w-4 h-4 text-muted-foreground" />
         </div>

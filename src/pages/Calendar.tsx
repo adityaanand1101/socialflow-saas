@@ -23,10 +23,12 @@ import {
 import { Instagram, Linkedin, Twitter } from '@/components/icons'
 import { cn } from '@/lib/utils'
 import { useStore } from '@/store/useStore'
+import { useAuth } from '@clerk/react'
 
 export const Calendar = () => {
   const [currentMonth, setCurrentMonth] = useState(new Date())
-  const { posts } = useStore()
+  const { posts, updatePost } = useStore()
+  const { getToken } = useAuth()
 
   const monthStart = startOfMonth(currentMonth)
   const monthEnd = endOfMonth(monthStart)
@@ -40,6 +42,38 @@ export const Calendar = () => {
 
   const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1))
   const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1))
+
+  const handleDragStart = (e: React.DragEvent, postId: string) => {
+    e.dataTransfer.setData('postId', postId)
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault() // Required to allow drop
+  }
+
+  const handleDrop = async (e: React.DragEvent, targetDate: Date) => {
+    e.preventDefault()
+    const postId = e.dataTransfer.getData('postId')
+    if (!postId) return
+
+    try {
+      const token = await getToken()
+      if (!token) return
+      
+      // Keep the same time of day but change the date
+      const post = posts.find(p => p.id === postId)
+      if (!post) return
+
+      const newDate = new Date(post.scheduledTime || post.scheduledAt || new Date())
+      newDate.setFullYear(targetDate.getFullYear())
+      newDate.setMonth(targetDate.getMonth())
+      newDate.setDate(targetDate.getDate())
+
+      await updatePost(token, postId, { scheduledTime: newDate.toISOString() })
+    } catch (error) {
+      console.error('Failed to reschedule post', error)
+    }
+  }
 
   return (
     <div className="space-y-6 h-full flex flex-col pb-10">
@@ -82,12 +116,15 @@ export const Calendar = () => {
 
           <div className="grid grid-cols-7 flex-1 min-h-[600px]">
             {calendarDays.map((day, i) => {
-              const dayPosts = posts.filter(p => isSameDay(new Date(p.scheduledTime), day))
+              // Note: handling both scheduledTime (mock schema) and scheduledAt (new backend schema)
+              const dayPosts = posts.filter(p => p.scheduledTime || (p as any).scheduledAt ? isSameDay(new Date(p.scheduledTime || (p as any).scheduledAt), day) : false)
               const isCurrentMonth = isSameMonth(day, monthStart)
               
               return (
                 <div 
                   key={i} 
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, day)}
                   className={cn(
                     "min-h-[120px] p-2 border-r border-b border-white/10 last:border-r-0 relative group transition-colors",
                     !isCurrentMonth ? "bg-black/20" : "hover:bg-white/5"
@@ -105,14 +142,16 @@ export const Calendar = () => {
                     {dayPosts.map((post) => (
                       <div 
                         key={post.id} 
-                        className="p-1 rounded bg-gradient-primary/20 border border-purple-500/30 flex items-center gap-1 cursor-pointer hover:bg-gradient-primary/30 transition-all"
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, post.id)}
+                        className="p-1 rounded bg-gradient-primary/20 border border-purple-500/30 flex items-center gap-1 cursor-grab hover:bg-gradient-primary/30 transition-all active:cursor-grabbing"
                       >
                          <div className="shrink-0">
-                            {post.platforms[0] === 'instagram' && <Instagram className="w-2.5 h-2.5 text-pink-400" />}
-                            {post.platforms[0] === 'linkedin' && <Linkedin className="w-2.5 h-2.5 text-blue-400" />}
-                            {post.platforms[0] === 'x' && <Twitter className="w-2.5 h-2.5 text-white" />}
+                            {post.platforms?.[0] === 'instagram' && <Instagram className="w-2.5 h-2.5 text-pink-400" />}
+                            {post.platforms?.[0] === 'linkedin' && <Linkedin className="w-2.5 h-2.5 text-blue-400" />}
+                            {post.platforms?.[0] === 'x' && <Twitter className="w-2.5 h-2.5 text-white" />}
                          </div>
-                         <span className="text-[10px] text-white truncate">{post.caption}</span>
+                         <span className="text-[10px] text-white truncate">{post.caption || (post as any).content}</span>
                       </div>
                     ))}
                   </div>

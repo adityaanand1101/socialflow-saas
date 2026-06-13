@@ -10,28 +10,16 @@ import {
   Filter, 
   ArrowUpRight, 
   ArrowDownRight,
+  TrendingUp,
 } from 'lucide-react'
-import { Instagram } from '@/components/icons'
 import { cn } from '@/lib/utils'
 
-const data = [
-  { name: 'May 01', instagram: 4000, linkedin: 2400, x: 2400 },
-  { name: 'May 02', instagram: 3000, linkedin: 1398, x: 2210 },
-  { name: 'May 03', instagram: 2000, linkedin: 9800, x: 2290 },
-  { name: 'May 04', instagram: 2780, linkedin: 3908, x: 2000 },
-  { name: 'May 05', instagram: 1890, linkedin: 4800, x: 2181 },
-  { name: 'May 06', instagram: 2390, linkedin: 3800, x: 2500 },
-  { name: 'May 07', instagram: 3490, linkedin: 4300, x: 2100 },
-]
+// Empty data for now until we have real analytics backend
+const data: any[] = []
 
 const COLORS = ['#E4405F', '#0A66C2', '#000000', '#FF0000']
 
-const pieData = [
-  { name: 'Instagram', value: 45 },
-  { name: 'LinkedIn', value: 30 },
-  { name: 'X', value: 15 },
-  { name: 'YouTube', value: 10 },
-]
+const pieData: any[] = []
 
 export const Analytics = () => {
   return (
@@ -46,7 +34,7 @@ export const Analytics = () => {
             <Filter className="w-4 h-4" />
             Filters
           </Button>
-          <Button variant="outline" className="gap-2">
+          <Button variant="outline" className="gap-2" disabled>
             <Download className="w-4 h-4" />
             Export PDF
           </Button>
@@ -56,11 +44,11 @@ export const Analytics = () => {
       {/* Analytics KPI Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
         {[
-          { label: 'Impressions', value: '4.2M', growth: '+22%', up: true },
-          { label: 'Engagements', value: '128K', growth: '+14%', up: true },
-          { label: 'Link Clicks', value: '12.4K', growth: '-3%', up: false },
-          { label: 'Shares', value: '8.2K', growth: '+42%', up: true },
-          { label: 'Net Followers', value: '+1,240', growth: '+5%', up: true },
+          { label: 'Impressions', value: '0', growth: '0%', up: true },
+          { label: 'Engagements', value: '0', growth: '0%', up: true },
+          { label: 'Link Clicks', value: '0', growth: '0%', up: true },
+          { label: 'Shares', value: '0', growth: '0%', up: true },
+          { label: 'Net Followers', value: '0', growth: '0%', up: true },
         ].map((item, i) => (
           <Card key={i} className="p-4 flex flex-col justify-between">
             <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">{item.label}</p>
@@ -86,25 +74,35 @@ export const Analytics = () => {
             <CardDescription>Multi-platform performance across the current period.</CardDescription>
           </CardHeader>
           <CardContent className="h-[400px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={data}>
-                <defs>
-                  <linearGradient id="colorInsta" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#E4405F" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#E4405F" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                <XAxis dataKey="name" tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 12 }} axisLine={false} tickLine={false} />
-                <Tooltip 
-                   contentStyle={{ backgroundColor: '#141218', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
-                   itemStyle={{ color: '#fff' }}
-                />
-                <Area type="monotone" dataKey="instagram" stroke="#E4405F" fillOpacity={1} fill="url(#colorInsta)" />
-                <Area type="monotone" dataKey="linkedin" stroke="#0A66C2" fillOpacity={0} />
-              </AreaChart>
-            </ResponsiveContainer>
+            {data.length === 0 ? (
+              <div className="w-full h-full flex flex-col items-center justify-center text-center">
+                <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-4">
+                  <TrendingUp className="w-6 h-6 text-muted-foreground" />
+                </div>
+                <p className="text-white font-medium">No performance data yet</p>
+                <p className="text-muted-foreground text-sm mt-1">Connect your accounts to see trends</p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={data}>
+                  <defs>
+                    <linearGradient id="colorInsta" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#E4405F" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#E4405F" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 12 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 12 }} axisLine={false} tickLine={false} />
+                  <Tooltip 
+                     contentStyle={{ backgroundColor: '#141218', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
+                     itemStyle={{ color: '#fff' }}
+                  />
+                  <Area type="monotone" dataKey="instagram" stroke="#E4405F" fillOpacity={1} fill="url(#colorInsta)" />
+                  <Area type="monotone" dataKey="linkedin" stroke="#0A66C2" fillOpacity={0} />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
 
@@ -114,29 +112,37 @@ export const Analytics = () => {
             <CardTitle>Reach Split by Platform</CardTitle>
             <CardDescription>How your audience is distributed across channels.</CardDescription>
           </CardHeader>
-          <CardContent className="h-[400px] flex items-center justify-center">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={pieData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={80}
-                  outerRadius={120}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {pieData.map((_, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="absolute flex flex-col items-center">
-               <span className="text-3xl font-bold text-white">100%</span>
-               <span className="text-xs text-muted-foreground uppercase">Reach</span>
-            </div>
+          <CardContent className="h-[400px] flex items-center justify-center relative">
+            {pieData.length === 0 ? (
+               <div className="text-center">
+                  <p className="text-muted-foreground text-sm">No audience data available</p>
+               </div>
+            ) : (
+              <>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={80}
+                      outerRadius={120}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {pieData.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute flex flex-col items-center">
+                  <span className="text-3xl font-bold text-white">0%</span>
+                  <span className="text-xs text-muted-foreground uppercase">Reach</span>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -160,22 +166,11 @@ export const Analytics = () => {
                 </tr>
               </thead>
               <tbody className="text-sm">
-                {[1, 2, 3, 4].map((i) => (
-                  <tr key={i} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
-                    <td className="py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded bg-navy-700 shrink-0" />
-                        <span className="text-white font-medium truncate max-w-[200px]">Why you need to schedule posts...</span>
-                      </div>
+                 <tr>
+                    <td colSpan={5} className="py-12 text-center text-muted-foreground italic">
+                       No published posts found to analyze performance.
                     </td>
-                    <td className="py-4">
-                      <Instagram className="w-4 h-4 text-pink-400" />
-                    </td>
-                    <td className="py-4 text-right text-white font-semibold">12.4K</td>
-                    <td className="py-4 text-right text-white font-semibold">842</td>
-                    <td className="py-4 text-right text-green-400 font-bold">6.8%</td>
-                  </tr>
-                ))}
+                 </tr>
               </tbody>
             </table>
           </div>

@@ -15,6 +15,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useStore } from '@/store/useStore'
 import { Button } from '@/components/ui/button'
+import { UserButton, useUser } from '@clerk/react'
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/' },
@@ -31,6 +32,7 @@ const navItems = [
 export const Sidebar = () => {
   const { sidebarCollapsed, toggleSidebar } = useStore()
   const location = useLocation()
+  const { user } = useUser()
 
   return (
     <aside 
@@ -87,16 +89,20 @@ export const Sidebar = () => {
       </nav>
 
       <div className="p-4 border-t border-white/10">
-        {!sidebarCollapsed && (
-          <div className="p-3 glass-card rounded-lg flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-pink-500" />
-            <div className="flex-1 overflow-hidden">
-              <p className="text-sm font-medium text-white truncate">Aditya Anand</p>
-              <p className="text-xs text-muted-foreground truncate">Starter Plan</p>
+        <div className={cn(
+          "flex items-center gap-3",
+          sidebarCollapsed ? "justify-center" : "px-2"
+        )}>
+          <UserButton />
+          {!sidebarCollapsed && user && (
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-white truncate">{user.fullName || user.username}</p>
+              <p className="text-xs text-muted-foreground truncate">{user.primaryEmailAddress?.emailAddress}</p>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </aside>
   )
 }
+

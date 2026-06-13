@@ -1,33 +1,246 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { 
-  Sparkles, 
-  MessageSquare, 
-  Hash, 
-  Lightbulb, 
-  ImageIcon, 
-  RefreshCcw,
-  Zap,
-  ArrowRight,
+  Sparkles, MessageSquare, Hash, Lightbulb, ImageIcon,
+  RefreshCcw, Loader2, Copy, Check, Wand2, ArrowRight
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useAuth } from '@clerk/react'
+import { generateCaptions, generateHashtags, generateContentIdeas, generateImage } from '@/lib/gemini'
 
 const tools = [
-  { id: 'caption', icon: MessageSquare, title: 'Caption Generator', description: 'Create engaging captions from a prompt.' },
-  { id: 'hashtag', icon: Hash, title: 'Hashtag Research', description: 'Find trending tags for your niche.' },
-  { id: 'ideas', icon: Lightbulb, title: 'Content Ideas', description: 'Get 30 days of content planned in seconds.' },
-  { id: 'image', icon: ImageIcon, title: 'AI Image Generator', description: 'Generate custom visuals for your posts.' },
+  { id: 'caption', icon: MessageSquare, title: 'Caption Generator', description: 'Create engaging captions from a prompt.', color: 'from-purple-500 to-blue-500' },
+  { id: 'hashtag', icon: Hash, title: 'Hashtag Research', description: 'Find trending tags for your niche.', color: 'from-blue-500 to-cyan-500' },
+  { id: 'ideas', icon: Lightbulb, title: 'Content Ideas', description: 'Get 30 days of content planned in seconds.', color: 'from-orange-500 to-yellow-500' },
+  { id: 'image', icon: ImageIcon, title: 'AI Image Generator', description: 'Generate custom visuals for your posts.', color: 'from-pink-500 to-rose-500' },
 ]
 
 export const AIStudio = () => {
   const [activeTool, setActiveTool] = useState('caption')
   const [prompt, setPrompt] = useState('')
+  const [tone, setTone] = useState('Professional')
   const [isGenerating, setIsGenerating] = useState(false)
+  const [results, setResults] = useState<any>(null)
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
 
-  const handleGenerate = () => {
+  const navigate = useNavigate()
+  const { getToken } = useAuth()
+
+  const copyText = async (text: string, index: number) => {
+    await navigator.clipboard.writeText(text)
+    setCopiedIndex(index)
+    setTimeout(() => setCopiedIndex(null), 2000)
+  }
+
+  const handleGenerate = async () => {
+    if (!prompt.trim()) return
     setIsGenerating(true)
-    setTimeout(() => setIsGenerating(false), 2000)
+    setResults(null)
+    
+    let token = '';
+    try {
+      token = await getToken() || '';
+    } catch (err) {
+      console.warn('Failed to get auth token', err);
+    }
+
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      switch (activeTool) {
+        case 'caption': {
+          try {
+            const res = await fetch('/api/ai/caption', {
+              method: 'POST',
+              headers,
+              body: JSON.stringify({ prompt, tone, platform: 'Instagram' })
+            });
+            if (res.ok) {
+              const data = await res.json();
+              setResults({ variations: data.variations });
+              break;
+            }
+          } catch (e) {
+            console.warn('Backend caption generation failed, falling back to client-side Gemini', e);
+          }
+          const captions = await generateCaptions(prompt, tone, 'Instagram')
+          setResults({ variations: captions })
+          break
+        }
+        case 'hashtag': {
+          try {
+            const res = await fetch('/api/ai/hashtags', {
+              method: 'POST',
+              headers,
+              body: JSON.stringify({ niche: prompt, keywords: prompt })
+            });
+            if (res.ok) {
+              const data = await res.json();
+              setResults({ hashtags: data.hashtags });
+              break;
+            }
+          } catch (e) {
+            console.warn('Backend hashtag generation failed, falling back to client-side Gemini', e);
+          }
+          const hashtags = await generateHashtags(prompt)
+          setResults({ hashtags })
+          break
+        }
+        case 'ideas': {
+          try {
+            const res = await fetch('/api/ai/ideas', {
+              method: 'POST',
+              headers,
+              body: JSON.stringify({ topic: prompt, industry: prompt })
+            });
+            if (res.ok) {
+              const data = await res.json();
+              setResults({ ideas: data.ideas });
+              break;
+            }
+          } catch (e) {
+            console.warn('Backend ideas generation failed, falling back to client-side Gemini', e);
+          }
+          const ideas = await generateContentIdeas(prompt)
+          setResults({ ideas })
+          break
+        }
+        case 'image': {
+          try {
+            const res = await fetch('/api/ai/image', {
+              method: 'POST',
+              headers,
+              body: JSON.stringify({ imagePrompt: prompt, aspectRatio: '1:1' })
+            });
+            if (res.ok) {
+              const data = await res.json();
+              setResults({ url: data.url });
+              break;
+            }
+          } catch (e) {
+            console.warn('Backend image generation failed, falling back to client-side Unsplash mock', e);
+          }
+          const url = await generateImage(prompt)
+          setResults({ url })
+          break
+        }
+      }
+    } catch (error) {
+      console.error('Generation error:', error)
+      alert('Generation failed. Please try again.')
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  const renderResults = () => {
+    if (!results) return null
+
+    if (activeTool === 'caption' && results.variations) {
+      return (
+        <div className="grid grid-cols-1 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          {results.variations.map((v: string, i: number) => (
+            <Card key={i} className="hover:border-purple-500/50 transition-colors group border-white/10 bg-white/5">
+              <CardContent className="p-5">
+                <p className="text-sm text-white leading-relaxed whitespace-pre-wrap">{v}</p>
+                <div className="flex items-center justify-between mt-4 pt-4 border-t border-white/10">
+                  <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Variant {i + 1}</span>
+                  <Button 
+                    size="sm" 
+                    variant="ghost"
+                    className="h-8 gap-2 text-white/60 hover:text-white text-xs"
+                    onClick={() => copyText(v, i)}
+                  >
+                    {copiedIndex === i ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+                    {copiedIndex === i ? 'Copied!' : 'Copy'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )
+    }
+
+    if (activeTool === 'hashtag' && results.hashtags) {
+      return (
+        <Card className="animate-in fade-in border-white/10 bg-white/5">
+          <CardHeader>
+            <CardTitle className="text-sm">Generated Hashtags</CardTitle>
+            <CardDescription>{results.hashtags.length} hashtags for your niche</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {results.hashtags.map((h: string, i: number) => (
+                <button
+                  key={i}
+                  onClick={() => copyText(h, i)}
+                  className="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-purple-500/50 rounded-full text-sm text-blue-400 transition-all flex items-center gap-1.5 group"
+                >
+                  {h}
+                  {copiedIndex === i ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3 opacity-0 group-hover:opacity-100" />}
+                </button>
+              ))}
+            </div>
+            <Button className="mt-4 gap-2 w-full" variant="outline" onClick={() => copyText(results.hashtags.join(' '), 999)}>
+              {copiedIndex === 999 ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+              Copy All Hashtags
+            </Button>
+          </CardContent>
+        </Card>
+      )
+    }
+
+    if (activeTool === 'ideas' && results.ideas) {
+      return (
+        <div className="space-y-3 animate-in fade-in max-h-[600px] overflow-auto custom-scrollbar pr-1">
+          {results.ideas.map((idea: any, i: number) => (
+            <Card key={i} className="border-white/10 bg-white/5 hover:border-white/20 transition-colors">
+              <CardContent className="p-4 flex gap-4">
+                <div className="w-10 h-10 shrink-0 rounded-lg bg-gradient-primary flex items-center justify-center font-bold text-white text-sm shadow-glow">
+                  {idea.day || i + 1}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-bold text-white text-sm">{idea.topic}</h4>
+                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{idea.description}</p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="shrink-0 h-8 text-xs gap-1 text-purple-400 hover:bg-purple-500/10"
+                  onClick={() => navigate('/compose')}
+                >
+                  Create <ArrowRight className="w-3 h-3" />
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )
+    }
+
+    if (activeTool === 'image' && results.url) {
+      return (
+        <Card className="animate-in fade-in overflow-hidden border-white/10 bg-white/5">
+          <CardContent className="p-0 relative group">
+            <img src={results.url} alt="Generated" className="w-full h-auto rounded-xl" />
+            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 rounded-xl">
+              <Button onClick={() => window.open(results.url, '_blank')} variant="outline">View Full</Button>
+              <Button onClick={() => navigate('/media')}>Save to Library</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )
+    }
+
+    return null
   }
 
   return (
@@ -35,112 +248,93 @@ export const AIStudio = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white tracking-tight">AI Studio</h1>
-          <p className="text-muted-foreground mt-1">Unlock your creativity with advanced AI tools.</p>
+          <p className="text-muted-foreground mt-1">Powered by Google Gemini — create content in seconds.</p>
         </div>
-        <div className="px-4 py-2 glass-card rounded-lg flex items-center gap-2">
-          <Zap className="w-4 h-4 text-yellow-400 fill-yellow-400" />
-          <span className="text-xs font-bold text-white uppercase tracking-widest">24 / 100 Credits left</span>
+        <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-primary/10 border border-purple-500/20">
+          <Sparkles className="w-4 h-4 text-purple-400" />
+          <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">Gemini AI Active</span>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        {/* Tool Selector Sidebar */}
+        {/* Tool Selector */}
         <div className="space-y-3">
           {tools.map((tool) => (
             <button
               key={tool.id}
-              onClick={() => setActiveTool(tool.id)}
+              onClick={() => { setActiveTool(tool.id); setResults(null); setPrompt('') }}
               className={cn(
-                "w-full text-left p-4 rounded-xl border transition-all group",
+                "w-full text-left p-4 rounded-xl border transition-all duration-200 group",
                 activeTool === tool.id 
                   ? "bg-gradient-primary border-transparent shadow-glow" 
-                  : "bg-white/5 border-white/10 hover:border-white/20"
+                  : "bg-white/5 border-white/10 hover:border-white/20 hover:bg-white/8"
               )}
             >
-              <tool.icon className={cn(
-                "w-5 h-5 mb-2",
-                activeTool === tool.id ? "text-white" : "text-muted-foreground group-hover:text-white"
-              )} />
-              <p className={cn(
-                "font-semibold text-sm",
-                activeTool === tool.id ? "text-white" : "text-muted-foreground group-hover:text-white"
-              )}>{tool.title}</p>
-              <p className={cn(
-                "text-[10px] mt-1 leading-tight",
-                activeTool === tool.id ? "text-white/80" : "text-muted-foreground"
-              )}>{tool.description}</p>
+              <tool.icon className={cn("w-5 h-5 mb-2", activeTool === tool.id ? "text-white" : "text-muted-foreground group-hover:text-white")} />
+              <p className={cn("font-semibold text-sm", activeTool === tool.id ? "text-white" : "text-muted-foreground group-hover:text-white")}>{tool.title}</p>
+              <p className={cn("text-[10px] mt-1 leading-tight", activeTool === tool.id ? "text-white/80" : "text-muted-foreground")}>{tool.description}</p>
             </button>
           ))}
         </div>
 
         {/* Main Work Area */}
         <div className="lg:col-span-3 space-y-6">
-          <Card className="min-h-[500px] flex flex-col">
+          <Card className="min-h-[280px] flex flex-col border-white/10 bg-white/5">
             <CardHeader>
               <CardTitle>{tools.find(t => t.id === activeTool)?.title}</CardTitle>
-              <CardDescription>Enter a prompt below to generate content.</CardDescription>
+              <CardDescription>Enter a prompt to generate content with AI.</CardDescription>
             </CardHeader>
             <CardContent className="flex-1 flex flex-col gap-6">
-              <div className="relative flex-1 bg-white/5 rounded-xl border border-white/10 p-6">
-                {isGenerating ? (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center space-y-4">
-                    <div className="w-12 h-12 rounded-full border-4 border-purple-500/20 border-t-purple-500 animate-spin" />
-                    <p className="text-sm text-muted-foreground animate-pulse">Consulting the muse...</p>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    <textarea 
-                      value={prompt}
-                      onChange={(e) => setPrompt(e.target.value)}
-                      placeholder="e.g. Write a funny caption for a new luxury watch launch on Instagram. Mention the durability and style."
-                      className="w-full bg-transparent border-none focus:ring-0 text-white placeholder:text-muted-foreground resize-none text-lg h-[150px]"
-                    />
-                    
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      {['Professional', 'Casual', 'Funny', 'Urgent'].map(tone => (
-                        <Button key={tone} variant="outline" size="sm" className="bg-white/5 border-white/10 text-xs">{tone}</Button>
-                      ))}
-                    </div>
+              <div className="flex-1 bg-black/20 rounded-xl border border-white/10 p-4">
+                <textarea 
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && e.metaKey) handleGenerate() }}
+                  placeholder={
+                    activeTool === 'caption' ? "Describe your post (e.g. 'launching a new coffee brand for Gen Z')..." :
+                    activeTool === 'hashtag' ? "Enter your niche or topic (e.g. 'sustainable fashion')..." :
+                    activeTool === 'ideas' ? "Enter your brand topic (e.g. 'fitness coaching for women')..." :
+                    "Describe the image you want to generate..."
+                  }
+                  className="w-full bg-transparent border-none focus:ring-0 outline-none text-white placeholder:text-white/30 resize-none text-sm h-[100px] leading-relaxed"
+                />
+                
+                {activeTool === 'caption' && (
+                  <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-white/10">
+                    {['Professional', 'Casual', 'Funny', 'Inspirational', 'Urgent', 'Educational'].map(t => (
+                      <button
+                        key={t}
+                        onClick={() => setTone(t)}
+                        className={cn(
+                          "px-3 py-1 rounded-full text-xs font-medium border transition-all",
+                          tone === t ? "bg-white/20 border-white/30 text-white" : "bg-white/5 border-white/10 text-muted-foreground hover:border-white/20 hover:text-white"
+                        )}
+                      >
+                        {t}
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>
 
-              <div className="flex items-center justify-between pt-4 border-t border-white/10">
-                 <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="sm" className="text-muted-foreground gap-2">
-                      <RefreshCcw className="w-4 h-4" />
-                      Reset
-                    </Button>
-                 </div>
-                 <Button onClick={handleGenerate} disabled={!prompt || isGenerating} className="gap-2 px-8">
-                   {isGenerating ? "Generating..." : "Generate Magic"}
-                   <Sparkles className="w-4 h-4" />
-                 </Button>
+              <div className="flex items-center justify-between">
+                <Button variant="ghost" size="sm" className="text-muted-foreground gap-2" onClick={() => { setPrompt(''); setResults(null) }}>
+                  <RefreshCcw className="w-4 h-4" />
+                  Reset
+                </Button>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">⌘ + Enter</span>
+                  <Button onClick={handleGenerate} disabled={!prompt.trim() || isGenerating} className="gap-2 px-8 bg-gradient-primary shadow-glow">
+                    {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+                    {isGenerating ? 'Generating...' : 'Generate'}
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Generated Result Preview (Mock) */}
-          {!isGenerating && prompt && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              {[1, 2].map(i => (
-                <Card key={i} className="hover:border-purple-500/50 transition-colors cursor-pointer group">
-                  <CardContent className="p-6">
-                    <p className="text-sm text-white leading-relaxed italic">
-                      "Time isn't just about hours—it's about the moments that define you. ⌚✨ Our new Chronos Elite isn't just a watch; it's a legacy on your wrist. Durable enough for the summit, stylish enough for the gala. #ChronosElite #LuxuryStyle"
-                    </p>
-                    <div className="flex items-center justify-between mt-6">
-                       <span className="text-[10px] text-muted-foreground uppercase font-bold">Variant {i}</span>
-                       <Button size="sm" className="h-8 gap-2 bg-white/10 hover:bg-white/20 text-white border-none">
-                         Use this
-                         <ArrowRight className="w-3 h-3" />
-                       </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
+          {/* Results */}
+          {renderResults()}
         </div>
       </div>
     </div>

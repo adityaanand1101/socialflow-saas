@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,21 +10,44 @@ import {
   List, 
   Filter,
   MoreVertical,
-  Image as ImageIcon,
   Video,
-  FileText
+  FileText,
+  Loader2,
+  Trash2
 } from 'lucide-react'
-
-const mediaItems = [
-  { id: '1', type: 'image', name: 'Product_01.jpg', size: '2.4 MB', date: '2h ago', url: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=400' },
-  { id: '2', type: 'image', name: 'Team_Photo.png', size: '4.8 MB', date: '5h ago', url: 'https://images.unsplash.com/photo-1454165833767-131f3696773a?w=400' },
-  { id: '3', type: 'video', name: 'Promo_Video.mp4', size: '45.2 MB', date: 'Yesterday', url: '' },
-  { id: '4', type: 'image', name: 'Banner_v2.jpg', size: '1.2 MB', date: '2 days ago', url: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?w=400' },
-  { id: '5', type: 'file', name: 'Campaign_Brief.pdf', size: '0.5 MB', date: '3 days ago', url: '' },
-  { id: '6', type: 'image', name: 'Asset_7.png', size: '3.1 MB', date: '1 week ago', url: 'https://images.unsplash.com/photo-1551434678-e076c223a692?w=400' },
-]
+import { useStore } from '@/store/useStore'
+import { useAuth } from '@clerk/react'
 
 export const MediaLibrary = () => {
+  const { media, uploadMedia, removeMedia, loading } = useStore()
+  const { getToken } = useAuth()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUploading(true)
+    try {
+      const token = await getToken()
+      if (token) await uploadMedia(token, file)
+    } catch (error) {
+      console.error('Upload failed:', error)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    try {
+      const token = await getToken()
+      if (token) await removeMedia(token, id)
+    } catch (error) {
+       console.error('Failed to delete', error)
+    }
+  }
+
   return (
     <div className="space-y-6 pb-10">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -32,12 +56,23 @@ export const MediaLibrary = () => {
           <p className="text-muted-foreground mt-1">Manage all your visual assets in one place.</p>
         </div>
         <div className="flex items-center gap-3">
+          <input 
+            type="file" 
+            className="hidden" 
+            ref={fileInputRef} 
+            onChange={handleUpload}
+            accept="image/*,video/*"
+          />
           <Button variant="outline" className="gap-2">
             <FolderPlus className="w-4 h-4" />
             New Folder
           </Button>
-          <Button className="gap-2">
-            <Upload className="w-4 h-4" />
+          <Button 
+            className="gap-2" 
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+          >
+            {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
             Upload Asset
           </Button>
         </div>
@@ -55,53 +90,72 @@ export const MediaLibrary = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6">
-        {mediaItems.map((item) => (
-          <Card key={item.id} className="group relative overflow-hidden bg-white/5 hover:border-white/20 transition-all">
-            <div className="aspect-square relative overflow-hidden bg-navy-800 flex items-center justify-center">
-              {item.type === 'image' ? (
-                <img src={item.url} alt={item.name} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
-              ) : item.type === 'video' ? (
-                <Video className="w-8 h-8 text-muted-foreground" />
-              ) : (
-                <FileText className="w-8 h-8 text-muted-foreground" />
-              )}
-              
-              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-white"><ImageIcon className="w-4 h-4" /></Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-white"><MoreVertical className="w-4 h-4" /></Button>
-              </div>
-
-              {item.type === 'video' && (
-                <div className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded bg-black/60 text-[10px] font-bold text-white">
-                  0:45
+      {loading ? (
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6">
+          {media.map((item) => (
+            <Card key={item.id} className="group relative overflow-hidden bg-white/5 hover:border-white/20 transition-all">
+              <div className="aspect-square relative overflow-hidden bg-navy-800 flex items-center justify-center">
+                {item.fileType?.startsWith('image') || item.type === 'image' ? (
+                  <img src={item.fileUrl || item.url} alt={item.fileName || item.name} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                ) : item.fileType?.startsWith('video') || item.type === 'video' ? (
+                  <Video className="w-8 h-8 text-muted-foreground" />
+                ) : (
+                  <FileText className="w-8 h-8 text-muted-foreground" />
+                )}
+                
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8 text-destructive hover:bg-destructive/20"
+                    onClick={() => handleDelete(item.id)}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-white"><MoreVertical className="w-4 h-4" /></Button>
                 </div>
-              )}
-            </div>
-            <div className="p-3">
-              <p className="text-xs font-medium text-white truncate">{item.name}</p>
-              <div className="flex items-center justify-between mt-1">
-                <span className="text-[10px] text-muted-foreground uppercase font-bold">{item.size}</span>
-                <span className="text-[10px] text-muted-foreground">{item.date}</span>
+
+                {(item.fileType?.startsWith('video') || item.type === 'video') && (
+                  <div className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded bg-black/60 text-[10px] font-bold text-white">
+                    0:45
+                  </div>
+                )}
               </div>
-            </div>
-          </Card>
-        ))}
-      </div>
+              <div className="p-3">
+                <p className="text-xs font-medium text-white truncate">{item.fileName || item.name}</p>
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-[10px] text-muted-foreground uppercase font-bold">{item.fileSize || item.size}</span>
+                  <span className="text-[10px] text-muted-foreground">{new Date(item.createdAt || item.created_at || Date.now()).toLocaleDateString()}</span>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* Storage Usage indicator */}
       <div className="mt-8 p-4 glass-card rounded-xl">
         <div className="flex items-center justify-between mb-2">
           <p className="text-xs font-bold text-white uppercase tracking-widest">Storage Usage</p>
-          <p className="text-xs text-muted-foreground">3.2 GB / 10 GB (32%)</p>
+          <p className="text-xs text-muted-foreground">
+            {media.length > 0 ? `${(media.length * 1.5).toFixed(1)} MB` : '0 MB'} / 500 MB
+          </p>
         </div>
         <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
-          <div className="h-full bg-gradient-primary w-[32%] rounded-full shadow-glow" />
+          <div 
+            className="h-full bg-gradient-primary rounded-full shadow-glow transition-all" 
+            style={{ width: `${Math.min((media.length * 0.3), 100)}%` }}
+          />
         </div>
         <p className="text-[10px] text-muted-foreground mt-2 italic text-center">
-          Powered by Backblaze B2 Storage
+          Powered by Cloud Storage
         </p>
       </div>
     </div>
   )
 }
+

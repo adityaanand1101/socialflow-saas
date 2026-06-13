@@ -1,4 +1,5 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { Show, RedirectToSignIn } from '@clerk/react'
 import { Layout } from './components/layout/Layout'
 import { Dashboard } from './pages/Dashboard'
 import { Compose } from './pages/Compose'
@@ -14,7 +15,16 @@ function App() {
   return (
     <Router>
       <Routes>
-        <Route element={<Layout />}>
+        <Route element={
+          <>
+            <Show when="signed-in">
+              <Layout />
+            </Show>
+            <Show when="signed-out">
+              <RedirectToSignIn />
+            </Show>
+          </>
+        }>
           <Route path="/" element={<Dashboard />} />
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/compose" element={<Compose />} />
@@ -31,3 +41,5 @@ function App() {
 }
 
 export default App
+
+

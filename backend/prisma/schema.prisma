@@ -1,0 +1,201 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String            @id @default(uuid())
+  clerkId           String            @unique
+  email             String            @unique
+  name              String?
+  avatarUrl         String?
+  paymentCustomerId String?           @unique
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  
+  // Relations
+  memberships      WorkspaceMember[]
+  posts            Post[]
+  mediaAssets      MediaAsset[]
+  aiLogs           AiGenerationLog[]
+}
+
+model Workspace {
+  id             String            @id @default(uuid())
+  name           String
+  slug           String            @unique
+  logoUrl        String?
+  subscriptionId String?
+  plan           String            @default("STARTER")
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  // Relations
+  members              WorkspaceMember[]
+  socialAccounts       SocialAccount[]
+  posts                Post[]
+  mediaAssets          MediaAsset[]
+  invites              WorkspaceInvite[]
+}
+
+model WorkspaceMember {
+  id          String   @id @default(uuid())
+  workspaceId String
+  userId      String
+  role        Role     @default(MEMBER)
+  createdAt   DateTime @default(now())
+
+  // Relations
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+enum PlatformType {
+  INSTAGRAM
+  X
+  LINKEDIN
+  YOUTUBE
+  GMB
+  FACEBOOK
+  THREADS
+  BLUESKY
+  SLACK
+  PINTEREST
+  MASTODON
+  REDDIT
+  MEDIUM
+  DISCORD
+  TELEGRAM
+  TUMBLR
+}
+
+enum PostStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHING
+  PUBLISHED
+  FAILED
+}
+
+model SocialAccount {
+  id                String       @id @default(uuid())
+  workspaceId       String
+  platform          PlatformType
+  platformAccountId String       // Remote platform account ID
+  username          String
+  displayName       String?
+  avatarUrl         String?
+  accessToken       String       // Encrypted in database
+  refreshToken      String?      // Encrypted in database
+  tokenExpiresAt    DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  // Relations
+  workspace         Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  posts             SocialAccountPost[]
+
+  @@unique([workspaceId, platform, platformAccountId])
+}
+
+model Post {
+  id          String              @id @default(uuid())
+  userId      String
+  workspaceId String
+  content     String?             @db.Text
+  mediaUrls   String[]            // Array of cloud storage file URLs
+  scheduledAt DateTime?
+  status      PostStatus          @default(DRAFT)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  // Relations
+  user        User                @relation(fields: [userId], references: [id])
+  workspace   Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  accounts    SocialAccountPost[]
+}
+
+// Junction table to link posts to target accounts
+model SocialAccountPost {
+  postId          String
+  socialAccountId String
+  status          PostStatus          @default(SCHEDULED)
+  publishedUrl    String?             // Link to the published post on the live platform
+  errorMessage    String?
+  publishedAt     DateTime?
+
+  post            Post                @relation(fields: [postId], references: [id], onDelete: Cascade)
+  socialAccount   SocialAccount       @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+
+  @@id([postId, socialAccountId])
+}
+
+model MediaAsset {
+  id          String    @id @default(uuid())
+  workspaceId String
+  userId      String
+  fileName    String
+  fileUrl     String    // Public CDN URL of the media file
+  fileType    String    // mime-type (e.g., 'image/png', 'video/mp4')
+  fileSize    Int       // In bytes
+  tags        String[]  // Searchable descriptors
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@index([workspaceId])
+}
+
+model AiGenerationLog {
+  id             String   @id @default(uuid())
+  userId         String
+  toolUsed       String   // 'caption' | 'hashtag' | 'ideas' | 'image'
+  prompt         String   @db.Text
+  tokensUsed     Int?
+  imagesGenerated Int?
+  createdAt      DateTime @default(now())
+
+  // Relations
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model WorkspaceInvite {
+  id          String         @id @default(uuid())
+  workspaceId String
+  email       String
+  role        Role           @default(MEMBER)
+  token       String         @unique
+  expiresAt   DateTime
+  status      InviteStatus   @default(PENDING)
+  createdAt   DateTime       @default(now())
+
+  workspace   Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+}

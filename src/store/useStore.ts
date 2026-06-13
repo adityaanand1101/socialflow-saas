@@ -1,9 +1,9 @@
 import { create } from 'zustand'
 
 export type SocialPlatform = 
-  | 'instagram' | 'linkedin' | 'x' | 'youtube' | 'tiktok' 
-  | 'facebook' | 'threads' | 'pinterest' | 'reddit' 
-  | 'bluesky' | 'mastodon' | 'discord' | 'slack' | 'gmb'
+  | 'instagram' | 'linkedin' | 'x' | 'youtube' | 'gmb' 
+  | 'facebook' | 'threads' | 'bluesky' | 'slack' | 'pinterest' 
+  | 'mastodon' | 'reddit' | 'medium' | 'discord' | 'telegram' | 'tumblr'
 
 export interface Post {
   id: string
@@ -11,6 +11,7 @@ export interface Post {
   caption: string
   media: string[]
   scheduledTime: string
+  scheduledAt?: string
   status: 'scheduled' | 'draft' | 'failed' | 'published'
   tags: string[]
 }
@@ -33,69 +34,188 @@ interface SocialFlowStore {
   channels: Channel[]
   posts: Post[]
   media: any[]
-  addPost: (post: Post) => void
-  removePost: (id: string) => void
+  loading: boolean
+  fetchData: (token: string) => Promise<void>
+  fetchChannels: (token: string) => Promise<void>
+  addPost: (token: string, post: Omit<Post, 'id'>) => Promise<void>
+  removePost: (token: string, id: string) => Promise<void>
+  updatePost: (token: string, id: string, updates: Partial<Post>) => Promise<void>
+  uploadMedia: (token: string, file: File) => Promise<void>
+  removeMedia: (token: string, id: string) => Promise<void>
 }
 
 export const useStore = create<SocialFlowStore>((set) => ({
   sidebarCollapsed: false,
   toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
-  channels: [
-    {
-      id: '1',
-      platform: 'instagram',
-      name: 'SocialFlow HQ',
-      username: '@socialflow_hq',
-      avatar: 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=128&h=128&fit=crop',
-      followers: 12400,
-      status: 'connected',
-      engagementRate: 4.8,
-      lastSynced: new Date().toISOString()
-    },
-    {
-      id: '2',
-      platform: 'linkedin',
-      name: 'SocialFlow Inc.',
-      username: 'socialflow-inc',
-      avatar: 'https://images.unsplash.com/photo-1611162616305-c69b3fa7fbe0?w=128&h=128&fit=crop',
-      followers: 5200,
-      status: 'connected',
-      engagementRate: 3.2,
-      lastSynced: new Date().toISOString()
-    },
-    {
-      id: '3',
-      platform: 'x',
-      name: 'SocialFlow',
-      username: '@SocialFlowApp',
-      avatar: 'https://images.unsplash.com/photo-1611605698335-8b1569810432?w=128&h=128&fit=crop',
-      followers: 8900,
-      status: 'connected',
-      engagementRate: 2.1,
-      lastSynced: new Date().toISOString()
-    }
-  ],
-  posts: [
-    {
-      id: '1',
-      platforms: ['instagram', 'x'],
-      caption: 'Big things are coming! Stay tuned for our next update. #SaaS #SocialMedia',
-      media: ['https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=400&h=300&fit=crop'],
-      scheduledTime: new Date(Date.now() + 86400000).toISOString(),
-      status: 'scheduled',
-      tags: ['campaign-a']
-    },
-    {
-      id: '2',
-      platforms: ['linkedin'],
-      caption: 'Why social media scheduling is critical for your business growth in 2026.',
-      media: ['https://images.unsplash.com/photo-1454165833767-131f3696773a?w=400&h=300&fit=crop'],
-      scheduledTime: new Date(Date.now() + 172800000).toISOString(),
-      status: 'scheduled',
-      tags: ['educational']
-    }
-  ],
+  channels: [],
+  posts: [],
   media: [],
-  addPost: (post) => set((state) => ({ posts: [post, ...state.posts] })),
-  removePost: (id) => set((state) => ({ posts: state.posts.filter((p) => p.id !== id) })),
+  loading: false,
+
+  fetchData: async (token: string) => {
+    set({ loading: true })
+    try {
+      const [postsRes, mediaRes] = await Promise.all([
+        fetch('/api/posts', { headers: { Authorization: `Bearer ${token}` } }),
+        fetch('/api/media', { headers: { Authorization: `Bearer ${token}` } })
+      ])
+      
+      let posts = [], media = []
+      if (postsRes.ok) posts = await postsRes.json()
+      if (mediaRes.ok) media = await mediaRes.json()
+      
+      set({ 
+        posts: Array.isArray(posts) ? posts : [], 
+        media: Array.isArray(media) ? media : []
+      })
+    } catch (e) {
+      console.error("Failed to fetch data", e)
+      set({ posts: [], media: [] })
+    } finally {
+      set({ loading: false })
+    }
+  },
+
+  fetchChannels: async (token: string) => {
+    try {
+      const res = await fetch('/api/channels', { headers: { Authorization: `Bearer ${token}` } })
+      if (res.ok) {
+        const data = await res.json()
+        if (Array.isArray(data)) set({ channels: data })
+      }
+    } catch (e) {
+      console.error("Failed to fetch channels", e)
+    }
+  },
+
+  addPost: async (token: string, postData) => {
+    try {
+      const res = await fetch('/api/posts', {
+        method: 'POST',
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          content: postData.caption,
+          mediaUrls: postData.media,
+          socialAccountIds: [], 
+          scheduledAt: postData.scheduledTime,
+          status: postData.status?.toUpperCase()
+        })
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        set((state) => ({ posts: [data as any, ...state.posts] }))
+      }
+    } catch (e) {
+      console.error("Failed to add post", e)
+    }
+  },
+
+  removePost: async (token: string, id: string) => {
+    try {
+      const res = await fetch(`/api/posts/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      if (res.ok) {
+        set((state) => ({ posts: state.posts.filter((p) => p.id !== id) }))
+      }
+    } catch (e) {
+      console.error("Failed to remove post", e)
+    }
+  },
+
+  updatePost: async (token: string, id: string, updates) => {
+    try {
+      const payload: any = {}
+      if (updates.scheduledTime) payload.scheduledAt = updates.scheduledTime;
+      if (updates.caption) payload.content = updates.caption;
+      
+      const res = await fetch(`/api/posts/${id}`, {
+        method: 'PATCH',
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      })
+      if (res.ok) {
+        set((state) => ({
+          posts: state.posts.map((p) => p.id === id ? { ...p, ...updates } : p)
+        }))
+      }
+    } catch (e) {
+      console.error("Failed to update post", e)
+    }
+  },
+
+  uploadMedia: async (token: string, file: File) => {
+    try {
+      const presignedRes = await fetch('/api/media/presigned-url', {
+        method: 'POST',
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          fileName: file.name,
+          fileType: file.type,
+          fileSize: file.size
+        })
+      });
+
+      if (presignedRes.ok) {
+        const { uploadUrl, fileUrl } = await presignedRes.json();
+
+        const uploadRes = await fetch(uploadUrl, {
+          method: 'PUT',
+          body: file,
+          headers: {
+            'Content-Type': file.type,
+          }
+        });
+
+        if (uploadRes.ok) {
+          const registerRes = await fetch('/api/media/register', {
+            method: 'POST',
+            headers: { 
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              fileName: file.name,
+              fileUrl,
+              fileType: file.type,
+              fileSize: file.size,
+              tags: []
+            })
+          });
+
+          if (registerRes.ok) {
+            const data = await registerRes.json();
+            set((state) => ({ media: [data, ...state.media] }))
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Failed to upload media", error);
+    }
+  },
+
+  removeMedia: async (token: string, id: string) => {
+    try {
+      const res = await fetch(`/api/media/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        set((state) => ({ media: state.media.filter((m) => m.id !== id) }))
+      }
+    } catch (error) {
+      console.error("Failed to remove media", error);
+    }
+  },
 }))

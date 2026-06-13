@@ -1,0 +1,241 @@
+import { Queue, Worker, Job } from 'bullmq';
+import IORedis from 'ioredis';
+import { PrismaClient } from '@prisma/client';
+import { decryptToken, encryptToken } from './crypto';
+import fetch from 'node-fetch';
+
+const redisConfig = {
+  host: process.env.REDIS_HOST || '127.0.0.1',
+  port: parseInt(process.env.REDIS_PORT || '6379'),
+  maxRetriesPerRequest: null,
+};
+
+const connection = new IORedis(redisConfig);
+connection.on('error', (err) => {
+  console.warn('Redis connection error. BullMQ tasks will not work.', err.message);
+});
+
+const prisma = new PrismaClient();
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'default_32_byte_secret_key_for_dev!';
+
+let postQueue: any;
+let postWorker: any;
+
+async function refreshSocialAccountToken(account: any) {
+  if (!account.refreshToken || !account.tokenExpiresAt || new Date(account.tokenExpiresAt) > new Date()) {
+    return decryptToken(account.accessToken, ENCRYPTION_KEY);
+  }
+
+  const platformKey = account.platform.toLowerCase();
+  
+  const providerUrls: Record<string, string> = {
+    linkedin: 'https://www.linkedin.com/oauth/v2/accessToken',
+    x: 'https://api.twitter.com/2/oauth2/token',
+    instagram: 'https://api.instagram.com/oauth/access_token',
+    facebook: 'https://graph.facebook.com/v18.0/oauth/access_token',
+    threads: 'https://graph.threads.net/oauth/access_token',
+    youtube: 'https://oauth2.googleapis.com/token',
+    pinterest: 'https://api.pinterest.com/v5/oauth/token',
+    gmb: 'https://oauth2.googleapis.com/token',
+    reddit: 'https://www.reddit.com/api/v1/access_token',
+    tumblr: 'https://api.tumblr.com/v2/oauth2/token',
+    discord: 'https://discord.com/api/oauth2/token',
+    slack: 'https://slack.com/api/oauth.v2.access'
+  };
+
+  const clientIds: Record<string, string> = {
+    linkedin: process.env.LINKEDIN_CLIENT_ID || '',
+    x: process.env.X_CLIENT_ID || '',
+    instagram: process.env.INSTAGRAM_CLIENT_ID || '',
+    facebook: process.env.FACEBOOK_CLIENT_ID || '',
+    threads: process.env.THREADS_CLIENT_ID || '',
+    youtube: process.env.YOUTUBE_CLIENT_ID || '',
+    pinterest: process.env.PINTEREST_CLIENT_ID || '',
+    gmb: process.env.GMB_CLIENT_ID || '',
+    reddit: process.env.REDDIT_CLIENT_ID || '',
+    tumblr: process.env.TUMBLR_CLIENT_ID || '',
+    discord: process.env.DISCORD_CLIENT_ID || '',
+    slack: process.env.SLACK_CLIENT_ID || ''
+  };
+
+  const clientSecrets: Record<string, string> = {
+    linkedin: process.env.LINKEDIN_CLIENT_SECRET || '',
+    x: process.env.X_CLIENT_SECRET || '',
+    instagram: process.env.INSTAGRAM_CLIENT_SECRET || '',
+    facebook: process.env.FACEBOOK_CLIENT_SECRET || '',
+    threads: process.env.THREADS_CLIENT_SECRET || '',
+    youtube: process.env.YOUTUBE_CLIENT_SECRET || '',
+    pinterest: process.env.PINTEREST_CLIENT_SECRET || '',
+    gmb: process.env.GMB_CLIENT_SECRET || '',
+    reddit: process.env.REDDIT_CLIENT_SECRET || '',
+    tumblr: process.env.TUMBLR_CLIENT_SECRET || '',
+    discord: process.env.DISCORD_CLIENT_SECRET || '',
+    slack: process.env.SLACK_CLIENT_SECRET || ''
+  };
+
+  const tokenUrl = providerUrls[platformKey];
+  const clientId = clientIds[platformKey];
+  const clientSecret = clientSecrets[platformKey];
+
+  if (!tokenUrl || !clientId || !clientSecret) {
+    console.warn(`Cannot refresh token for ${account.platform}: Missing credentials.`);
+    return decryptToken(account.accessToken, ENCRYPTION_KEY);
+  }
+
+  try {
+    const decryptedRefresh = decryptToken(account.refreshToken, ENCRYPTION_KEY);
+
+    const params = new URLSearchParams();
+    params.append('grant_type', 'refresh_token');
+    params.append('refresh_token', decryptedRefresh);
+    params.append('client_id', clientId);
+    params.append('client_secret', clientSecret);
+
+    const res = await fetch(tokenUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString()
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to refresh token: ${await res.text()}`);
+    }
+
+    const data = await res.json() as any;
+    const newAccessToken = data.access_token || data.accessToken;
+    const newRefreshToken = data.refresh_token || data.refreshToken || decryptedRefresh;
+    const expiresIn = data.expires_in || 3600;
+
+    const encryptedAccess = encryptToken(newAccessToken, ENCRYPTION_KEY);
+    const encryptedRefresh = encryptToken(newRefreshToken, ENCRYPTION_KEY);
+    const newExpiresAt = new Date(Date.now() + expiresIn * 1000);
+
+    await prisma.socialAccount.update({
+      where: { id: account.id },
+      data: {
+        accessToken: encryptedAccess,
+        refreshToken: encryptedRefresh,
+        tokenExpiresAt: newExpiresAt
+      }
+    });
+
+    return newAccessToken;
+  } catch (err) {
+    console.error(`Error refreshing token for ${account.platform}:`, err);
+    return decryptToken(account.accessToken, ENCRYPTION_KEY);
+  }
+}
+
+async function publishToPlatform(platform: string, decryptedToken: string, content: string, mediaUrls: string[]) {
+  // Real platform logic required here. For now, we throw a specific error.
+  throw new Error(`Publishing logic for ${platform} is not yet implemented. Please connect a production-ready publishing module.`);
+}
+
+try {
+  postQueue = new Queue('post-publishing', { 
+    connection: connection as any,
+    defaultJobOptions: {
+      removeOnComplete: true,
+      attempts: 3,
+    }
+  });
+
+  postWorker = new Worker('post-publishing', async (job: Job) => {
+    const { postId } = job.data;
+    console.log(`Processing job ${job.id} for post ${postId}`);
+
+    try {
+      const post = await prisma.post.findUnique({
+        where: { id: postId },
+        include: { accounts: { include: { socialAccount: true } } }
+      });
+
+      if (!post) {
+        console.warn(`Post ${postId} not found, skipping.`);
+        return;
+      }
+
+      await prisma.post.update({
+        where: { id: postId },
+        data: { status: 'PUBLISHING' }
+      });
+
+      await prisma.socialAccountPost.updateMany({
+        where: { postId: post.id },
+        data: { status: 'PUBLISHING' }
+      });
+
+      let overallSuccess = true;
+      let failureCount = 0;
+
+      for (const accountPost of post.accounts) {
+        const account = accountPost.socialAccount;
+        try {
+          const decryptedToken = await refreshSocialAccountToken(account);
+          
+          const result = await publishToPlatform(
+            account.platform,
+            decryptedToken,
+            post.content || '',
+            post.mediaUrls
+          ) as any;
+
+          await prisma.socialAccountPost.update({
+            where: {
+              postId_socialAccountId: {
+                postId: post.id,
+                socialAccountId: account.id
+              }
+            },
+            data: {
+              status: 'PUBLISHED',
+              publishedUrl: result.url,
+              publishedAt: new Date()
+            }
+          });
+        } catch (postErr: any) {
+          console.error(`Failed to publish to platform ${account.platform}:`, postErr.message);
+          overallSuccess = false;
+          failureCount++;
+
+          await prisma.socialAccountPost.update({
+            where: {
+              postId_socialAccountId: {
+                postId: post.id,
+                socialAccountId: account.id
+              }
+            },
+            data: {
+              status: 'FAILED',
+              errorMessage: postErr.message
+            }
+          });
+        }
+      }
+
+      const postStatus = overallSuccess ? 'PUBLISHED' : (failureCount === post.accounts.length ? 'FAILED' : 'PUBLISHED'); 
+      
+      await prisma.post.update({
+        where: { id: postId },
+        data: { status: postStatus }
+      });
+
+      console.log(`Finished processing post ${postId}. Status: ${postStatus}`);
+    } catch (error) {
+      console.error(`Queue job execution crashed for post ${postId}:`, error);
+      await prisma.post.update({
+        where: { id: postId },
+        data: { status: 'FAILED' }
+      });
+      throw error;
+    }
+  }, { connection: connection as any });
+
+  postWorker.on('error', (err: any) => {
+    console.warn('Worker error:', err.message);
+  });
+} catch (error) {
+  console.warn('Failed to initialize BullMQ:', (error as any).message);
+}
+
+export { postQueue, postWorker };

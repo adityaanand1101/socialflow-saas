@@ -23,7 +23,14 @@ export const app = express();
 const prisma = new PrismaClient();
 
 // 1. Basic Middlewares
-app.use(cors());
+app.use(cors({
+  origin: [
+    'http://localhost:5173',
+    'https://socialflow-saas.vercel.app', // Update this if you have a custom domain
+    /\.vercel\.app$/ // Matches all Vercel preview deployments
+  ],
+  credentials: true
+}));
 app.use(helmet());
 
 // 2. Health check (Lightweight for pings)

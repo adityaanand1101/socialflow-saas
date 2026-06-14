@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import path from 'path';
 import dotenv from 'dotenv';
 import { Webhook } from 'svix';
 import { PrismaClient } from '@prisma/client';
@@ -182,16 +183,11 @@ app.patch('/api/user/me', requireAuth, async (req: any, res: any) => {
   }
 });
 
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 const PORT = process.env.PORT || 3001;
 
 // Serve static files from the React app
-const distPath = path.join(__dirname, '../../dist'); // Go up twice: dist -> backend -> root
+// In production, index.js is in backend/dist. Root dist is at ../../dist
+const distPath = path.join(__dirname, '../../dist'); 
 app.use(express.static(distPath));
 
 // For any request that doesn't match an API route, send back index.html

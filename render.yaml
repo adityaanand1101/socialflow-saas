@@ -2,7 +2,7 @@ services:
   # 1. Backend API (Node.js/Express)
   - type: web
     name: socialflow-backend
-    env: node
+    runtime: node
     rootDir: backend
     plan: starter # Starter or higher required for background workers
     buildCommand: npm install && npx prisma generate && npm run build
@@ -22,7 +22,7 @@ services:
           property: connectionString
       - key: FRONTEND_URL
         fromService:
-          type: static
+          type: web
           name: socialflow-frontend
           property: url
       # Social API Keys (To be filled in Render UI)
@@ -42,12 +42,12 @@ services:
         value: us-east-1
 
   # 2. Frontend (Static Site)
-  - type: static
+  - type: web
     name: socialflow-frontend
-    env: static
+    runtime: static
     rootDir: .
     buildCommand: npm install && npm run build
-    publishPath: dist
+    staticPublishPath: dist
     headers:
       - path: /*
         name: Cache-Control

@@ -18,6 +18,7 @@ module.exports = {
     extend: {
       fontFamily: {
         sans: ["'Plus Jakarta Sans'", "sans-serif"],
+        serif: ["'Instrument Serif'", "serif"],
       },
       colors: {
         border: "hsl(var(--border))",

@@ -97,12 +97,13 @@ app.get('/api/user/me', requireAuth, async (req: any, res: any) => {
 const distPath = path.join(__dirname, '../../dist');
 app.use(express.static(distPath));
 
-// Final Catch-all handler for SPA (Express 5 safe)
-app.get('*', (req, res, next) => {
-  // If request is for an API that doesn't exist, don't serve index.html
+// Final Catch-all handler for SPA (Express 5 safe middleware)
+app.use((req, res, next) => {
+  // If request is for an API that doesn't exist, return 404
   if (req.url.startsWith('/api')) {
     return next();
   }
+  // Otherwise serve index.html for React Router
   res.sendFile(path.join(distPath, 'index.html'));
 });
 

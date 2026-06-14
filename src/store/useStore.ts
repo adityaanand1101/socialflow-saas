@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { apiFetch } from '@/lib/api'
 
 export type SocialPlatform = 
   | 'instagram' | 'linkedin' | 'x' | 'youtube' | 'gmb' 
@@ -56,8 +57,8 @@ export const useStore = create<SocialFlowStore>((set) => ({
     set({ loading: true })
     try {
       const [postsRes, mediaRes] = await Promise.all([
-        fetch('/api/posts', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('/api/media', { headers: { Authorization: `Bearer ${token}` } })
+        apiFetch('/api/posts', { headers: { Authorization: `Bearer ${token}` } }),
+        apiFetch('/api/media', { headers: { Authorization: `Bearer ${token}` } })
       ])
       
       let posts = [], media = []
@@ -78,7 +79,7 @@ export const useStore = create<SocialFlowStore>((set) => ({
 
   fetchChannels: async (token: string) => {
     try {
-      const res = await fetch('/api/channels', { headers: { Authorization: `Bearer ${token}` } })
+      const res = await apiFetch('/api/channels', { headers: { Authorization: `Bearer ${token}` } })
       if (res.ok) {
         const data = await res.json()
         if (Array.isArray(data)) set({ channels: data })
@@ -90,7 +91,7 @@ export const useStore = create<SocialFlowStore>((set) => ({
 
   addPost: async (token: string, postData) => {
     try {
-      const res = await fetch('/api/posts', {
+      const res = await apiFetch('/api/posts', {
         method: 'POST',
         headers: { 
           Authorization: `Bearer ${token}`,
@@ -116,7 +117,7 @@ export const useStore = create<SocialFlowStore>((set) => ({
 
   removePost: async (token: string, id: string) => {
     try {
-      const res = await fetch(`/api/posts/${id}`, {
+      const res = await apiFetch(`/api/posts/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       })
@@ -134,7 +135,7 @@ export const useStore = create<SocialFlowStore>((set) => ({
       if (updates.scheduledTime) payload.scheduledAt = updates.scheduledTime;
       if (updates.caption) payload.content = updates.caption;
       
-      const res = await fetch(`/api/posts/${id}`, {
+      const res = await apiFetch(`/api/posts/${id}`, {
         method: 'PATCH',
         headers: { 
           Authorization: `Bearer ${token}`,
@@ -154,7 +155,7 @@ export const useStore = create<SocialFlowStore>((set) => ({
 
   uploadMedia: async (token: string, file: File) => {
     try {
-      const presignedRes = await fetch('/api/media/presigned-url', {
+      const presignedRes = await apiFetch('/api/media/presigned-url', {
         method: 'POST',
         headers: { 
           Authorization: `Bearer ${token}`,
@@ -179,7 +180,7 @@ export const useStore = create<SocialFlowStore>((set) => ({
         });
 
         if (uploadRes.ok) {
-          const registerRes = await fetch('/api/media/register', {
+          const registerRes = await apiFetch('/api/media/register', {
             method: 'POST',
             headers: { 
               Authorization: `Bearer ${token}`,
@@ -207,7 +208,7 @@ export const useStore = create<SocialFlowStore>((set) => ({
 
   removeMedia: async (token: string, id: string) => {
     try {
-      const res = await fetch(`/api/media/${id}`, {
+      const res = await apiFetch(`/api/media/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });

@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useAuth } from '@clerk/react'
+import { apiFetch } from '@/lib/api'
 import { 
   UserPlus, 
   MoreVertical, 
@@ -32,7 +33,7 @@ export const Team = () => {
         const token = await getToken();
         if (!token) return;
 
-        const res = await fetch('/api/user/me', {
+        const res = await apiFetch('/api/user/me', {
           headers: { Authorization: `Bearer ${token}` }
         });
 
@@ -67,7 +68,7 @@ export const Team = () => {
     
     try {
       const token = await getToken();
-      const res = await fetch(`/api/workspaces/${activeWorkspaceId}/invites`, {
+      const res = await apiFetch(`/api/workspaces/${activeWorkspaceId}/invites`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

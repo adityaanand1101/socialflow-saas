@@ -4,7 +4,7 @@ import { Sparkles, CheckCircle2 } from "lucide-react";
 
 export const AuthPage = () => {
   const location = useLocation();
-  const isSignUp = location.pathname === "/sign-up";
+  const isSignUp = location.pathname.startsWith("/sign-up");
 
   return (
     <div className="min-h-screen bg-[#0F1117] flex flex-col lg:flex-row">
@@ -76,6 +76,7 @@ export const AuthPage = () => {
                 routing="path" 
                 path="/sign-up" 
                 signInUrl="/sign-in"
+                forceRedirectUrl="/app"
                 appearance={{
                   elements: {
                     rootBox: "w-full",
@@ -98,6 +99,7 @@ export const AuthPage = () => {
                 routing="path" 
                 path="/sign-in" 
                 signUpUrl="/sign-up"
+                forceRedirectUrl="/app"
                 appearance={{
                   elements: {
                     rootBox: "w-full",

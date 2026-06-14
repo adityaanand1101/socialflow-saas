@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@clerk/react'
+import { apiFetch } from '@/lib/api'
 
 const sections = [
   { id: 'profile', icon: User, title: 'Profile', description: 'Personal information and avatar.' },
@@ -64,7 +65,7 @@ export const Settings = () => {
         const token = await getToken()
         if (!token) return
 
-        const res = await fetch('/api/user/me', {
+        const res = await apiFetch('/api/user/me', {
           headers: { Authorization: `Bearer ${token}` }
         })
 
@@ -89,8 +90,8 @@ export const Settings = () => {
 
             // Fetch API keys and webhooks
             const [keysRes, whRes] = await Promise.all([
-               fetch('/api/integrations/keys', { headers: { Authorization: `Bearer ${token}` } }),
-               fetch('/api/integrations/endpoints', { headers: { Authorization: `Bearer ${token}` } })
+               apiFetch('/api/integrations/keys', { headers: { Authorization: `Bearer ${token}` } }),
+               apiFetch('/api/integrations/endpoints', { headers: { Authorization: `Bearer ${token}` } })
             ])
             if (keysRes.ok) setApiKeys(await keysRes.json())
             if (whRes.ok) setWebhooks(await whRes.json())
@@ -108,7 +109,7 @@ export const Settings = () => {
   const handleGenerateApiKey = async () => {
     try {
       const token = await getToken()
-      const res = await fetch('/api/integrations/keys', {
+      const res = await apiFetch('/api/integrations/keys', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ name: `Key created ${new Date().toLocaleDateString()}` })
@@ -123,7 +124,7 @@ export const Settings = () => {
   const handleRevokeApiKey = async (id: string) => {
     try {
       const token = await getToken()
-      const res = await fetch(`/api/integrations/keys/${id}`, {
+      const res = await apiFetch(`/api/integrations/keys/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       })
@@ -136,7 +137,7 @@ export const Settings = () => {
     if (!url) return
     try {
       const token = await getToken()
-      const res = await fetch('/api/integrations/endpoints', {
+      const res = await apiFetch('/api/integrations/endpoints', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ url })
@@ -151,7 +152,7 @@ export const Settings = () => {
   const handleRevokeWebhook = async (id: string) => {
     try {
       const token = await getToken()
-      const res = await fetch(`/api/integrations/endpoints/${id}`, {
+      const res = await apiFetch(`/api/integrations/endpoints/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       })
@@ -164,7 +165,7 @@ export const Settings = () => {
     try {
       const token = await getToken()
       if (activeSection === 'profile') {
-        await fetch('/api/user/me', {
+        await apiFetch('/api/user/me', {
           method: 'PATCH',
           headers: { 
             'Content-Type': 'application/json',
@@ -173,7 +174,7 @@ export const Settings = () => {
           body: JSON.stringify({ name: profile.name, avatarUrl: profile.avatarUrl })
         })
       } else if (activeSection === 'workspace' && workspace.id) {
-        await fetch(`/api/workspaces/${workspace.id}`, {
+        await apiFetch(`/api/workspaces/${workspace.id}`, {
           method: 'PATCH',
           headers: { 
             'Content-Type': 'application/json',

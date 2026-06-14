@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@clerk/react'
+import { apiFetch } from '@/lib/api'
 import { generateCaptions, generateHashtags, generateContentIdeas, generateImage } from '@/lib/gemini'
 
 const tools = [
@@ -57,7 +58,7 @@ export const AIStudio = () => {
       switch (activeTool) {
         case 'caption': {
           try {
-            const res = await fetch('/api/ai/caption', {
+            const res = await apiFetch('/api/ai/caption', {
               method: 'POST',
               headers,
               body: JSON.stringify({ prompt, tone, platform: 'Instagram' })
@@ -76,7 +77,7 @@ export const AIStudio = () => {
         }
         case 'hashtag': {
           try {
-            const res = await fetch('/api/ai/hashtags', {
+            const res = await apiFetch('/api/ai/hashtags', {
               method: 'POST',
               headers,
               body: JSON.stringify({ niche: prompt, keywords: prompt })
@@ -95,7 +96,7 @@ export const AIStudio = () => {
         }
         case 'ideas': {
           try {
-            const res = await fetch('/api/ai/ideas', {
+            const res = await apiFetch('/api/ai/ideas', {
               method: 'POST',
               headers,
               body: JSON.stringify({ topic: prompt, industry: prompt })
@@ -114,7 +115,7 @@ export const AIStudio = () => {
         }
         case 'image': {
           try {
-            const res = await fetch('/api/ai/image', {
+            const res = await apiFetch('/api/ai/image', {
               method: 'POST',
               headers,
               body: JSON.stringify({ imagePrompt: prompt, aspectRatio: '1:1' })

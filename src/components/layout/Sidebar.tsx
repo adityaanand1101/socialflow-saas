@@ -19,15 +19,15 @@ import { Button } from '@/components/ui/button'
 import { UserButton, useUser, SignOutButton } from '@clerk/react'
 
 const navItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', href: '/' },
-  { icon: Calendar, label: 'Calendar', href: '/calendar' },
-  { icon: PenTool, label: 'Compose', href: '/compose' },
-  { icon: ImageIcon, label: 'Media Library', href: '/media' },
-  { icon: BarChart3, label: 'Analytics', href: '/analytics' },
-  { icon: Share2, label: 'Channels', href: '/channels' },
-  { icon: Sparkles, label: 'AI Studio', href: '/ai-studio' },
-  { icon: Users, label: 'Team', href: '/team' },
-  { icon: Settings, label: 'Settings', href: '/settings' },
+  { icon: LayoutDashboard, label: 'Dashboard', href: '/app' },
+  { icon: Calendar, label: 'Calendar', href: '/app/calendar' },
+  { icon: PenTool, label: 'Compose', href: '/app/compose' },
+  { icon: ImageIcon, label: 'Media Library', href: '/app/media' },
+  { icon: BarChart3, label: 'Analytics', href: '/app/analytics' },
+  { icon: Share2, label: 'Channels', href: '/app/channels' },
+  { icon: Sparkles, label: 'AI Studio', href: '/app/ai-studio' },
+  { icon: Users, label: 'Team', href: '/app/team' },
+  { icon: Settings, label: 'Settings', href: '/app/settings' },
 ]
 
 export const Sidebar = () => {

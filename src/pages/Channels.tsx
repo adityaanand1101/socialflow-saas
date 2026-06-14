@@ -12,6 +12,7 @@ import {
 import { useAuth } from '@clerk/react'
 import { useStore } from '@/store/useStore'
 import { cn } from '@/lib/utils'
+import { apiFetch } from '@/lib/api'
 
 const ALL_PLATFORMS = [
   { id: 'instagram', label: 'Instagram', icon: Instagram, color: 'text-pink-400', bgHover: 'hover:border-pink-500/50 hover:bg-pink-500/5', description: 'Reels, Stories & Feed', authNote: 'Requires Instagram Business account' },
@@ -52,7 +53,7 @@ export const Channels = () => {
     setConnecting(platform)
     try {
       const token = await getToken()
-      const res = await fetch(`/api/oauth/${platform}/connect`, {
+      const res = await apiFetch(`/api/oauth/${platform}/connect`, {
         headers: { Authorization: `Bearer ${token}` }
       })
       const data = await res.json()
@@ -74,7 +75,7 @@ export const Channels = () => {
     setConnecting(showCustomModal)
     try {
       const token = await getToken()
-      const res = await fetch(`/api/oauth/${showCustomModal}/manual-connect`, {
+      const res = await apiFetch(`/api/oauth/${showCustomModal}/manual-connect`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

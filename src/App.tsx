@@ -14,18 +14,21 @@ import { PrivacyPolicy } from './pages/PrivacyPolicy'
 import { TermsOfService } from './pages/TermsOfService'
 import { AuthPage } from './pages/Auth'
 
+import { LandingPage } from './pages/Landing'
+
 function App() {
   return (
     <Router>
       <Routes>
         {/* Public Routes */}
+        <Route path="/" element={<LandingPage />} />
         <Route path="/sign-in/*" element={<AuthPage />} />
         <Route path="/sign-up/*" element={<AuthPage />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<TermsOfService />} />
         
         {/* Protected Routes */}
-        <Route element={
+        <Route path="/app/*" element={
           <>
             <Show when="signed-in">
               <Layout />
@@ -35,15 +38,15 @@ function App() {
             </Show>
           </>
         }>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/calendar" element={<Calendar />} />
-          <Route path="/compose" element={<Compose />} />
-          <Route path="/media" element={<MediaLibrary />} />
-          <Route path="/analytics" element={<Analytics />} />
-          <Route path="/channels" element={<Channels />} />
-          <Route path="/ai-studio" element={<AIStudio />} />
-          <Route path="/team" element={<Team />} />
-          <Route path="/settings" element={<Settings />} />
+          <Route path="" element={<Dashboard />} />
+          <Route path="calendar" element={<Calendar />} />
+          <Route path="compose" element={<Compose />} />
+          <Route path="media" element={<MediaLibrary />} />
+          <Route path="analytics" element={<Analytics />} />
+          <Route path="channels" element={<Channels />} />
+          <Route path="ai-studio" element={<AIStudio />} />
+          <Route path="team" element={<Team />} />
+          <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>
     </Router>

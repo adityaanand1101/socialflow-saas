@@ -34,8 +34,38 @@ services:
         sync: false
       - key: S3_REGION
         value: us-east-1
+      # Production URLs
+      - key: BACKEND_URL
+        sync: false # Set to your Render backend URL (e.g., https://app-name.onrender.com)
+      - key: FRONTEND_URL
+        sync: false # Usually the same as BACKEND_URL in consolidated mode
+      
+      # Security
+      - key: ENCRYPTION_KEY
+        sync: false # Generate a random 32-character string for token encryption
+      - key: CLERK_WEBHOOK_SECRET
+        sync: false # From Clerk Dashboard -> Webhooks
+      
       # OpenAI / Gemini API Key
       - key: OPENAI_API_KEY
+        sync: false
+
+      # Social Media APIs (Add these as needed)
+      - key: X_CLIENT_ID
+        sync: false
+      - key: X_CLIENT_SECRET
+        sync: false
+      - key: LINKEDIN_CLIENT_ID
+        sync: false
+      - key: LINKEDIN_CLIENT_SECRET
+        sync: false
+      - key: INSTAGRAM_CLIENT_ID
+        sync: false
+      - key: INSTAGRAM_CLIENT_SECRET
+        sync: false
+      - key: FACEBOOK_CLIENT_ID
+        sync: false
+      - key: FACEBOOK_CLIENT_SECRET
         sync: false
 
   # 2. Redis (Key Value Store for BullMQ)

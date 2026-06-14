@@ -1,30 +1,24 @@
 services:
-  # 1. Backend API (Node.js/Express)
+  # 1. Consolidated App (Backend serving Frontend)
   - type: web
-    name: socialflow-backend
+    name: socialflow-saas
     runtime: node
-    rootDir: backend
-    plan: starter # Starter or higher required for background workers
-    buildCommand: npm install && npx prisma generate && npm run build
-    startCommand: npm start
-    healthCheckPath: /api/health # Ensure you have a health check route
+    plan: starter
+    # Build frontend first, then backend
+    buildCommand: npm install && npm run build && cd backend && npm install && npm run build
+    startCommand: cd backend && npm start
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
         value: 3001
       - key: DATABASE_URL
-        sync: false # Set manually in Render UI or link to Render DB
+        sync: false
       - key: REDIS_URL
         fromService:
-          type: redis
+          type: keyvalue
           name: socialflow-cache
           property: connectionString
-      - key: FRONTEND_URL
-        fromService:
-          type: web
-          name: socialflow-frontend
-          property: url
       # Social API Keys (To be filled in Render UI)
       - key: CLERK_SECRET_KEY
         sync: false
@@ -40,29 +34,12 @@ services:
         sync: false
       - key: S3_REGION
         value: us-east-1
-
-  # 2. Frontend (Static Site)
-  - type: web
-    name: socialflow-frontend
-    runtime: static
-    rootDir: .
-    buildCommand: npm install && npm run build
-    staticPublishPath: dist
-    headers:
-      - path: /*
-        name: Cache-Control
-        value: public, max-age=0, must-revalidate
-    envVars:
-      - key: VITE_API_URL
-        fromService:
-          type: web
-          name: socialflow-backend
-          property: url
-      - key: VITE_CLERK_PUBLISHABLE_KEY
+      # OpenAI / Gemini API Key
+      - key: OPENAI_API_KEY
         sync: false
 
-# 3. Redis (For BullMQ background tasks)
-redis:
-  - name: socialflow-cache
+  # 2. Redis (Key Value Store for BullMQ)
+  - type: keyvalue
+    name: socialflow-cache
     plan: free
-    ipAllowList: [] # Internal only
+    ipAllowList: [] # Allow all internal traffic

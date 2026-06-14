@@ -41,6 +41,42 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// 3. Diagnostics (Temporary Public Route for Setup)
+app.get('/api/diagnostics', async (req, res) => {
+  const checkEnv = (key: string) => {
+    const val = process.env[key];
+    if (!val) return '❌ MISSING';
+    if (val.includes('your_') || val.includes('placeholder')) return '⚠️ PLACEHOLDER';
+    return '✅ CONFIGURED';
+  };
+
+  const report = {
+    auth: {
+      CLERK_SECRET_KEY: checkEnv('CLERK_SECRET_KEY'),
+      CLERK_PUBLISHABLE_KEY: checkEnv('CLERK_PUBLISHABLE_KEY'),
+      CLERK_WEBHOOK_SECRET: checkEnv('CLERK_WEBHOOK_SECRET'),
+    },
+    database: {
+      DATABASE_URL: checkEnv('DATABASE_URL'),
+      DIRECT_URL: checkEnv('DIRECT_URL'),
+    },
+    social_apis: {
+      X: checkEnv('X_CLIENT_ID') === '✅ CONFIGURED' && checkEnv('X_CLIENT_SECRET') === '✅ CONFIGURED' ? '✅ READY' : '❌ INCOMPLETE',
+      INSTAGRAM: checkEnv('INSTAGRAM_CLIENT_ID') === '✅ CONFIGURED' && checkEnv('INSTAGRAM_CLIENT_SECRET') === '✅ CONFIGURED' ? '✅ READY' : '❌ INCOMPLETE',
+      FACEBOOK: checkEnv('FACEBOOK_CLIENT_ID') === '✅ CONFIGURED' && checkEnv('FACEBOOK_CLIENT_SECRET') === '✅ CONFIGURED' ? '✅ READY' : '❌ INCOMPLETE',
+      LINKEDIN: checkEnv('LINKEDIN_CLIENT_ID') === '✅ CONFIGURED' && checkEnv('LINKEDIN_CLIENT_SECRET') === '✅ CONFIGURED' ? '✅ READY' : '❌ INCOMPLETE',
+      THREADS: checkEnv('THREADS_CLIENT_ID') === '✅ CONFIGURED' && checkEnv('THREADS_CLIENT_SECRET') === '✅ CONFIGURED' ? '✅ READY' : '❌ INCOMPLETE',
+    },
+    storage: {
+      S3_ACCESS_KEY: checkEnv('S3_ACCESS_KEY_ID'),
+      S3_SECRET: checkEnv('S3_SECRET_ACCESS_KEY'),
+      S3_BUCKET: checkEnv('S3_BUCKET_NAME'),
+    }
+  };
+
+  res.json(report);
+});
+
 // 3. Webhook (Hardened with Try/Catch)
 app.post('/api/webhooks/clerk', express.raw({ type: 'application/json' }), async (req, res) => {
   try {

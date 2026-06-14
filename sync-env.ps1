@@ -28,7 +28,7 @@ Get-Content $ENV_FILE | ForEach-Object {
 # Add Production specific overrides
 $envVars += @{ key = "NODE_ENV"; value = "production" }
 $envVars += @{ key = "BACKEND_URL"; value = "https://socialflow-saas.onrender.com" }
-$envVars += @{ key = "FRONTEND_URL"; value = "https://socialflow-saas.onrender.com" }
+$envVars += @{ key = "FRONTEND_URL"; value = "https://socialflow-saas.vercel.app" }
 
 # 2. Push to Render
 Write-Host "Syncing $($envVars.Count) environment variables to Render..."

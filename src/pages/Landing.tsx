@@ -1,18 +1,24 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useScroll, useTransform, useInView } from "framer-motion";
 import { 
-  ArrowRight, 
-  Check, 
-  Globe, 
   Sparkles, 
   TrendingUp, 
   Calendar,
   Cpu,
-  Lock,
   Database,
   MessageSquare,
-  Plus
+  ChevronDown,
+  ArrowRight,
+  Star,
+  Zap,
+  Share2,
+  CheckCircle2,
+  ShieldCheck,
+  ChevronLeft,
+  ChevronRight,
+  Shield,
+  Globe
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -21,12 +27,6 @@ import { cn } from "@/lib/utils";
 const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
 
 // --- Sub-components ---
-
-const SectionBadge = ({ children }: { children: React.ReactNode }) => (
-  <div className="inline-flex items-center px-3 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-600 text-[10px] font-black uppercase tracking-[0.2em] mb-6">
-    {children}
-  </div>
-);
 
 const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -40,22 +40,22 @@ const Navbar = () => {
   return (
     <nav className={cn(
       "fixed top-0 w-full z-50 transition-all duration-500 py-6 px-8",
-      isScrolled ? "bg-white/80 backdrop-blur-xl border-b border-gray-100 py-4" : "bg-transparent"
+      isScrolled ? "bg-navy-900/80 backdrop-blur-xl border-b border-white/5 py-4" : "bg-transparent"
     )}>
       <div className="max-w-7xl mx-auto flex items-center justify-between">
-        <div className="flex items-center gap-2 group cursor-pointer">
-          <div className="w-8 h-8 rounded bg-[#111111] flex items-center justify-center">
-            <Sparkles className="text-white w-4 h-4" />
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-xl bg-gradient-primary flex items-center justify-center shadow-glow">
+            <Sparkles className="text-white w-5 h-5" />
           </div>
-          <span className="text-lg font-black tracking-tighter text-[#111111] uppercase italic font-serif">SocialFlow</span>
+          <span className="text-xl font-bold tracking-tighter text-white italic">SocialFlow</span>
         </div>
 
         <div className="hidden md:flex items-center gap-10">
-          {["Platform", "Features", "Pricing"].map((item) => (
+          {["Platform", "Features", "Reviews", "Pricing", "FAQ"].map((item) => (
             <a 
               key={item} 
               href={`#${item.toLowerCase()}`}
-              className="text-[11px] font-bold uppercase tracking-[0.1em] text-gray-500 hover:text-black transition-colors"
+              className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400 hover:text-white transition-colors"
             >
               {item}
             </a>
@@ -64,13 +64,13 @@ const Navbar = () => {
 
         <div className="flex items-center gap-4">
           <Link to="/sign-in">
-            <Button variant="ghost" className="text-gray-600 hover:text-black text-[11px] font-bold uppercase tracking-widest">
+            <Button variant="ghost" className="text-gray-300 hover:text-white text-xs font-bold uppercase tracking-widest">
               Login
             </Button>
           </Link>
           <Link to="/sign-up">
-            <Button className="bg-[#111111] text-white hover:bg-black px-6 rounded-md text-[11px] font-bold uppercase tracking-widest shadow-none">
-              Start Building
+            <Button className="bg-gradient-primary text-white hover:opacity-90 px-6 rounded-lg text-xs font-bold uppercase tracking-widest shadow-glow border-none">
+              Start Free
             </Button>
           </Link>
         </div>
@@ -79,261 +79,342 @@ const Navbar = () => {
   );
 };
 
-const AICalibrationDemo = () => {
-  const [tone, setTone] = useState("Professional");
-  const captions = {
-    "Professional": "SocialFlow automates your cross-platform strategy with precision and intelligence.",
-    "Sarcastic": "Because manually posting to three different apps is definitely the best use of your 2026.",
-    "Viral": "THE SECRET to 10x growth? It's not working harder. It's working autonomously. 🚀 #SaaS",
-    "Technical": "Leveraging vector-based semantic analysis to synchronize multi-tenant content delivery pipelines."
-  };
+const PlatformMarquee = () => {
+  const platforms = [
+    { name: "Instagram", color: "text-[#E4405F]" },
+    { name: "LinkedIn", color: "text-[#0A66C2]" },
+    { name: "X / Twitter", color: "text-white" },
+    { name: "Facebook", color: "text-[#1877F2]" },
+    { name: "Threads", color: "text-white" },
+    { name: "Bluesky", color: "text-[#0085FF]" },
+    { name: "Mastodon", color: "text-[#6364FF]" }
+  ];
 
   return (
-    <div className="w-full h-full flex flex-col bg-[#FBFBFA] border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-      <div className="bg-white border-b border-gray-200 px-4 py-2 flex items-center gap-1.5">
-        <div className="w-2 h-2 rounded-full bg-gray-200" />
-        <div className="w-2 h-2 rounded-full bg-gray-200" />
-        <div className="w-2 h-2 rounded-full bg-gray-200" />
-        <span className="ml-2 text-[10px] text-gray-400 font-mono">socialflow_studio_v2.exe</span>
-      </div>
-      <div className="p-6 space-y-6">
-        <div className="space-y-3">
-          <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Target Tone Profile</label>
-          <div className="flex flex-wrap gap-2">
-            {Object.keys(captions).map(t => (
-              <button 
-                key={t}
-                onClick={() => setTone(t)}
-                className={cn(
-                  "px-3 py-1 rounded text-[10px] font-bold border transition-all",
-                  tone === t ? "bg-[#111111] text-white border-black" : "bg-white text-gray-500 border-gray-200 hover:border-gray-300"
-                )}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="space-y-2">
-          <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Generated Synthesis</label>
-          <div className="p-4 bg-white border border-gray-100 rounded-lg min-h-[80px] text-sm text-[#111111] font-medium leading-relaxed">
-            <AnimatePresence mode="wait">
-              <motion.p
-                key={tone}
-                initial={{ opacity: 0, y: 5 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -5 }}
-                transition={{ duration: 0.3 }}
-              >
-                {captions[tone as keyof typeof captions]}
-              </motion.p>
-            </AnimatePresence>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const WorkflowDemo = () => {
-  return (
-    <div className="w-full h-full bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-      <div className="flex items-center justify-between mb-8">
-        <h4 className="text-sm font-black uppercase tracking-widest">Active Channels</h4>
-        <Plus className="w-4 h-4 text-gray-400" />
-      </div>
-      <div className="space-y-4">
-        {[
-          { platform: "X / Twitter", time: "10:00 AM", status: "Scheduled", color: "bg-gray-100" },
-          { platform: "LinkedIn", time: "11:30 AM", status: "Published", color: "bg-indigo-50", icon: true },
-          { platform: "Instagram", time: "02:00 PM", status: "Queued", color: "bg-gray-50" }
-        ].map((p, i) => (
-          <div key={i} className="flex items-center gap-4 p-3 rounded-lg border border-gray-100">
-            <div className={cn("w-8 h-8 rounded flex items-center justify-center", p.color)}>
-              <div className="w-4 h-4 rounded-sm border-2 border-gray-300" />
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-[#111111]">{p.platform}</span>
-                <span className="text-[9px] font-mono text-gray-400">{p.time}</span>
-              </div>
-              <div className="flex items-center gap-1.5 mt-1">
-                <div className={cn("w-1.5 h-1.5 rounded-full", p.status === 'Published' ? "bg-emerald-500" : "bg-amber-500")} />
-                <span className="text-[10px] text-gray-400 font-medium">{p.status}</span>
-              </div>
-            </div>
+    <div className="w-full overflow-hidden py-12 border-y border-white/5 bg-white/[0.01] relative">
+      <div className="absolute inset-y-0 left-0 w-32 bg-gradient-to-r from-navy-900 to-transparent z-10" />
+      <div className="absolute inset-y-0 right-0 w-32 bg-gradient-to-l from-navy-900 to-transparent z-10" />
+      
+      <motion.div 
+        animate={{ x: [0, -1000] }}
+        transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
+        className="flex gap-20 items-center whitespace-nowrap whitespace-nowrap"
+      >
+        {[...platforms, ...platforms, ...platforms].map((p, i) => (
+          <div key={i} className={cn("flex items-center gap-3 text-lg font-black uppercase tracking-[0.2em] opacity-30 hover:opacity-100 transition-opacity", p.color)}>
+            <div className="w-2 h-2 rounded-full bg-current" />
+            {p.name}
           </div>
         ))}
-      </div>
+      </motion.div>
     </div>
   );
 };
 
-// --- Main Page ---
+const FAQItem = ({ question, answer }: { question: string; answer: string }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  return (
+    <div className="border-b border-white/5 last:border-0">
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full py-6 flex items-center justify-between text-left group"
+      >
+        <span className="text-lg font-bold text-gray-200 group-hover:text-white transition-colors">{question}</span>
+        <ChevronDown className={cn("w-5 h-5 text-gray-500 transition-transform duration-300", isOpen && "rotate-180")} />
+      </button>
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3, ease: EASE }}
+            className="overflow-hidden"
+          >
+            <p className="pb-6 text-gray-400 leading-relaxed max-w-3xl">
+              {answer}
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+const ReviewCard = ({ name, role, content, rating = 5 }: any) => (
+  <div className="p-8 rounded-3xl glass-morphism border border-white/10 space-y-6 min-w-[350px] max-w-[350px]">
+    <div className="flex gap-1 text-yellow-500">
+      {[...Array(rating)].map((_, i) => <Star key={i} className="w-4 h-4 fill-current" />)}
+    </div>
+    <p className="text-gray-300 font-medium leading-relaxed italic">"{content}"</p>
+    <div className="flex items-center gap-4">
+      <div className="w-10 h-10 rounded-full bg-gradient-primary flex-shrink-0" />
+      <div>
+        <p className="text-sm font-bold text-white">{name}</p>
+        <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">{role}</p>
+      </div>
+    </div>
+  </div>
+);
+
+const BentoFeature = ({ icon: Icon, title, desc, className, delay = 0 }: any) => {
+  const ref = useRef(null);
+  const isInView = useInView(ref, { once: true });
+
+  return (
+    <motion.div
+      ref={ref}
+      initial={{ opacity: 0, y: 20 }}
+      animate={isInView ? { opacity: 1, y: 0 } : {}}
+      transition={{ duration: 0.8, delay, ease: EASE }}
+      className={cn(
+        "p-8 rounded-[2rem] border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/10 transition-all group overflow-hidden relative",
+        className
+      )}
+    >
+      <div className="absolute -right-4 -top-4 w-32 h-32 bg-gradient-primary opacity-[0.03] group-hover:opacity-[0.08] blur-3xl transition-opacity" />
+      <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center mb-8 group-hover:scale-110 transition-transform">
+        <Icon className="w-6 h-6 text-indigo-400" />
+      </div>
+      <h3 className="text-2xl font-black tracking-tight text-white mb-3 uppercase">{title}</h3>
+      <p className="text-gray-400 text-sm font-medium leading-relaxed">{desc}</p>
+    </motion.div>
+  );
+};
 
 export const LandingPage = () => {
+  const { scrollYProgress } = useScroll();
+  const heroScale = useTransform(scrollYProgress, [0, 0.2], [1, 0.95]);
+  const heroRotate = useTransform(scrollYProgress, [0, 0.2], [0, 2]);
+
   return (
-    <div className="min-h-screen bg-[#FBFBFA] text-[#111111] font-sans selection:bg-indigo-500/10 antialiased overflow-x-hidden">
+    <div className="min-h-screen bg-navy-900 text-white font-sans selection:bg-indigo-500/30 overflow-x-hidden antialiased">
+      {/* Background Orbs */}
+      <div className="fixed inset-0 pointer-events-none -z-10">
+        <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] bg-indigo-600/10 rounded-full blur-[150px]" />
+        <div className="absolute bottom-[10%] right-[-5%] w-[50%] h-[50%] bg-pink-600/10 rounded-full blur-[150px]" />
+      </div>
+
       <Navbar />
 
       <main>
-        {/* Hero: The Editorial Statement */}
-        <section className="pt-52 pb-32 px-8">
-          <div className="max-w-5xl mx-auto text-center space-y-10">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, ease: EASE }}
-            >
-              <SectionBadge>Protocol v2.0</SectionBadge>
-              <h1 className="text-7xl md:text-9xl font-serif tracking-tight leading-[1] text-[#111111] mb-8">
-                The Autonomous <br />
-                <span className="italic text-gray-400">Social Protocol.</span>
-              </h1>
-              <p className="text-xl md:text-2xl text-gray-500 max-w-3xl mx-auto leading-relaxed font-medium">
-                SocialFlow is a high-performance workspace for content architects. <br className="hidden md:block" />
-                Synchronize, synthesize, and scale with neural-layer automation.
-              </p>
-            </motion.div>
-
+        {/* 1. HERO SECTION */}
+        <section className="relative pt-44 pb-32 px-6">
+          <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-20 items-center">
             <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.5, duration: 1 }}
-              className="flex flex-col sm:flex-row items-center justify-center gap-6 pt-6"
+              initial={{ opacity: 0, x: -30 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 1, ease: EASE }}
+              className="space-y-10"
             >
-              <Link to="/sign-up">
-                <Button size="lg" className="h-16 px-10 bg-[#111111] text-white hover:bg-black rounded-md font-bold uppercase tracking-widest text-sm shadow-none">
-                  Begin Onboarding <ArrowRight className="ml-3 w-5 h-5" />
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-indigo-400 text-[11px] font-black uppercase tracking-[0.2em]">
+                <Zap className="w-3.5 h-3.5 fill-indigo-400" />
+                <span>Next-Gen Content Automation</span>
+              </div>
+              
+              <h1 className="text-7xl md:text-8xl font-black tracking-tighter leading-[0.9] text-white italic">
+                AUTOMATE <br />
+                <span className="text-transparent bg-clip-text bg-gradient-primary">
+                  DOMINANCE.
+                </span>
+              </h1>
+
+              <p className="text-xl text-gray-400 max-w-xl leading-relaxed font-medium">
+                The all-in-one command center to schedule content, synthesize viral captions with AI, and dominate X, Instagram, and LinkedIn in one protocol.
+              </p>
+
+              <div className="flex flex-wrap items-center gap-5 pt-4">
+                <Link to="/sign-up">
+                  <Button size="lg" className="h-16 px-10 text-base bg-gradient-primary rounded-xl font-black uppercase tracking-widest shadow-glow hover:opacity-90 transition-all active:scale-95">
+                    Launch Free Trial <ArrowRight className="ml-3 w-5 h-5" />
+                  </Button>
+                </Link>
+                <Button size="lg" variant="ghost" className="h-16 px-8 text-base text-gray-400 hover:text-white font-black uppercase tracking-widest border border-white/5 bg-white/5 rounded-xl backdrop-blur-md">
+                  Watch intelligence demo
                 </Button>
-              </Link>
-              <Button size="lg" variant="outline" className="h-16 px-8 border-gray-200 hover:bg-white text-[#111111] font-bold uppercase tracking-widest text-sm rounded-md">
-                Review The Stack
-              </Button>
+              </div>
+            </motion.div>
+
+            {/* Browser Mockup */}
+            <motion.div 
+              style={{ scale: heroScale, rotateX: heroRotate }}
+              className="relative group hidden lg:block"
+            >
+               <div className="absolute inset-0 bg-indigo-500/20 blur-[120px] -z-10" />
+               <div className="rounded-3xl border border-white/10 bg-[#0F1117] p-3 shadow-2xl">
+                  <div className="bg-white/5 rounded-2xl overflow-hidden border border-white/5">
+                     <div className="h-10 bg-white/5 flex items-center px-4 gap-2">
+                        <div className="flex gap-1.5">
+                           <div className="w-2.5 h-2.5 rounded-full bg-red-500/50" />
+                           <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/50" />
+                           <div className="w-2.5 h-2.5 rounded-full bg-green-500/50" />
+                        </div>
+                        <div className="flex-1 h-6 bg-white/5 rounded-md mx-8" />
+                     </div>
+                     <div className="p-8 space-y-6">
+                        <div className="grid grid-cols-3 gap-4">
+                           {[1,2,3].map(i => <div key={i} className="h-32 rounded-xl bg-white/5 animate-pulse" style={{ animationDelay: `${i * 0.2}s` }} />)}
+                        </div>
+                        <div className="h-48 rounded-xl bg-gradient-to-br from-indigo-500/10 to-transparent border border-white/5 flex items-center justify-center">
+                           <Sparkles className="w-12 h-12 text-indigo-500/20" />
+                        </div>
+                     </div>
+                  </div>
+               </div>
             </motion.div>
           </div>
         </section>
 
-        {/* The "How it works" Grid */}
-        <section id="platform" className="py-32 px-8 border-t border-gray-200 bg-white">
-          <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-24 items-center">
-             <div className="space-y-12">
-                <div className="space-y-6">
-                  <h2 className="text-5xl md:text-6xl font-serif tracking-tight leading-none text-[#111111]">
-                    Synthesis over <br />Templates.
-                  </h2>
-                  <p className="text-lg text-gray-500 leading-relaxed font-medium">
-                    We don't just schedule posts. We reconstruct your brand's semantic signature to generate content that actually resonates.
-                  </p>
-                </div>
+        {/* 2. MARQUEE SECTION */}
+        <PlatformMarquee />
 
-                <div className="space-y-8">
-                  {[
-                    { 
-                      title: "Neural Tone Mapping", 
-                      desc: "Our engine analyzes your last 100 successful posts to replicate your specific humor, vocabulary, and pacing."
-                    },
-                    { 
-                      title: "Universal Queue Protocol", 
-                      desc: "One central command for X, LinkedIn, and Instagram. Atomic scheduling with millisecond precision."
-                    },
-                    { 
-                      title: "Absolute Data Sovereignty", 
-                      desc: "Your assets live on your terms. Powered by Supabase for databases and Backblaze B2 for encrypted media hosting."
-                    }
-                  ].map((f, i) => (
-                    <div key={i} className="flex gap-6">
-                      <div className="w-6 h-6 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center flex-shrink-0 mt-1">
-                        <Check className="w-3 h-3 text-indigo-600" strokeWidth={4} />
-                      </div>
-                      <div className="space-y-1">
-                        <h4 className="text-sm font-black uppercase tracking-widest text-[#111111]">{f.title}</h4>
-                        <p className="text-sm text-gray-500 font-medium leading-relaxed">{f.desc}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-             </div>
-
-             <div className="relative group">
-                <div className="absolute inset-0 bg-indigo-600/5 blur-[120px] group-hover:bg-indigo-600/10 transition-all duration-1000" />
-                <div className="relative">
-                   <AICalibrationDemo />
-                   <div className="absolute -bottom-12 -right-12 hidden lg:block w-72 h-72">
-                      <WorkflowDemo />
-                   </div>
-                </div>
-             </div>
-          </div>
-        </section>
-
-        {/* Features: Utilitarian Grid */}
-        <section id="features" className="py-40 px-8 bg-[#FBFBFA]">
+        {/* 3. CORE FEATURES: BENTO GRID */}
+        <section id="features" className="py-40 px-6">
           <div className="max-w-7xl mx-auto space-y-24">
-            <div className="max-w-2xl">
-              <SectionBadge>Capabilities</SectionBadge>
-              <h2 className="text-5xl font-serif tracking-tight text-[#111111]">Built for the <br />1% of Creators.</h2>
-            </div>
+             <div className="text-center space-y-6">
+                <h2 className="text-5xl md:text-7xl font-black tracking-tighter text-white uppercase italic">Built for the Elite.</h2>
+                <p className="text-gray-400 text-lg max-w-2xl mx-auto font-medium">Stop wasting hours on manual posting. Our neural layer handles the complexity while you focus on the vision.</p>
+             </div>
 
-            <div className="grid md:grid-cols-3 gap-1px bg-gray-200 border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-               {[
-                 { icon: Cpu, title: "AI Studio", desc: "Fine-tune LLMs on your specific brand assets. No more generic 'Elevate your growth' captions." },
-                 { icon: TrendingUp, title: "Visual Intel", desc: "Real-time engagement heatmaps across every connected endpoint. Data-driven, not opinion-driven." },
-                 { icon: Lock, title: "Vault Security", desc: "Enterprise-grade encryption for all social tokens. Your security is our primary directive." },
-                 { icon: Database, title: "Edge Storage", desc: "Media is hosted on Backblaze B2's global edge network for instant previewing and reliable publishing." },
-                 { icon: Calendar, title: "Visual Queue", desc: "A clean, editorial-style calendar to map out your entire month's strategy in minutes." },
-                 { icon: Globe, title: "Web-scale", desc: "Designed to handle high-frequency posting with BullMQ and Redis infrastructure on Render." }
-               ].map((f, i) => (
-                 <div key={i} className="bg-white p-10 space-y-6 hover:bg-gray-50 transition-colors">
-                    <div className="w-10 h-10 rounded bg-[#F7F6F3] border border-gray-200 flex items-center justify-center">
-                       <f.icon className="w-5 h-5 text-[#111111]" />
-                    </div>
-                    <h3 className="text-sm font-black uppercase tracking-widest text-[#111111]">{f.title}</h3>
-                    <p className="text-sm text-gray-500 font-medium leading-relaxed">{f.desc}</p>
-                 </div>
-               ))}
-            </div>
+             <div className="grid md:grid-cols-6 gap-6">
+                <BentoFeature 
+                  className="md:col-span-4"
+                  icon={Cpu}
+                  title="AI Studio 2.0"
+                  desc="Replicate your brand's semantic signature. Fine-tuned LLMs that generate threads, captions, and hashtags that match your specific voice and humor."
+                />
+                <BentoFeature 
+                  className="md:col-span-2"
+                  icon={Calendar}
+                  title="Visual Queue"
+                  desc="A high-performance visual timeline to orchestrate multi-platform campaigns with millisecond precision."
+                />
+                <BentoFeature 
+                  className="md:col-span-3"
+                  icon={TrendingUp}
+                  title="Predictive Intel"
+                  desc="Stop guessing. Our engine predicts engagement based on real-time global social signals."
+                />
+                <BentoFeature 
+                  className="md:col-span-3"
+                  icon={ShieldCheck}
+                  title="Vault-Grade Security"
+                  desc="Social tokens are encrypted with military-grade protocols and media is stored on B2 infrastructure."
+                />
+             </div>
           </div>
         </section>
 
-        {/* Pricing: The Minimalist Choice */}
-        <section id="pricing" className="py-40 px-8 bg-white border-y border-gray-100">
-           <div className="max-w-5xl mx-auto">
-              <div className="text-center space-y-6 mb-24">
-                 <h2 className="text-6xl font-serif tracking-tight text-[#111111]">Pure Access.</h2>
-                 <p className="text-gray-500 font-bold uppercase tracking-widest text-[10px]">Commercial tiers for evolving brands</p>
+        {/* 4. INTERACTIVE PREVIEWER */}
+        <section className="py-32 px-6 bg-white/[0.01] border-y border-white/5">
+           <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-24 items-center">
+              <div className="space-y-12">
+                 <h2 className="text-5xl md:text-6xl font-black tracking-tighter italic leading-none">POST SYNTHESIS <br />IN REAL TIME.</h2>
+                 <div className="space-y-10">
+                    {[
+                      { icon: MessageSquare, title: "Tone Calibration", desc: "Choose between Professional, Viral, Sarcastic, or Technical styles." },
+                      { icon: Share2, title: "Multi-Sync", desc: "Preview exactly how your post looks on X vs Instagram instantly." },
+                      { icon: Database, title: "Media Relay", desc: "Sync your Backblaze library directly into your post compositions." }
+                    ].map((f, i) => (
+                      <div key={i} className="flex gap-6">
+                        <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+                           <f.icon className="w-5 h-5 text-indigo-400" />
+                        </div>
+                        <div className="space-y-1">
+                           <h4 className="text-lg font-bold text-white">{f.title}</h4>
+                           <p className="text-gray-400 text-sm font-medium leading-relaxed">{f.desc}</p>
+                        </div>
+                      </div>
+                    ))}
+                 </div>
+              </div>
+
+              <div className="p-8 rounded-[3rem] glass-morphism border border-white/10 bg-navy-900/50 shadow-glow relative">
+                 <div className="absolute -top-6 -right-6 w-24 h-24 bg-gradient-primary rounded-full blur-[60px]" />
+                 <div className="space-y-8">
+                    <div className="flex items-center justify-between border-b border-white/5 pb-4">
+                       <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Post Intelligence Preview</span>
+                       <div className="flex gap-2">
+                          <div className="w-2 h-2 rounded-full bg-green-500" />
+                          <div className="w-2 h-2 rounded-full bg-white/10" />
+                       </div>
+                    </div>
+                    <div className="space-y-4">
+                       <div className="h-4 w-1/3 bg-white/10 rounded-full" />
+                       <div className="p-6 rounded-2xl bg-white/5 border border-white/5 italic text-gray-300 leading-relaxed font-medium">
+                          "Social media growth isn't about working harder. It's about building an autonomous protocol that replicates your brand 24/7."
+                       </div>
+                       <div className="grid grid-cols-2 gap-4">
+                          <div className="h-10 rounded-lg bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-[10px] font-black uppercase tracking-widest text-indigo-400">Schedule: Tomorrow 10AM</div>
+                          <div className="h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-[10px] font-black uppercase tracking-widest text-gray-500">Add to Queue</div>
+                       </div>
+                    </div>
+                 </div>
+              </div>
+           </div>
+        </section>
+
+        {/* 5. REVIEWS / TESTIMONIALS */}
+        <section id="reviews" className="py-40 px-6 relative overflow-hidden">
+           <div className="max-w-7xl mx-auto space-y-20">
+              <div className="flex flex-col md:flex-row items-end justify-between gap-8">
+                 <h2 className="text-5xl md:text-7xl font-black tracking-tighter italic uppercase leading-none">THE INDUSTRY <br />CONSENSUS.</h2>
+                 <div className="flex gap-4">
+                    <Button variant="outline" className="rounded-full border-white/10 hover:bg-white/5 h-12 w-12 p-0"><ChevronLeft className="w-5 h-5"/></Button>
+                    <Button variant="outline" className="rounded-full border-white/10 hover:bg-white/5 h-12 w-12 p-0"><ChevronRight className="w-5 h-5"/></Button>
+                 </div>
+              </div>
+
+              <div className="flex gap-8 overflow-x-hidden pb-12 cursor-grab active:cursor-grabbing">
+                 {[
+                   { name: "Alex Rivera", role: "Growth Lead @ TechScale", content: "SocialFlow is the first tool that actually sounds like me. The AI tone calibration is unreal." },
+                   { name: "Sarah Chen", role: "Indie Maker", content: "I saved 15 hours a week using the autonomous scheduling engine. It paid for itself in two days." },
+                   { name: "Marcus Thorne", role: "Agency Founder", content: "Managing 20+ client accounts used to be a nightmare. Now it's a synchronized protocol." },
+                   { name: "Elena Vogt", role: "SaaS Marketing", content: "The level of security and integration with Backblaze/Supabase makes this a no-brainer for serious brands." }
+                 ].map((r, i) => <ReviewCard key={i} {...r} />)}
+              </div>
+           </div>
+        </section>
+
+        {/* 6. PRICING SECTION */}
+        <section id="pricing" className="py-40 px-6 bg-[#010101]">
+           <div className="max-w-5xl mx-auto text-center space-y-24">
+              <div className="space-y-6">
+                 <h2 className="text-6xl md:text-8xl font-black tracking-tighter italic uppercase text-white">Select Access.</h2>
+                 <p className="text-gray-500 font-black uppercase tracking-[0.4em] text-[10px]">Commercial grade protocols for every scale</p>
               </div>
 
               <div className="grid md:grid-cols-3 gap-8">
                  {[
                    { name: "Starter", price: "0", features: ["3 Social Channels", "Visual Scheduler", "Standard AI"] },
-                   { name: "Professional", price: "29", features: ["15 Social Channels", "AI Tone Calibration", "Custom Analytics", "Priority Support"], popular: true },
-                   { name: "Elite", price: "99", features: ["Infinite Channels", "API Access", "Custom LLM Fine-tuning", "White Label"] }
+                   { name: "Professional", price: "29", features: ["15 Social Channels", "AI Tone Calibration", "Neural Analytics", "Priority Support"], popular: true },
+                   { name: "Elite", price: "99", features: ["Infinite Channels", "API Access", "Custom AI Fine-tuning", "White Labeling"] }
                  ].map((p, i) => (
                    <div key={i} className={cn(
-                     "p-10 rounded-xl border flex flex-col justify-between transition-all",
-                     p.popular ? "bg-[#111111] text-white border-black" : "bg-white text-[#111111] border-gray-200"
+                     "p-10 rounded-[3rem] border flex flex-col justify-between transition-all relative group",
+                     p.popular ? "bg-[#0F1117] border-indigo-500 shadow-glow scale-105 z-10" : "bg-white/[0.02] border-white/5"
                    )}>
+                      {p.popular && <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-indigo-500 text-white text-[8px] font-black uppercase px-4 py-1 rounded-full tracking-widest shadow-glow">Most Active</div>}
                       <div className="space-y-8">
                         <div>
-                           <h3 className="text-[10px] font-black uppercase tracking-[0.3em] mb-2">{p.name}</h3>
-                           <div className="flex items-baseline gap-1">
-                              <span className="text-5xl font-serif">${p.price}</span>
-                              <span className={cn("text-xs font-bold", p.popular ? "text-gray-400" : "text-gray-400")}>/mo</span>
+                           <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 mb-2 italic">{p.name}</h3>
+                           <div className="flex items-baseline justify-center gap-1">
+                              <span className="text-6xl font-black tracking-tighter text-white italic">${p.price}</span>
+                              <span className="text-sm font-bold text-gray-500">/mo</span>
                            </div>
                         </div>
-                        <ul className="space-y-4">
+                        <ul className="space-y-4 text-left">
                            {p.features.map(f => (
-                             <li key={f} className="flex items-center gap-3 text-[11px] font-bold uppercase tracking-widest">
-                                <Check className={cn("w-3 h-3", p.popular ? "text-indigo-400" : "text-indigo-600")} strokeWidth={4} /> {f}
+                             <li key={f} className="flex items-center gap-3 text-[11px] font-bold uppercase tracking-widest text-gray-300">
+                                <CheckCircle2 className="w-4 h-4 text-indigo-500" strokeWidth={3} /> {f}
                              </li>
                            ))}
                         </ul>
                       </div>
                       <Link to="/sign-up" className="mt-12">
                          <Button className={cn(
-                           "w-full h-12 rounded-md font-bold uppercase tracking-widest text-[10px] shadow-none",
-                           p.popular ? "bg-white text-black hover:bg-gray-100" : "bg-[#111111] text-white hover:bg-black"
+                           "w-full h-14 rounded-2xl font-black uppercase tracking-widest text-xs transition-all shadow-xl",
+                           p.popular ? "bg-gradient-primary text-white border-none" : "bg-white/5 text-white hover:bg-white/10"
                          )}>
                            Initialize {p.name}
                          </Button>
@@ -344,60 +425,97 @@ export const LandingPage = () => {
            </div>
         </section>
 
-        {/* CTA: Final Statement */}
-        <section className="py-56 px-8 relative overflow-hidden bg-[#FBFBFA]">
-           <div className="max-w-4xl mx-auto text-center space-y-12">
-              <h2 className="text-7xl md:text-8xl font-serif tracking-tighter text-[#111111] leading-none">
-                Build your legacy <br />
-                <span className="italic text-gray-400">on autopilot.</span>
-              </h2>
-              <div className="flex flex-col items-center gap-8">
-                <Link to="/sign-up">
-                  <Button size="lg" className="h-20 px-16 text-xl bg-[#111111] text-white hover:bg-black rounded-md font-bold uppercase tracking-widest shadow-none transition-transform active:scale-95">
-                    Start Your Trial
-                  </Button>
-                </Link>
-                <p className="text-gray-400 font-bold uppercase tracking-[0.4em] text-[10px]">Instant access • No credit card required</p>
+        {/* 7. FAQ SECTION */}
+        <section id="faq" className="py-40 px-6 border-t border-white/5">
+           <div className="max-w-4xl mx-auto space-y-16">
+              <h2 className="text-5xl font-black tracking-tighter italic uppercase text-white">Intelligence FAQ.</h2>
+              <div className="space-y-2">
+                 <FAQItem 
+                   question="How does the AI understand my brand voice?" 
+                   answer="Our Neural Tone Mapping engine analyzes your previous content to identify recurring semantic patterns, humor, and specific industry vocabulary. You can also manually fine-tune the calibration in the AI Studio."
+                 />
+                 <FAQItem 
+                   question="Can I manage multiple teams or workspaces?" 
+                   answer="Yes, the Elite tier allows you to create unlimited workspaces. Each workspace has isolated media storage (Backblaze B2) and independent social credentials."
+                 />
+                 <FAQItem 
+                   question="Which social platforms are currently supported?" 
+                   answer="Currently we support X (Twitter), LinkedIn, and Instagram. Facebook, Threads, and Bluesky are in early access for Elite members."
+                 />
+                 <FAQItem 
+                   question="Is my data secure?" 
+                   answer="Absolutely. All social tokens are encrypted at rest using AES-256. We utilize Supabase's hardened Postgres infrastructure and Backblaze B2 for secure file hosting."
+                 />
+              </div>
+           </div>
+        </section>
+
+        {/* 8. FINAL CTA BANNER */}
+        <section className="py-40 px-6">
+           <div className="max-w-6xl mx-auto rounded-[4rem] bg-gradient-primary p-1 rounded-3xl relative group overflow-hidden shadow-glow">
+              <div className="absolute inset-0 bg-black/40 backdrop-blur-3xl -z-10 group-hover:scale-110 transition-transform duration-1000" />
+              <div className="bg-[#020617] rounded-[calc(4rem-4px)] p-20 text-center space-y-10 relative">
+                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-indigo-600/10 blur-[150px] -z-10 rounded-full" />
+                 <h2 className="text-6xl md:text-8xl font-black tracking-tighter text-white leading-none italic uppercase">Ready for <br />Infinite Scale?</h2>
+                 <p className="text-gray-400 font-bold uppercase tracking-[0.4em] text-[10px]">The protocol is waiting for your initialization.</p>
+                 <div className="flex flex-col items-center gap-6">
+                    <Link to="/sign-up">
+                      <Button size="lg" className="h-16 px-16 text-xl bg-white text-black hover:bg-gray-100 rounded-2xl font-black uppercase tracking-widest shadow-2xl transition-transform active:scale-95">
+                        Begin Now
+                      </Button>
+                    </Link>
+                    <div className="flex items-center gap-4 text-gray-500">
+                       <div className="flex items-center gap-1.5"><Shield className="w-3.5 h-3.5" /> No Credit Card</div>
+                       <div className="w-1 h-1 rounded-full bg-white/20" />
+                       <div className="flex items-center gap-1.5"><Zap className="w-3.5 h-3.5" /> Instant Access</div>
+                    </div>
+                 </div>
               </div>
            </div>
         </section>
       </main>
 
-      {/* Footer */}
-      <footer className="py-24 px-12 bg-white border-t border-gray-200">
-        <div className="max-w-7xl mx-auto grid md:grid-cols-4 gap-16">
+      {/* 9. FOOTER */}
+      <footer className="py-24 px-12 border-t border-white/5 bg-[#010101]">
+        <div className="max-w-7xl mx-auto grid md:grid-cols-5 gap-16">
           <div className="col-span-2 space-y-8">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded bg-[#111111] flex items-center justify-center">
-                <Sparkles className="text-white w-4 h-4" />
+              <div className="w-9 h-9 rounded-xl bg-gradient-primary flex items-center justify-center">
+                <Sparkles className="text-white w-5 h-5" />
               </div>
-              <span className="text-xl font-black tracking-tighter text-[#111111] italic font-serif">SocialFlow</span>
+              <span className="text-2xl font-black tracking-tighter text-white italic">SocialFlow.</span>
             </div>
-            <p className="text-gray-500 max-w-sm text-sm font-medium leading-relaxed">
-              Synchronized intelligence for modern brand architects. <br />
-              Synthesizing content, optimizing reach, ensuring sovereignty.
+            <p className="text-gray-500 max-w-sm text-xs font-bold uppercase tracking-widest leading-loose">
+              Synthesizing brand intelligence for the next generation of social media dominance. Secure, autonomous, and engineered for high-frequency reach.
             </p>
+            <div className="flex gap-6 opacity-30 grayscale transition-all hover:opacity-100 hover:grayscale-0">
+               <MessageSquare className="w-5 h-5 cursor-pointer hover:text-white" />
+               <TrendingUp className="w-5 h-5 cursor-pointer hover:text-white" />
+               <Sparkles className="w-5 h-5 cursor-pointer hover:text-white" />
+               <Globe className="w-5 h-5 cursor-pointer hover:text-white" />
+            </div>
           </div>
 
           {[
-            { title: "Protocol", links: ["Features", "Security", "AI Studio", "Infrastructure"] },
+            { title: "Protocol", links: ["AI Studio", "Visual Queue", "Intel Engine", "Security Vault"] },
+            { title: "Network", links: ["X / Twitter", "Instagram", "LinkedIn", "Facebook"] },
             { title: "Company", links: ["Privacy", "Terms", "Documentation", "Contact"] }
           ].map(g => (
-            <div key={g.title} className="space-y-6">
-              <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-[#111111]">{g.title}</h4>
+            <div key={g.title} className="space-y-8">
+              <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-white italic underline decoration-indigo-600 decoration-4 underline-offset-8">{g.title}</h4>
               <div className="flex flex-col gap-4">
                 {g.links.map(l => (
-                  <a key={l} href="#" className="text-[11px] font-bold uppercase tracking-widest text-gray-500 hover:text-black transition-colors">{l}</a>
+                  <a key={l} href="#" className="text-[10px] font-black uppercase tracking-widest text-gray-500 hover:text-indigo-400 transition-all">{l}</a>
                 ))}
               </div>
             </div>
           ))}
         </div>
-        <div className="max-w-7xl mx-auto pt-16 mt-16 border-t border-gray-100 flex flex-col md:flex-row justify-between items-center gap-6">
-           <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">© {new Date().getFullYear()} SOCIALFLOW TECH. ALL RIGHTS RESERVED.</span>
-           <div className="flex items-center gap-8">
-              <MessageSquare className="w-4 h-4 text-gray-300 hover:text-black transition-colors cursor-pointer" />
-              <div className="w-4 h-4 rounded-sm border-2 border-gray-200 hover:border-black transition-colors cursor-pointer" />
+        <div className="max-w-7xl mx-auto pt-16 mt-16 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6">
+           <span className="text-[9px] font-black text-white/20 uppercase tracking-[0.3em]">© {new Date().getFullYear()} SOCIALFLOW TECH PROTOCOL. ALL RIGHTS RESERVED.</span>
+           <div className="flex items-center gap-8 text-[9px] font-black text-white/20 uppercase tracking-[0.3em]">
+              <span className="hover:text-white cursor-pointer transition-colors">Server Status: Online</span>
+              <span className="hover:text-white cursor-pointer transition-colors">API v2.4</span>
            </div>
         </div>
       </footer>

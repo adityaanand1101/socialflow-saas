@@ -2,10 +2,11 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import path from 'path';
+import fs from 'fs';
 import dotenv from 'dotenv';
 import { Webhook } from 'svix';
 import { PrismaClient } from '@prisma/client';
-import { ClerkExpressRequireAuth, StrictAuthProp, users } from '@clerk/clerk-sdk-node';
+import { users } from '@clerk/clerk-sdk-node';
 import oauthRouter from './routes/oauth';
 import postsRouter from './routes/posts';
 import aiRouter from './routes/ai';
@@ -26,28 +27,30 @@ const prisma = new PrismaClient();
 app.use(cors({
   origin: [
     'http://localhost:5173',
-    'https://socialflow-saas.vercel.app', // Update this if you have a custom domain
-    /\.vercel\.app$/ // Matches all Vercel preview deployments
+    'https://socialflow-saas.vercel.app',
+    /\.vercel\.app$/
   ],
   credentials: true
 }));
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false // Disable CSP for easier initial deployment
+}));
 
-// 2. Health check (Lightweight for pings)
+// 2. Health check (Priority)
 app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// 3. Webhook (Needs raw body)
+// 3. Webhook (Hardened with Try/Catch)
 app.post('/api/webhooks/clerk', express.raw({ type: 'application/json' }), async (req, res) => {
-  const SIGNING_SECRET = process.env.CLERK_WEBHOOK_SECRET;
-  if (!SIGNING_SECRET) return res.status(500).json({ error: 'Webhook secret missing' });
-
-  const payload = req.body.toString();
-  const headers = req.headers as Record<string, string>;
-  const wh = new Webhook(SIGNING_SECRET);
-  
   try {
+    const SIGNING_SECRET = process.env.CLERK_WEBHOOK_SECRET;
+    if (!SIGNING_SECRET) return res.status(500).json({ error: 'Webhook secret missing' });
+
+    const payload = req.body.toString();
+    const headers = req.headers as Record<string, string>;
+    const wh = new Webhook(SIGNING_SECRET);
+    
     const evt: any = wh.verify(payload, {
       'svix-id': headers['svix-id'] as string,
       'svix-timestamp': headers['svix-timestamp'] as string,
@@ -59,21 +62,19 @@ app.post('/api/webhooks/clerk', express.raw({ type: 'application/json' }), async
       const email = email_addresses[0]?.email_address;
       const name = `${first_name || ''} ${last_name || ''}`.trim();
 
-      await prisma.user.create({
+      const user = await prisma.user.create({
         data: { clerkId, email, name, avatarUrl: image_url },
       });
-      const user = await prisma.user.findUnique({ where: { clerkId } });
-      if (user) {
-        const workspace = await prisma.workspace.create({
-          data: { name: `${name}'s Workspace`, slug: `workspace-${user.id}` },
-        });
-        await prisma.workspaceMember.create({
-          data: { userId: user.id, workspaceId: workspace.id, role: 'OWNER' },
-        });
-      }
+      const workspace = await prisma.workspace.create({
+        data: { name: `${name}'s Workspace`, slug: `workspace-${user.id}` },
+      });
+      await prisma.workspaceMember.create({
+        data: { userId: user.id, workspaceId: workspace.id, role: 'OWNER' },
+      });
     }
     res.json({ success: true });
   } catch (err: any) {
+    console.error('Webhook Error:', err.message);
     res.status(400).json({ error: err.message });
   }
 });
@@ -97,29 +98,37 @@ app.get('/api/user/me', requireAuth, async (req: any, res: any) => {
       where: { id: req.userId },
       include: { memberships: { include: { workspace: true } } }
     });
-    res.json(user);
+    res.json(user || { error: 'User not found' });
   } catch (error) {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// 5. Static Assets & Catch-all (Consolidated App)
-// In production, index.js is in backend/dist. Root dist is at ../../dist
+// 5. Static Assets & Catch-all (Hardened)
 const distPath = path.join(__dirname, '../../dist');
-app.use(express.static(distPath));
 
-// Final Catch-all handler for SPA (Express 5 safe - No path argument)
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+} else {
+  console.warn('WARNING: Frontend dist folder not found at:', distPath);
+}
+
+// Final Catch-all handler (Express 5 safe middleware)
 app.use((req, res, next) => {
-  // If request is for an API that doesn't exist, return 404 via next()
-  if (req.url.startsWith('/api')) {
+  if (req.path.startsWith('/api')) {
     return next();
   }
-  // Otherwise serve index.html for React Router
-  res.sendFile(path.join(distPath, 'index.html'));
+  
+  const indexPath = path.join(distPath, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(404).send('Frontend not built or API route not found');
+  }
 });
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on port ${PORT}`);
 });
 

@@ -1,5 +1,5 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
-import { Show, RedirectToSignIn } from '@clerk/react'
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { Show } from '@clerk/react'
 import { Layout } from './components/layout/Layout'
 import { Dashboard } from './pages/Dashboard'
 import { Compose } from './pages/Compose'
@@ -12,21 +12,26 @@ import { Team } from './pages/Team'
 import { Settings } from './pages/Settings'
 import { PrivacyPolicy } from './pages/PrivacyPolicy'
 import { TermsOfService } from './pages/TermsOfService'
+import { AuthPage } from './pages/Auth'
 
 function App() {
   return (
     <Router>
       <Routes>
+        {/* Public Routes */}
+        <Route path="/sign-in/*" element={<AuthPage />} />
+        <Route path="/sign-up/*" element={<AuthPage />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<TermsOfService />} />
         
+        {/* Protected Routes */}
         <Route element={
           <>
             <Show when="signed-in">
               <Layout />
             </Show>
             <Show when="signed-out">
-              <RedirectToSignIn />
+              <Navigate to="/sign-in" replace />
             </Show>
           </>
         }>

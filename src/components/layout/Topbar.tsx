@@ -1,8 +1,7 @@
-import { Search, Bell, ChevronDown, Plus } from 'lucide-react'
+import { Search, Bell, Plus } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { useUser } from '@clerk/react'
+import { useUser, UserButton } from '@clerk/react'
 import { useNavigate } from 'react-router-dom'
 
 export const Topbar = () => {
@@ -35,15 +34,11 @@ export const Topbar = () => {
         </div>
 
         <div className="flex items-center gap-3 pl-4 border-l border-white/10">
-          <Avatar className="w-8 h-8 border border-white/20">
-            <AvatarImage src={user?.imageUrl} />
-            <AvatarFallback>{user?.firstName?.[0] || 'U'}</AvatarFallback>
-          </Avatar>
-          <div className="hidden lg:block text-left">
-            <p className="text-xs font-semibold text-white truncate max-w-[100px]">{user?.fullName || user?.username || 'User'}</p>
+          <div className="hidden lg:block text-right">
+            <p className="text-xs font-semibold text-white truncate max-w-[150px]">{user?.fullName || user?.username || 'User'}</p>
             <p className="text-[10px] text-muted-foreground">Workspace Admin</p>
           </div>
-          <ChevronDown className="w-4 h-4 text-muted-foreground" />
+          <UserButton />
         </div>
       </div>
     </header>

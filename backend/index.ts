@@ -128,8 +128,9 @@ app.use((req, res, next) => {
 });
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
+console.log(`[Startup] Attempting to start server on port ${PORT} and binding to 0.0.0.0...`);
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log(`[Startup] Server is successfully running on port ${PORT}`);
 });
 
 export default app;

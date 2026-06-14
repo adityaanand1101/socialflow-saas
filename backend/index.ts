@@ -191,7 +191,7 @@ const distPath = path.join(__dirname, '../../dist');
 app.use(express.static(distPath));
 
 // For any request that doesn't match an API route, send back index.html
-app.get('*', (req, res) => {
+app.get('(.*)', (req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
 });
 

@@ -25,6 +25,11 @@ const prisma = new PrismaClient();
 app.use(cors());
 app.use(helmet());
 
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 // Webhook endpoint needs raw body for svix signature verification
 app.post('/api/webhooks/clerk', express.raw({ type: 'application/json' }), async (req, res) => {
   const SIGNING_SECRET = process.env.CLERK_WEBHOOK_SECRET;

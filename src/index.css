@@ -75,6 +75,26 @@
   .shadow-glow {
     box-shadow: 0 0 20px rgba(124, 58, 237, 0.3);
   }
+
+  .mesh-gradient {
+    background-image: 
+      radial-gradient(at 0% 0%, rgba(79, 70, 229, 0.15) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, rgba(236, 72, 153, 0.15) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, rgba(59, 130, 246, 0.1) 0px, transparent 50%),
+      radial-gradient(at 0% 100%, rgba(168, 85, 247, 0.1) 0px, transparent 50%);
+  }
+
+  .doppelrand-shell {
+    @apply bg-white/5 border border-white/10 rounded-[2rem];
+  }
+
+  .doppelrand-core {
+    @apply bg-[#050505] rounded-[calc(2rem-0.375rem)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)];
+  }
+
+  .mask-reveal {
+    mask-image: linear-gradient(to bottom, black 50%, transparent 100%);
+  }
 }
 
 /* Custom Scrollbar */

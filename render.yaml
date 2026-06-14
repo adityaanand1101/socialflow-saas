@@ -4,10 +4,10 @@ services:
     name: socialflow-saas
     runtime: node
     plan: free
-    # 1. Install root (frontend) deps & build frontend
-    # 2. Go to backend, install backend deps & run migrations
+    # 1. Install all deps (including types) & build frontend
+    # 2. Go to backend, install all deps & run migrations
     # 3. Build backend
-    buildCommand: npm install && npm run build && cd backend && npm install && npx prisma migrate deploy && npm run build
+    buildCommand: npm install --include=dev && npm run build && cd backend && npm install --include=dev && npx prisma migrate deploy && npm run build
     startCommand: node backend/dist/index.js
     envVars:
       - key: NODE_ENV

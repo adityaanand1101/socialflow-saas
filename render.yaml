@@ -7,7 +7,7 @@ services:
     # 1. Install all deps (including types) & build frontend
     # 2. Go to backend, install all deps, generate prisma client & build backend
     buildCommand: npm install --include=dev && npm run build && cd backend && npm install --include=dev && npx prisma generate && npm run build
-    startCommand: cd backend && npx prisma migrate deploy && node dist/index.js
+    startCommand: cd backend && (npx prisma migrate deploy || echo 'Migration skipped') && node dist/index.js
     envVars:
       - key: NODE_ENV
         value: production

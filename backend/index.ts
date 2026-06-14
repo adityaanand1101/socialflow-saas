@@ -52,15 +52,18 @@ app.post('/api/webhooks/clerk', express.raw({ type: 'application/json' }), async
       const email = email_addresses[0]?.email_address;
       const name = `${first_name || ''} ${last_name || ''}`.trim();
 
-      const user = await prisma.user.create({
+      await prisma.user.create({
         data: { clerkId, email, name, avatarUrl: image_url },
       });
-      const workspace = await prisma.workspace.create({
-        data: { name: `${name}'s Workspace`, slug: `workspace-${user.id}` },
-      });
-      await prisma.workspaceMember.create({
-        data: { userId: user.id, workspaceId: workspace.id, role: 'OWNER' },
-      });
+      const user = await prisma.user.findUnique({ where: { clerkId } });
+      if (user) {
+        const workspace = await prisma.workspace.create({
+          data: { name: `${name}'s Workspace`, slug: `workspace-${user.id}` },
+        });
+        await prisma.workspaceMember.create({
+          data: { userId: user.id, workspaceId: workspace.id, role: 'OWNER' },
+        });
+      }
     }
     res.json({ success: true });
   } catch (err: any) {
@@ -94,13 +97,14 @@ app.get('/api/user/me', requireAuth, async (req: any, res: any) => {
 });
 
 // 5. Static Assets & Catch-all (Consolidated App)
+// In production, index.js is in backend/dist. Root dist is at ../../dist
 const distPath = path.join(__dirname, '../../dist');
 app.use(express.static(distPath));
 
-// Final Catch-all handler for SPA (Express 5 safe middleware)
-app.use((req, res, next) => {
-  // If request is for an API that doesn't exist, return 404
-  if (req.url.startsWith('/api')) {
+// Final Catch-all handler for SPA (Express 5 safe - NO WILDCARD)
+app.get('/:path*', (req, res, next) => {
+  // If request is for an API that doesn't exist, return 404 via next()
+  if (req.originalUrl.startsWith('/api')) {
     return next();
   }
   // Otherwise serve index.html for React Router

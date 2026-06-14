@@ -101,10 +101,10 @@ app.get('/api/user/me', requireAuth, async (req: any, res: any) => {
 const distPath = path.join(__dirname, '../../dist');
 app.use(express.static(distPath));
 
-// Final Catch-all handler for SPA (Express 5 safe - NO WILDCARD)
-app.get('/:path*', (req, res, next) => {
+// Final Catch-all handler for SPA (Express 5 safe - No path argument)
+app.use((req, res, next) => {
   // If request is for an API that doesn't exist, return 404 via next()
-  if (req.originalUrl.startsWith('/api')) {
+  if (req.url.startsWith('/api')) {
     return next();
   }
   // Otherwise serve index.html for React Router

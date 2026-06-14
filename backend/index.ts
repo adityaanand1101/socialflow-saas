@@ -191,7 +191,7 @@ const __dirname = path.dirname(__filename);
 const PORT = process.env.PORT || 3001;
 
 // Serve static files from the React app
-const distPath = path.join(__dirname, '../dist');
+const distPath = path.join(__dirname, '../../dist'); // Go up twice: dist -> backend -> root
 app.use(express.static(distPath));
 
 // For any request that doesn't match an API route, send back index.html

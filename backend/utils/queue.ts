@@ -5,13 +5,12 @@ import { decryptToken, encryptToken } from './crypto';
 import fetch from 'node-fetch';
 import { triggerWebhooks } from './webhooks';
 
-const redisConfig = {
+const redisUrl = process.env.REDIS_URL;
+const connection = redisUrl ? new IORedis(redisUrl, { maxRetriesPerRequest: null }) : new IORedis({
   host: process.env.REDIS_HOST || '127.0.0.1',
   port: parseInt(process.env.REDIS_PORT || '6379'),
   maxRetriesPerRequest: null,
-};
-
-const connection = new IORedis(redisConfig);
+});
 connection.on('error', (err) => {
   console.warn('Redis connection error. BullMQ tasks will not work.', err.message);
 });

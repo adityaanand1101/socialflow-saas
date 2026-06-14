@@ -5,8 +5,9 @@ services:
     runtime: node
     plan: free
     # 1. Install root (frontend) deps & build frontend
-    # 2. Go to backend, install backend deps & build backend
-    buildCommand: npm install && npm run build && cd backend && npm install && npm run build
+    # 2. Go to backend, install backend deps & run migrations
+    # 3. Build backend
+    buildCommand: npm install && npm run build && cd backend && npm install && npx prisma migrate deploy && npm run build
     startCommand: node backend/dist/index.js
     envVars:
       - key: NODE_ENV

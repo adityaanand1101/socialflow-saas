@@ -38,10 +38,17 @@ export const Channels = () => {
   const [connecting, setConnecting] = useState<string | null>(null)
   const [syncingId, setSyncingId] = useState<string | null>(null)
   const [showInfoModal, setShowInfoModal] = useState<string | null>(null)
+  const [showCustomModal, setShowCustomModal] = useState<string | null>(null)
+  const [customCreds, setCustomCreds] = useState({ identifier: '', password: '' })
   const [menuOpen, setMenuOpen] = useState<string | null>(null)
-  const [connectSuccess, setConnectSuccess] = useState<string | null>(null)
+  const [connectSuccess] = useState<string | null>(null)
 
   const handleConnect = async (platform: string) => {
+    if (platform === 'bluesky' || platform === 'medium') {
+      setShowCustomModal(platform)
+      return
+    }
+
     setConnecting(platform)
     try {
       const token = await getToken()
@@ -52,13 +59,41 @@ export const Channels = () => {
       if (data.authUrl) {
         window.location.href = data.authUrl
       } else {
-        // Simulate connecting in demo mode
-        setConnectSuccess(platform)
-        setTimeout(() => setConnectSuccess(null), 3000)
+        setShowInfoModal(platform)
       }
     } catch {
-      // Demo fallback: show info modal
       setShowInfoModal(platform)
+    } finally {
+      setConnecting(null)
+    }
+  }
+
+  const handleCustomConnect = async () => {
+    if (!showCustomModal || !customCreds.identifier || !customCreds.password) return
+    
+    setConnecting(showCustomModal)
+    try {
+      const token = await getToken()
+      const res = await fetch(`/api/oauth/${showCustomModal}/manual-connect`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}` 
+        },
+        body: JSON.stringify(customCreds)
+      })
+      
+      if (res.ok) {
+        await fetchChannels(token as string)
+        setShowCustomModal(null)
+        setCustomCreds({ identifier: '', password: '' })
+      } else {
+        const data = await res.json()
+        alert(data.error || 'Failed to connect')
+      }
+    } catch (e) {
+      console.error(e)
+      alert('Connection error')
     } finally {
       setConnecting(null)
     }
@@ -124,24 +159,78 @@ export const Channels = () => {
                 <p className="text-sm text-white font-medium">Backend required</p>
                 <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
                   {ALL_PLATFORMS.find(p => p.id === showInfoModal)?.authNote}. 
-                  OAuth integration requires the backend server to be running on port 3001 with your OAuth credentials configured.
+                  OAuth integration requires the backend server to be running with your OAuth credentials configured.
                 </p>
               </div>
             </div>
 
-            <div className="space-y-2 mb-5">
-              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">To connect in production:</p>
-              <div className="space-y-1.5">
-                {['Set up OAuth app in platform developer console', 'Add credentials to backend .env file', 'Start the backend server: npm run dev (in /backend)', 'Click Connect again'].map((step, i) => (
-                  <div key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
-                    <div className="w-4 h-4 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-[10px] font-bold text-white shrink-0 mt-0.5">{i+1}</div>
-                    {step}
-                  </div>
-                ))}
+            <Button className="w-full" onClick={() => setShowInfoModal(null)}>Got it</Button>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Connect Modal (Bluesky/Medium) */}
+      {showCustomModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={(e) => e.target === e.currentTarget && setShowCustomModal(null)}>
+          <div className="bg-[#141218] border border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-3">
+                {(() => {
+                  const p = ALL_PLATFORMS.find(pl => pl.id === showCustomModal)
+                  if (!p) return null
+                  return (
+                    <>
+                      <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
+                        <p.icon className={cn("w-6 h-6", p.color)} />
+                      </div>
+                      <div>
+                        <h2 className="text-base font-bold text-white">Connect {p.label}</h2>
+                        <p className="text-xs text-muted-foreground">Direct authentication required</p>
+                      </div>
+                    </>
+                  )
+                })()}
+              </div>
+              <button onClick={() => setShowCustomModal(null)} className="p-2 hover:bg-white/5 rounded-lg">
+                <X className="w-4 h-4 text-muted-foreground" />
+              </button>
+            </div>
+            
+            <div className="space-y-4 mb-6">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                  {showCustomModal === 'bluesky' ? 'Handle (e.g. user.bsky.social)' : 'Integration Token Name'}
+                </label>
+                <input
+                  type="text"
+                  value={customCreds.identifier}
+                  onChange={(e) => setCustomCreds(c => ({ ...c, identifier: e.target.value }))}
+                  className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500/50"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                  {showCustomModal === 'bluesky' ? 'App Password' : 'Integration Token Secret'}
+                </label>
+                <input
+                  type="password"
+                  value={customCreds.password}
+                  onChange={(e) => setCustomCreds(c => ({ ...c, password: e.target.value }))}
+                  className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500/50"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  {showCustomModal === 'bluesky' ? "Generate this in your Bluesky Settings > Advanced > App Passwords" : "Generate this in your Medium Settings > Security and apps > Integration tokens"}
+                </p>
               </div>
             </div>
 
-            <Button className="w-full" onClick={() => setShowInfoModal(null)}>Got it</Button>
+            <Button 
+              className="w-full" 
+              onClick={handleCustomConnect}
+              disabled={!customCreds.identifier || !customCreds.password || connecting === showCustomModal}
+            >
+              {connecting === showCustomModal ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Connect Account'}
+            </Button>
           </div>
         </div>
       )}

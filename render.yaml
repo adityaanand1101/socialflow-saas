@@ -1,0 +1,68 @@
+services:
+  # 1. Backend API (Node.js/Express)
+  - type: web
+    name: socialflow-backend
+    env: node
+    rootDir: backend
+    plan: starter # Starter or higher required for background workers
+    buildCommand: npm install && npx prisma generate && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health # Ensure you have a health check route
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: DATABASE_URL
+        sync: false # Set manually in Render UI or link to Render DB
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: socialflow-cache
+          property: connectionString
+      - key: FRONTEND_URL
+        fromService:
+          type: static
+          name: socialflow-frontend
+          property: url
+      # Social API Keys (To be filled in Render UI)
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_BUCKET_NAME
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_REGION
+        value: us-east-1
+
+  # 2. Frontend (Static Site)
+  - type: static
+    name: socialflow-frontend
+    env: static
+    rootDir: .
+    buildCommand: npm install && npm run build
+    publishPath: dist
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: public, max-age=0, must-revalidate
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: socialflow-backend
+          property: url
+      - key: VITE_CLERK_PUBLISHABLE_KEY
+        sync: false
+
+# 3. Redis (For BullMQ background tasks)
+redis:
+  - name: socialflow-cache
+    plan: free
+    ipAllowList: [] # Internal only

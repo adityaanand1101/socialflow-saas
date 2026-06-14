@@ -3,6 +3,7 @@ import IORedis from 'ioredis';
 import { PrismaClient } from '@prisma/client';
 import { decryptToken, encryptToken } from './crypto';
 import fetch from 'node-fetch';
+import { triggerWebhooks } from './webhooks';
 
 const redisConfig = {
   host: process.env.REDIS_HOST || '127.0.0.1',
@@ -221,6 +222,14 @@ try {
       });
 
       console.log(`Finished processing post ${postId}. Status: ${postStatus}`);
+
+      // Fire outward webhook integrations
+      if (postStatus === 'PUBLISHED') {
+        await triggerWebhooks(post.workspaceId, 'post.published', { postId, successCount: post.accounts.length - failureCount });
+      } else {
+        await triggerWebhooks(post.workspaceId, 'post.failed', { postId, failureCount });
+      }
+
     } catch (error) {
       console.error(`Queue job execution crashed for post ${postId}:`, error);
       await prisma.post.update({

@@ -91,9 +91,9 @@ const providers = {
     scopes: 'identity,submit,edit',
   },
   mastodon: {
-    authUrl: '/api/oauth/mastodon/instance-auth', // Custom flow for instance URL
-    tokenUrl: '',
-    profileUrl: '/api/v1/accounts/verify_credentials',
+    authUrl: `${process.env.MASTODON_INSTANCE_URL}/oauth/authorize`, 
+    tokenUrl: `${process.env.MASTODON_INSTANCE_URL}/oauth/token`,
+    profileUrl: `${process.env.MASTODON_INSTANCE_URL}/api/v1/accounts/verify_credentials`,
     clientId: process.env.MASTODON_CLIENT_ID || '',
     clientSecret: process.env.MASTODON_CLIENT_SECRET || '',
     scopes: 'read write:statuses',
@@ -369,6 +369,80 @@ router.get('/:platform/callback', async (req: any, res) => {
   } catch (error: any) {
     console.error('OAuth Callback Error:', error);
     res.redirect(`${FRONTEND_URL}/channels?error=${encodeURIComponent(error.message)}`);
+  }
+});
+
+router.post('/:platform/manual-connect', requireAuth, async (req: any, res: any) => {
+  const { platform } = req.params;
+  const { identifier, password } = req.body;
+  const clerkId = req.auth.userId;
+
+  if (!identifier || !password) {
+    return res.status(400).json({ error: 'Missing required credentials' });
+  }
+
+  if (platform !== 'bluesky' && platform !== 'medium') {
+    return res.status(400).json({ error: 'Manual connect is only supported for Bluesky and Medium' });
+  }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { clerkId: clerkId as string },
+      include: { memberships: { include: { workspace: true } } }
+    });
+
+    if (!user || user.memberships.length === 0) {
+      return res.status(404).json({ error: 'User or Workspace not found' });
+    }
+
+    const workspaceId = user.memberships[0].workspaceId;
+
+    let profileId = identifier;
+    let displayName = identifier;
+    let avatarUrl = 'https://github.com/shadcn.png';
+    let tokenExpiresAt = null; // These tokens typically don't expire automatically
+
+    // Optional: Add logic here to verify the tokens against the platform APIs
+    // e.g. Call Bluesky ATP server or Medium API to ensure credentials are valid
+    // For now, we trust the input and store it securely.
+
+    const mappedPlatform = platform.toUpperCase() as PlatformType;
+    
+    // We store the 'identifier' in refreshToken and 'password' in accessToken
+    // This allows us to reuse the existing encrypted storage structure
+    const encryptedAccess = encryptToken(password, ENCRYPTION_KEY);
+    const encryptedRefresh = encryptToken(identifier, ENCRYPTION_KEY);
+
+    await prisma.socialAccount.upsert({
+      where: {
+        workspaceId_platform_platformAccountId: {
+          workspaceId,
+          platform: mappedPlatform,
+          platformAccountId: profileId
+        }
+      },
+      update: {
+        accessToken: encryptedAccess,
+        refreshToken: encryptedRefresh,
+        updatedAt: new Date(),
+      },
+      create: {
+        workspaceId,
+        platform: mappedPlatform,
+        platformAccountId: profileId,
+        username: identifier,
+        displayName: displayName,
+        avatarUrl: avatarUrl,
+        accessToken: encryptedAccess,
+        refreshToken: encryptedRefresh,
+        tokenExpiresAt: tokenExpiresAt // null means never expires
+      }
+    });
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Manual Connect Error:', error);
+    res.status(500).json({ error: 'Failed to securely store credentials' });
   }
 });
 

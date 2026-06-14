@@ -12,6 +12,8 @@ import mediaRouter from './routes/media';
 import workspacesRouter from './routes/workspaces';
 import invitesRouter from './routes/invites';
 import razorpayRouter from './routes/razorpay';
+import integrationsRouter from './routes/integrations';
+import externalApiRouter from './routes/externalApi';
 import { requireAuth } from './middlewares/auth';
 
 dotenv.config();
@@ -124,6 +126,8 @@ app.use('/api/media', mediaRouter);
 app.use('/api/workspaces', workspacesRouter);
 app.use('/api/invites', invitesRouter);
 app.use('/api/razorpay', razorpayRouter);
+app.use('/api/integrations', integrationsRouter);
+app.use('/api/external', externalApiRouter);
 
 // User Profile Management Routes
 app.get('/api/user/me', requireAuth, async (req: any, res: any) => {

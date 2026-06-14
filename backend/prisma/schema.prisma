@@ -43,6 +43,31 @@ model Workspace {
   posts                Post[]
   mediaAssets          MediaAsset[]
   invites              WorkspaceInvite[]
+  apiKeys              ApiKey[]
+  webhooks             WebhookEndpoint[]
+}
+
+model ApiKey {
+  id          String    @id @default(uuid())
+  workspaceId String
+  name        String
+  key         String    @unique
+  lastUsed    DateTime?
+  createdAt   DateTime  @default(now())
+  
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model WebhookEndpoint {
+  id          String    @id @default(uuid())
+  workspaceId String
+  url         String
+  secret      String?
+  events      String[]  // Array of event names (e.g., ["post.published", "post.failed"])
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 }
 
 model WorkspaceMember {

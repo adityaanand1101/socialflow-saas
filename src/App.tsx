@@ -10,11 +10,16 @@ import { Channels } from './pages/Channels'
 import { Calendar } from './pages/Calendar'
 import { Team } from './pages/Team'
 import { Settings } from './pages/Settings'
+import { PrivacyPolicy } from './pages/PrivacyPolicy'
+import { TermsOfService } from './pages/TermsOfService'
 
 function App() {
   return (
     <Router>
       <Routes>
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/terms" element={<TermsOfService />} />
+        
         <Route element={
           <>
             <Show when="signed-in">

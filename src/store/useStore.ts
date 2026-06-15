@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { apiFetch } from '@/lib/api'
+import { cookieStorage } from '@/lib/cookies'
 
 export type SocialPlatform = 
   | 'instagram' | 'linkedin' | 'x' | 'youtube' | 'gmb' 
@@ -31,7 +32,9 @@ export interface Channel {
 
 interface SocialFlowStore {
   sidebarCollapsed: boolean
+  mediaViewMode: 'grid' | 'list'
   toggleSidebar: () => void
+  setMediaViewMode: (mode: 'grid' | 'list') => void
   channels: Channel[]
   posts: Post[]
   media: any[]
@@ -53,8 +56,17 @@ interface SocialFlowStore {
 }
 
 export const useStore = create<SocialFlowStore>((set) => ({
-  sidebarCollapsed: false,
-  toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
+  sidebarCollapsed: cookieStorage.get('sidebarCollapsed') === true,
+  mediaViewMode: cookieStorage.get('mediaViewMode') || 'grid',
+  toggleSidebar: () => set((state) => {
+    const newVal = !state.sidebarCollapsed
+    cookieStorage.set('sidebarCollapsed', newVal)
+    return { sidebarCollapsed: newVal }
+  }),
+  setMediaViewMode: (mode) => {
+    cookieStorage.set('mediaViewMode', mode)
+    set({ mediaViewMode: mode })
+  },
   channels: [],
   posts: [],
   media: [],
@@ -64,41 +76,13 @@ export const useStore = create<SocialFlowStore>((set) => ({
 
   setCurrentFolder: (folderId) => set({ currentFolderId: folderId }),
 
-  fetchData: async (token: string, folderId = null) => {
-    // If we are navigating to a new folder, we might want to clear current view or show loading
-    const { currentFolderId } = useStore.getState();
-    const targetFolderId = folderId !== undefined ? folderId : currentFolderId;
-
-    set({ loading: true })
-    try {
-      const url = `/api/media?${targetFolderId ? `folderId=${targetFolderId}` : 'folderId=root'}`;
-      const [postsRes, mediaRes] = await Promise.all([
-        apiFetch('/api/posts', { headers: { Authorization: `Bearer ${token}` } }),
-        apiFetch(url, { headers: { Authorization: `Bearer ${token}` } })
-      ])
-      
-      let posts = []
-      let mediaData = { assets: [], folders: [] }
-      
-      if (postsRes.ok) posts = await postsRes.json()
-      if (mediaRes.ok) mediaData = await mediaRes.json()
-      
-      set({ 
-        posts: Array.isArray(posts) ? posts : [], 
-        media: Array.isArray(mediaData.assets) ? mediaData.assets : [],
-        folders: Array.isArray(mediaData.folders) ? mediaData.folders : [],
-        currentFolderId: targetFolderId
-      })
-    } catch (e) {
-      console.error("Failed to fetch data", e)
-    } finally {
-      set({ loading: false })
-    }
+  fetchData: async (_token: string, _folderId = null) => {
+    // Redundant now that we use React Query, but keeping as placeholder for other data if needed
   },
 
   createFolder: async (token, name, parentId = null) => {
     try {
-      const res = await apiFetch('/api/media/folders', {
+      await apiFetch('/api/media/folders', {
         method: 'POST',
         headers: { 
           Authorization: `Bearer ${token}`,
@@ -106,10 +90,6 @@ export const useStore = create<SocialFlowStore>((set) => ({
         },
         body: JSON.stringify({ name, parentId })
       });
-      if (res.ok) {
-        const folder = await res.json();
-        set((state) => ({ folders: [folder, ...state.folders] }));
-      }
     } catch (error) {
       console.error("Failed to create folder", error);
     }

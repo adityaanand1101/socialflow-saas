@@ -1,7 +1,9 @@
-import { useState, useRef } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/api'
 import { 
   Image as ImageIcon, Smile, Hash, Send, Calendar,
   Save, Sparkles, Smartphone, Monitor, Loader2, X, Clock, User, Upload
@@ -53,9 +55,22 @@ export const Compose = () => {
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   
-  const { addPost, uploadMedia, media: libraryMedia } = useStore()
+  const { addPost, uploadMedia } = useStore()
+  const queryClient = useQueryClient()
   const navigate = useNavigate()
   const { getToken } = useAuth()
+
+  const { data: mediaData } = useQuery({
+    queryKey: ['media', 'root'], // Fetch root media for simple selection
+    queryFn: async () => {
+      const token = await getToken()
+      const res = await apiFetch('/api/media?folderId=root', { headers: { Authorization: `Bearer ${token}` } })
+      return res.json()
+    },
+    staleTime: 1000 * 60 * 5,
+  })
+
+  const libraryMedia = mediaData?.assets || []
 
   const handleMediaUpload = async (file: File) => {
     setIsUploadingMedia(true)
@@ -65,6 +80,7 @@ export const Compose = () => {
       const asset = await uploadMedia(token, file)
       if (asset) {
         setMediaFiles(prev => [...prev, asset.fileUrl])
+        queryClient.invalidateQueries({ queryKey: ['media'] })
       }
       return asset
     } catch (error) {
@@ -293,7 +309,7 @@ export const Compose = () => {
                         </div>
                       ) : (
                         <div className="grid grid-cols-3 sm:grid-cols-4 gap-4">
-                          {libraryMedia.map((item) => (
+                          {libraryMedia.map((item: any) => (
                             <button
                               key={item.id}
                               onClick={() => toggleLibraryMedia(item.fileUrl)}

@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { 
-  Image as ImageIcon, Video, Smile, Hash, Send, Calendar,
-  Save, Sparkles, Smartphone, Monitor, Loader2, X, Clock, User
+  Image as ImageIcon, Smile, Hash, Send, Calendar,
+  Save, Sparkles, Smartphone, Monitor, Loader2, X, Clock, User, Upload
 } from 'lucide-react'
 import { 
   Instagram, Linkedin, Twitter, Youtube, Facebook, Threads, Bluesky, 
@@ -48,9 +48,11 @@ export const Compose = () => {
   const [scheduledDate, setScheduledDate] = useState(() => format(addDays(new Date(), 1), "yyyy-MM-dd'T'HH:mm"))
   const [selectedTone, setSelectedTone] = useState('Professional')
   const [mediaFiles, setMediaFiles] = useState<string[]>([])
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false)
+  const [showMediaLibrary, setShowMediaLibrary] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   
-  const addPost = useStore((state) => state.addPost)
+  const { addPost, uploadMedia, media: libraryMedia } = useStore()
   const navigate = useNavigate()
   const { getToken } = useAuth()
 
@@ -75,11 +77,29 @@ export const Compose = () => {
     }
   }
 
-  const handleMediaUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    const url = URL.createObjectURL(file)
-    setMediaFiles(prev => [...prev, url])
+
+    setIsUploadingMedia(true)
+    try {
+      const token = await getToken()
+      if (!token) return
+      const asset = await uploadMedia(token, file)
+      if (asset) {
+        setMediaFiles(prev => [...prev, asset.fileUrl])
+      }
+    } catch (error) {
+      console.error('Upload failed:', error)
+    } finally {
+      setIsUploadingMedia(false)
+    }
+  }
+
+  const toggleLibraryMedia = (url: string) => {
+    setMediaFiles(prev => 
+      prev.includes(url) ? prev.filter(u => u !== url) : [...prev, url]
+    )
   }
 
   const removeMedia = (index: number) => {
@@ -207,11 +227,20 @@ export const Compose = () => {
             <div className="flex items-center justify-between pt-4 border-t border-white/10">
               <div className="flex items-center gap-1">
                 <input type="file" className="hidden" ref={fileInputRef} accept="image/*,video/*" onChange={handleMediaUpload} />
-                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-white" onClick={() => fileInputRef.current?.click()}>
-                  <ImageIcon className="w-5 h-5" />
+                <Button 
+                  variant="ghost" size="icon" 
+                  className={cn("text-muted-foreground hover:text-white", isUploadingMedia && "animate-pulse")}
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploadingMedia}
+                >
+                  {isUploadingMedia ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
                 </Button>
-                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-white">
-                  <Video className="w-5 h-5" />
+                <Button 
+                  variant="ghost" size="icon" 
+                  className="text-muted-foreground hover:text-white"
+                  onClick={() => setShowMediaLibrary(true)}
+                >
+                  <ImageIcon className="w-5 h-5" />
                 </Button>
                 <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-white">
                   <Smile className="w-5 h-5" />
@@ -220,6 +249,54 @@ export const Compose = () => {
                   <Hash className="w-5 h-5" />
                 </Button>
               </div>
+
+              {/* Media Selection Modal */}
+              {showMediaLibrary && (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+                  <div className="bg-[#141218] border border-white/10 rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
+                    <div className="p-4 border-b border-white/10 flex items-center justify-between bg-white/5">
+                      <h3 className="font-bold text-white">Media Library</h3>
+                      <button onClick={() => setShowMediaLibrary(false)} className="text-muted-foreground hover:text-white">
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                      {libraryMedia.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
+                          <ImageIcon className="w-12 h-12 mb-2 opacity-20" />
+                          <p>Your library is empty.</p>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-4">
+                          {libraryMedia.map((item) => (
+                            <button
+                              key={item.id}
+                              onClick={() => toggleLibraryMedia(item.fileUrl)}
+                              className={cn(
+                                "relative aspect-square rounded-lg overflow-hidden border-2 transition-all",
+                                mediaFiles.includes(item.fileUrl) ? "border-purple-500 ring-2 ring-purple-500/20" : "border-transparent hover:border-white/20"
+                              )}
+                            >
+                              <img src={item.fileUrl} alt="" className="w-full h-full object-cover" />
+                              {mediaFiles.includes(item.fileUrl) && (
+                                <div className="absolute inset-0 bg-purple-500/20 flex items-center justify-center">
+                                  <div className="bg-purple-500 rounded-full p-1">
+                                    <ImageIcon className="w-4 h-4 text-white" />
+                                  </div>
+                                </div>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-4 border-t border-white/10 bg-white/5 flex justify-end">
+                      <Button onClick={() => setShowMediaLibrary(false)}>Done</Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center gap-3">
                 <Button
                   variant="outline"

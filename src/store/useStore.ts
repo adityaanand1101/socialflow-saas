@@ -41,7 +41,7 @@ interface SocialFlowStore {
   addPost: (token: string, post: Omit<Post, 'id'>) => Promise<void>
   removePost: (token: string, id: string) => Promise<void>
   updatePost: (token: string, id: string, updates: Partial<Post>) => Promise<void>
-  uploadMedia: (token: string, file: File) => Promise<void>
+  uploadMedia: (token: string, file: File) => Promise<any>
   removeMedia: (token: string, id: string) => Promise<void>
 }
 
@@ -198,12 +198,14 @@ export const useStore = create<SocialFlowStore>((set) => ({
           if (registerRes.ok) {
             const data = await registerRes.json();
             set((state) => ({ media: [data, ...state.media] }))
+            return data;
           }
         }
       }
     } catch (error) {
       console.error("Failed to upload media", error);
     }
+    return null;
   },
 
   removeMedia: async (token: string, id: string) => {

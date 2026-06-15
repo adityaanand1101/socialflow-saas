@@ -174,10 +174,15 @@ export const useStore = create<SocialFlowStore>((set) => ({
         const uploadRes = await fetch(uploadUrl, {
           method: 'PUT',
           body: file,
-          headers: {
-            'Content-Type': file.type,
-          }
+          // Removed manual Content-Type as it's often included in the signature 
+          // and can cause CORS preflight issues in some browsers
         });
+
+        if (!uploadRes.ok) {
+          const errorText = await uploadRes.text();
+          console.error('S3 Upload Error:', uploadRes.status, errorText);
+          throw new Error(`S3 upload failed: ${uploadRes.status}`);
+        }
 
         if (uploadRes.ok) {
           const registerRes = await apiFetch('/api/media/register', {

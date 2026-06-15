@@ -50,14 +50,18 @@ app.get('/api/diagnostics', async (req, res) => {
     return `✅ CONFIGURED (${val.substring(0, 4)}...)`;
   };
 
-  let dbStats = { users: 0, workspaces: 0, error: null };
+  let dbStats = { users: 0, workspaces: 0, aiLogs: 0, lastLogs: [], error: null };
   try {
-    const [userCount, workspaceCount] = await Promise.all([
+    const [userCount, workspaceCount, aiLogCount, lastLogs] = await Promise.all([
       prisma.user.count(),
-      prisma.workspace.count()
+      prisma.workspace.count(),
+      prisma.aiGenerationLog.count(),
+      prisma.aiGenerationLog.findMany({ take: 5, orderBy: { createdAt: 'desc' } })
     ]);
     dbStats.users = userCount;
     dbStats.workspaces = workspaceCount;
+    dbStats.aiLogs = aiLogCount;
+    dbStats.lastLogs = lastLogs as any;
   } catch (e: any) {
     dbStats.error = e.message;
   }

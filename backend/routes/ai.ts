@@ -83,7 +83,7 @@ router.post('/hashtags', requireAuth, async (req: any, res: any) => {
 
     if (geminiAI) {
       const response = await geminiAI.models.generateContent({
-        model: 'gemini-1.5-flash',
+        model: 'gemini-2.0-flash',
         contents: [{ role: 'user', parts: [{ text: `You are an SEO expert. Generate a list of top trending and contextually relevant hashtags for the given niche and keywords. Return strictly as a JSON object with a "hashtags" key containing an array of strings (including the # symbol).\n\nNiche: ${niche}, Keywords: ${keywords}` }] }],
       });
 
@@ -118,7 +118,7 @@ router.post('/ideas', requireAuth, async (req: any, res: any) => {
 
     if (geminiAI) {
       const response = await geminiAI.models.generateContent({
-        model: 'gemini-1.5-flash',
+        model: 'gemini-2.0-flash',
         contents: [{ role: 'user', parts: [{ text: `Generate a 30-day social media content plan. Return JSON strictly in this format: { "ideas": [ { "day": 1, "topic": "...", "description": "..." } ] }\n\nTopic: ${topic}, Industry: ${industry}` }] }],
       });
 

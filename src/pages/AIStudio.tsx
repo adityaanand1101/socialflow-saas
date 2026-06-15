@@ -9,7 +9,6 @@ import {
 import { cn } from '@/lib/utils'
 import { useAuth } from '@clerk/react'
 import { apiFetch } from '@/lib/api'
-import { generateCaptions, generateHashtags, generateContentIdeas, generateImage } from '@/lib/gemini'
 
 const tools = [
   { id: 'caption', icon: MessageSquare, title: 'Caption Generator', description: 'Create engaging captions from a prompt.', color: 'from-purple-500 to-blue-500' },
@@ -63,16 +62,17 @@ export const AIStudio = () => {
               headers,
               body: JSON.stringify({ prompt, tone, platform: 'Instagram' })
             });
+            const data = await res.json();
             if (res.ok) {
-              const data = await res.json();
               setResults({ variations: data.variations });
               break;
+            } else {
+              throw new Error(data.error || 'Server error');
             }
-          } catch (e) {
-            console.warn('Backend caption generation failed, falling back to client-side Gemini', e);
+          } catch (e: any) {
+            console.error('Backend caption generation failed:', e);
+            alert(`AI Error: ${e.message}`);
           }
-          const captions = await generateCaptions(prompt, tone, 'Instagram')
-          setResults({ variations: captions })
           break
         }
         case 'hashtag': {
@@ -82,16 +82,17 @@ export const AIStudio = () => {
               headers,
               body: JSON.stringify({ niche: prompt, keywords: prompt })
             });
+            const data = await res.json();
             if (res.ok) {
-              const data = await res.json();
               setResults({ hashtags: data.hashtags });
               break;
+            } else {
+              throw new Error(data.error || 'Server error');
             }
-          } catch (e) {
-            console.warn('Backend hashtag generation failed, falling back to client-side Gemini', e);
+          } catch (e: any) {
+            console.error('Backend hashtag generation failed:', e);
+            alert(`AI Error: ${e.message}`);
           }
-          const hashtags = await generateHashtags(prompt)
-          setResults({ hashtags })
           break
         }
         case 'ideas': {
@@ -101,16 +102,17 @@ export const AIStudio = () => {
               headers,
               body: JSON.stringify({ topic: prompt, industry: prompt })
             });
+            const data = await res.json();
             if (res.ok) {
-              const data = await res.json();
               setResults({ ideas: data.ideas });
               break;
+            } else {
+              throw new Error(data.error || 'Server error');
             }
-          } catch (e) {
-            console.warn('Backend ideas generation failed, falling back to client-side Gemini', e);
+          } catch (e: any) {
+            console.error('Backend ideas generation failed:', e);
+            alert(`AI Error: ${e.message}`);
           }
-          const ideas = await generateContentIdeas(prompt)
-          setResults({ ideas })
           break
         }
         case 'image': {
@@ -120,16 +122,17 @@ export const AIStudio = () => {
               headers,
               body: JSON.stringify({ imagePrompt: prompt, aspectRatio: '1:1' })
             });
+            const data = await res.json();
             if (res.ok) {
-              const data = await res.json();
               setResults({ url: data.url });
               break;
+            } else {
+              throw new Error(data.error || 'Server error');
             }
-          } catch (e) {
-            console.warn('Backend image generation failed, falling back to client-side Unsplash mock', e);
+          } catch (e: any) {
+            console.error('Backend image generation failed:', e);
+            alert(`AI Error: ${e.message}`);
           }
-          const url = await generateImage(prompt)
-          setResults({ url })
           break
         }
       }

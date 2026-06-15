@@ -48,7 +48,7 @@ router.post('/caption', requireAuth, async (req: any, res: any) => {
     if (geminiAI) {
       // Use Gemini via the new @google/genai SDK
       const response = await geminiAI.models.generateContent({
-        model: 'gemini-2.5-flash', // Updated to latest stable flash model
+        model: 'gemini-1.5-flash-8b', // Updated to latest stable flash model
         contents: [{ role: 'user', parts: [{ text: `You are an expert social media manager. Generate 3 variations of a caption for ${platform} with a ${tone} tone. Return the response strictly as a JSON object with a "variations" key containing an array of strings.\n\nUser Request: ${prompt}` }] }],
       });
 
@@ -180,7 +180,9 @@ router.post('/image', requireAuth, async (req: any, res: any) => {
       if (process.env.S3_BUCKET_NAME) {
         const s3Client = new S3Client({
           region: process.env.S3_REGION || 'us-east-1',
-          endpoint: process.env.S3_ENDPOINT,
+          endpoint: process.env.S3_ENDPOINT?.startsWith('http') 
+            ? process.env.S3_ENDPOINT 
+            : `https://${process.env.S3_ENDPOINT}`,
           credentials: {
             accessKeyId: process.env.S3_ACCESS_KEY_ID || '',
             secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || '',

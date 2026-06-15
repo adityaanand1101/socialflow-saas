@@ -12,7 +12,9 @@ const prisma = new PrismaClient();
 
 const s3Client = new S3Client({
   region: process.env.S3_REGION || 'us-east-1',
-  endpoint: process.env.S3_ENDPOINT, // Required for B2, R2
+  endpoint: process.env.S3_ENDPOINT?.startsWith('http') 
+    ? process.env.S3_ENDPOINT 
+    : `https://${process.env.S3_ENDPOINT}`,
   credentials: {
     accessKeyId: process.env.S3_ACCESS_KEY_ID || 'dummy-access-key',
     secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || 'dummy-secret-key',

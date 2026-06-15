@@ -365,10 +365,10 @@ router.get('/:platform/callback', async (req: any, res) => {
     });
 
     // Redirect back to frontend channels page
-    res.redirect(`${FRONTEND_URL}/channels?success=true`);
+    res.redirect(`${FRONTEND_URL}/app/channels?success=true`);
   } catch (error: any) {
     console.error('OAuth Callback Error:', error);
-    res.redirect(`${FRONTEND_URL}/channels?error=${encodeURIComponent(error.message)}`);
+    res.redirect(`${FRONTEND_URL}/app/channels?error=${encodeURIComponent(error.message)}`);
   }
 });
 

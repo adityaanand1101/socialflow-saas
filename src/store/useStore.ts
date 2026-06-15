@@ -46,6 +46,9 @@ interface SocialFlowStore {
   uploadMedia: (token: string, file: File, folderId?: string | null) => Promise<any>
   removeMedia: (token: string, id: string) => Promise<void>
   createFolder: (token: string, name: string, parentId?: string | null) => Promise<void>
+  updateFolder: (token: string, id: string, name: string) => Promise<void>
+  removeFolder: (token: string, id: string) => Promise<void>
+  moveAsset: (token: string, id: string, folderId: string | null) => Promise<void>
   setCurrentFolder: (folderId: string | null) => void
 }
 
@@ -274,6 +277,61 @@ export const useStore = create<SocialFlowStore>((set) => ({
       }
     } catch (error) {
       console.error("Failed to remove media", error);
+    }
+  },
+
+  updateFolder: async (token, id, name) => {
+    try {
+      const res = await apiFetch(`/api/media/folders/${id}`, {
+        method: 'PATCH',
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ name })
+      });
+      if (res.ok) {
+        const folder = await res.json();
+        set((state) => ({
+          folders: state.folders.map(f => f.id === id ? folder : f)
+        }));
+      }
+    } catch (error) {
+      console.error("Failed to update folder", error);
+    }
+  },
+
+  removeFolder: async (token, id) => {
+    try {
+      const res = await apiFetch(`/api/media/folders/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        set((state) => ({ folders: state.folders.filter(f => f.id !== id) }))
+      }
+    } catch (error) {
+      console.error("Failed to remove folder", error);
+    }
+  },
+
+  moveAsset: async (token, id, folderId) => {
+    try {
+      const res = await apiFetch(`/api/media/${id}`, {
+        method: 'PATCH',
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ folderId })
+      });
+      if (res.ok) {
+        set((state) => ({
+          media: state.media.filter(m => m.id !== id) // Remove from current view
+        }));
+      }
+    } catch (error) {
+      console.error("Failed to move asset", error);
     }
   },
 }))

@@ -57,6 +57,64 @@ router.get('/folders', requireAuth, async (req: any, res: any) => {
   }
 });
 
+// PATCH /api/media/folders/:id: Update a folder
+router.patch('/folders/:id', requireAuth, async (req: any, res: any) => {
+  const { id } = req.params;
+  const { name } = req.body;
+  try {
+    const workspaceId = req.workspaceId;
+    const folder = await prisma.mediaFolder.update({
+      where: { id, workspaceId },
+      data: { name }
+    });
+    res.json(folder);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update folder' });
+  }
+});
+
+// DELETE /api/media/folders/:id: Delete a folder
+router.delete('/folders/:id', requireAuth, async (req: any, res: any) => {
+  const { id } = req.params;
+  try {
+    const workspaceId = req.workspaceId;
+    
+    // We should decide if we delete assets inside or move them to root
+    // For now, let's just delete the folder (assets will stay in DB but with a null/invalid folderId if not careful)
+    // Actually, prisma onDelete: Cascade might handle this if configured, but let's be safe.
+    await prisma.mediaAsset.updateMany({
+      where: { folderId: id, workspaceId },
+      data: { folderId: null }
+    });
+
+    await prisma.mediaFolder.delete({
+      where: { id, workspaceId }
+    });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete folder' });
+  }
+});
+
+// PATCH /api/media/:id: Update asset (e.g. move to folder)
+router.patch('/:id', requireAuth, async (req: any, res: any) => {
+  const { id } = req.params;
+  const { folderId, fileName } = req.body;
+  try {
+    const workspaceId = req.workspaceId;
+    const asset = await prisma.mediaAsset.update({
+      where: { id, workspaceId },
+      data: { 
+        folderId: folderId === 'root' ? null : folderId,
+        ...(fileName && { fileName })
+      }
+    });
+    res.json(asset);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update asset' });
+  }
+});
+
 router.post('/presigned-url', requireAuth, async (req: any, res: any) => {
   const { fileName, fileType, fileSize } = req.body;
 

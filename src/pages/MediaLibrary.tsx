@@ -16,13 +16,14 @@ import {
   Trash2,
   ChevronLeft,
   Folder,
+  Edit2,
   Image as ImageIcon
 } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { useAuth } from '@clerk/react'
 
 export const MediaLibrary = () => {
-  const { media, folders, currentFolderId, uploadMedia, removeMedia, createFolder, fetchData, loading } = useStore()
+  const { media, folders, currentFolderId, uploadMedia, removeMedia, createFolder, updateFolder, removeFolder, moveAsset, fetchData, loading } = useStore()
   const { getToken, isLoaded, isSignedIn } = useAuth()
   const fileInputRef = useRef<HTMLInputElement>(null)
   
@@ -31,7 +32,9 @@ export const MediaLibrary = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
+  const [editingFolderId, setEditingFolderId] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
+  const [draggedAssetId, setDraggedAssetId] = useState<string | null>(null)
 
   useEffect(() => {
     const init = async () => {
@@ -67,7 +70,7 @@ export const MediaLibrary = () => {
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
-    setIsDragging(true)
+    if (!draggedAssetId) setIsDragging(true)
   }
 
   const handleDragLeave = (e: React.DragEvent) => {
@@ -78,17 +81,38 @@ export const MediaLibrary = () => {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     setIsDragging(false)
-    if (e.dataTransfer.files) processFiles(e.dataTransfer.files)
+    if (e.dataTransfer.files.length > 0) {
+      processFiles(e.dataTransfer.files)
+    }
   }
 
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return
     const token = await getToken()
     if (token) {
-      await createFolder(token, newFolderName, currentFolderId)
+      if (editingFolderId) {
+        await updateFolder(token, editingFolderId, newFolderName)
+      } else {
+        await createFolder(token, newFolderName, currentFolderId)
+      }
       setNewFolderName('')
+      setEditingFolderId(null)
       setIsFolderModalOpen(false)
     }
+  }
+
+  const handleDeleteFolder = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation()
+    if (!confirm('Are you sure you want to delete this folder? Assets will be moved to root.')) return
+    const token = await getToken()
+    if (token) await removeFolder(token, id)
+  }
+
+  const handleRenameFolder = (e: React.MouseEvent, folder: any) => {
+    e.stopPropagation()
+    setEditingFolderId(folder.id)
+    setNewFolderName(folder.name)
+    setIsFolderModalOpen(true)
   }
 
   const handleDelete = async (id: string) => {
@@ -99,6 +123,22 @@ export const MediaLibrary = () => {
     } catch (error) {
        console.error('Failed to delete', error)
     }
+  }
+
+  const onAssetDragStart = (e: React.DragEvent, id: string) => {
+    setDraggedAssetId(id)
+    e.dataTransfer.setData('assetId', id)
+  }
+
+  const onFolderDrop = async (e: React.DragEvent, folderId: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const assetId = e.dataTransfer.getData('assetId') || draggedAssetId
+    if (assetId && assetId !== folderId) {
+      const token = await getToken()
+      if (token) await moveAsset(token, assetId, folderId)
+    }
+    setDraggedAssetId(null)
   }
 
   const navigateToFolder = (id: string | null) => {
@@ -132,8 +172,8 @@ export const MediaLibrary = () => {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      {/* Drag & Drop Overlay */}
-      {isDragging && (
+      {/* Drag & Drop Overlay for External Files */}
+      {isDragging && !draggedAssetId && (
         <div className="absolute inset-0 z-50 bg-purple-500/10 backdrop-blur-sm border-2 border-dashed border-purple-500 rounded-2xl flex flex-col items-center justify-center pointer-events-none transition-all">
           <div className="bg-navy-900 p-6 rounded-full shadow-2xl mb-4">
             <Upload className="w-12 h-12 text-purple-400 animate-bounce" />
@@ -168,7 +208,7 @@ export const MediaLibrary = () => {
             accept="image/*,video/*"
             multiple
           />
-          <Button variant="outline" className="gap-2" onClick={() => setIsFolderModalOpen(true)}>
+          <Button variant="outline" className="gap-2" onClick={() => { setEditingFolderId(null); setNewFolderName(''); setIsFolderModalOpen(true); }}>
             <FolderPlus className="w-4 h-4" />
             New Folder
           </Button>
@@ -187,7 +227,7 @@ export const MediaLibrary = () => {
       {isFolderModalOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
           <div className="bg-[#141218] border border-white/10 rounded-2xl w-full max-w-md p-6 space-y-4">
-            <h3 className="text-xl font-bold text-white">Create New Folder</h3>
+            <h3 className="text-xl font-bold text-white">{editingFolderId ? 'Rename Folder' : 'Create New Folder'}</h3>
             <div className="space-y-2">
               <label className="text-sm text-muted-foreground font-medium">Folder Name</label>
               <Input 
@@ -199,8 +239,8 @@ export const MediaLibrary = () => {
               />
             </div>
             <div className="flex justify-end gap-3 pt-2">
-              <Button variant="ghost" onClick={() => setIsFolderModalOpen(false)}>Cancel</Button>
-              <Button onClick={handleCreateFolder} disabled={!newFolderName.trim()}>Create Folder</Button>
+              <Button variant="ghost" onClick={() => { setIsFolderModalOpen(false); setEditingFolderId(null); }}>Cancel</Button>
+              <Button onClick={handleCreateFolder} disabled={!newFolderName.trim()}>{editingFolderId ? 'Rename' : 'Create Folder'}</Button>
             </div>
           </div>
         </div>
@@ -255,18 +295,33 @@ export const MediaLibrary = () => {
           {filteredFolders.map((folder) => (
             <Card 
               key={folder.id} 
-              className="group cursor-pointer bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all border-white/10 flex flex-col items-center justify-center aspect-square p-4"
+              className="group cursor-pointer bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all border-white/10 flex flex-col items-center justify-center aspect-square p-4 relative"
               onClick={() => navigateToFolder(folder.id)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => onFolderDrop(e, folder.id)}
             >
               <Folder className="w-16 h-16 text-purple-400 mb-2 opacity-80 group-hover:scale-110 transition-transform" fill="currentColor" fillOpacity={0.1} />
-              <p className="text-xs font-bold text-white text-center truncate w-full">{folder.name}</p>
-              <p className="text-[10px] text-muted-foreground mt-1">Folder</p>
+              <p className="text-xs font-bold text-white text-center truncate w-full px-2">{folder.name}</p>
+              
+              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col gap-1">
+                <button onClick={(e) => handleRenameFolder(e, folder)} className="p-1.5 rounded bg-black/40 hover:bg-white/10 text-white">
+                  <Edit2 className="w-3 h-3" />
+                </button>
+                <button onClick={(e) => handleDeleteFolder(e, folder.id)} className="p-1.5 rounded bg-black/40 hover:bg-red-500/20 text-red-400">
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
             </Card>
           ))}
 
           {/* Render Assets */}
           {filteredMedia.map((item) => (
-            <Card key={item.id} className="group relative overflow-hidden bg-white/5 hover:border-white/20 transition-all border-white/10">
+            <Card 
+              key={item.id} 
+              draggable 
+              onDragStart={(e) => onAssetDragStart(e, item.id)}
+              className="group relative overflow-hidden bg-white/5 hover:border-white/20 transition-all border-white/10 cursor-grab active:cursor-grabbing"
+            >
               <div className="aspect-square relative overflow-hidden bg-navy-800 flex items-center justify-center">
                 {item.fileType?.startsWith('image') ? (
                   <img src={item.fileUrl} alt={item.fileName} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
@@ -337,7 +392,13 @@ export const MediaLibrary = () => {
             <tbody className="divide-y divide-white/10">
               {/* Folders First */}
               {filteredFolders.map((folder) => (
-                 <tr key={folder.id} className="hover:bg-white/5 transition-colors cursor-pointer" onClick={() => navigateToFolder(folder.id)}>
+                 <tr 
+                   key={folder.id} 
+                   className="hover:bg-white/5 transition-colors cursor-pointer" 
+                   onClick={() => navigateToFolder(folder.id)}
+                   onDragOver={(e) => e.preventDefault()}
+                   onDrop={(e) => onFolderDrop(e, folder.id)}
+                 >
                    <td className="p-4">
                      <div className="flex items-center gap-3">
                        <div className="w-10 h-10 rounded bg-navy-800 flex items-center justify-center">
@@ -350,13 +411,21 @@ export const MediaLibrary = () => {
                    <td className="p-4 text-sm text-muted-foreground">--</td>
                    <td className="p-4 text-sm text-muted-foreground">{new Date(folder.createdAt).toLocaleDateString()}</td>
                    <td className="p-4 text-right">
-                     <Button variant="ghost" size="icon" className="text-muted-foreground"><MoreVertical className="w-4 h-4" /></Button>
+                     <div className="flex justify-end gap-2">
+                        <Button variant="ghost" size="icon" onClick={(e) => handleRenameFolder(e, folder)}><Edit2 className="w-4 h-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={(e) => handleDeleteFolder(e, folder.id)}><Trash2 className="w-4 h-4 text-red-400" /></Button>
+                     </div>
                    </td>
                  </tr>
               ))}
 
               {filteredMedia.map((item) => (
-                <tr key={item.id} className="hover:bg-white/5 transition-colors">
+                <tr 
+                  key={item.id} 
+                  draggable 
+                  onDragStart={(e) => onAssetDragStart(e, item.id)}
+                  className="hover:bg-white/5 transition-colors cursor-grab active:cursor-grabbing"
+                >
                   <td className="p-4">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded bg-navy-800 overflow-hidden flex items-center justify-center">

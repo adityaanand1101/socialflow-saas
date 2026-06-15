@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import dotenv from 'dotenv';
 import { requireAuth } from '../middlewares/auth';
@@ -38,16 +38,14 @@ router.post('/presigned-url', requireAuth, async (req: any, res: any) => {
       Bucket: process.env.S3_BUCKET_NAME || 'dummy-bucket',
       Key: key,
       ContentType: fileType,
-      // For some providers, ACL 'public-read' might be required or rejected depending on bucket settings
-      // ACL: 'public-read'
     });
 
-    // Signed URL expires in 15 minutes
+    // Signed URL expires in 15 minutes for uploading
     const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 900 });
 
-    const fileUrl = process.env.S3_PUBLIC_URL 
-      ? `${process.env.S3_PUBLIC_URL}/${key}`
-      : `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.S3_REGION}.amazonaws.com/${key}`;
+    // For a private bucket, the fileUrl is just the key for database storage
+    // We will generate a viewUrl on the fly when fetching
+    const fileUrl = key; 
 
     res.json({ uploadUrl, fileUrl, key });
   } catch (error) {
@@ -71,7 +69,7 @@ router.post('/register', requireAuth, async (req: any, res: any) => {
         workspaceId,
         userId: req.userId,
         fileName,
-        fileUrl,
+        fileUrl, // This is now the S3 Key
         fileType,
         fileSize,
         tags: tags || []
@@ -103,7 +101,30 @@ router.get('/', requireAuth, async (req: any, res: any) => {
       orderBy: { createdAt: 'desc' }
     });
 
-    res.json(media);
+    // Generate signed GET URLs for each asset for private viewing
+    const mediaWithSignedUrls = await Promise.all(media.map(async (item) => {
+      try {
+        // If fileUrl is a full URL, try to extract key, else assume it's already the key
+        const key = item.fileUrl.includes('http') 
+          ? item.fileUrl.split('/').slice(-2).join('/') // Handles workspaceId/filename
+          : item.fileUrl;
+
+        const command = new GetObjectCommand({
+          Bucket: process.env.S3_BUCKET_NAME || 'dummy-bucket',
+          Key: key
+        });
+
+        // Signed URL expires in 1 hour
+        const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+        
+        return { ...item, fileUrl: signedUrl, s3Key: key };
+      } catch (e) {
+        console.error(`Failed to sign URL for ${item.id}`, e);
+        return item;
+      }
+    }));
+
+    res.json(mediaWithSignedUrls);
   } catch (error) {
     console.error('Error fetching media assets:', error);
     res.status(500).json({ error: 'Failed to fetch media assets' });

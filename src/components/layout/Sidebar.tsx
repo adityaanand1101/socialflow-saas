@@ -11,12 +11,11 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  LogOut
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useStore } from '@/store/useStore'
 import { Button } from '@/components/ui/button'
-import { UserButton, useUser, SignOutButton } from '@clerk/react'
+import { UserButton, useUser } from '@clerk/react'
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/app' },
@@ -90,16 +89,6 @@ export const Sidebar = () => {
       </nav>
 
       <div className="p-4 border-t border-white/10 space-y-2">
-        <SignOutButton>
-          <button className={cn(
-            "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-red-500/10 hover:text-red-500 transition-all duration-200",
-            sidebarCollapsed && "justify-center"
-          )}>
-            <LogOut className="w-5 h-5" />
-            {!sidebarCollapsed && <span className="font-medium">Log out</span>}
-          </button>
-        </SignOutButton>
-
         <div className={cn(
           "flex items-center gap-3 pt-2",
           sidebarCollapsed ? "justify-center" : "px-2"

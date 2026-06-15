@@ -4,10 +4,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { 
   User, Globe, CreditCard, Bell, Clock, Link as LinkIcon, Key, Trash2,
-  ChevronRight, Loader2, Check, Camera, AlertTriangle, ExternalLink, Copy
+  ChevronRight, Loader2, Check, Camera, AlertTriangle, ExternalLink, Copy, LogOut
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useAuth } from '@clerk/react'
+import { useAuth, SignOutButton } from '@clerk/react'
 import { apiFetch } from '@/lib/api'
 
 const sections = [
@@ -257,8 +257,20 @@ export const Settings = () => {
                 </div>
               </div>
 
-              {/* Danger Zone */}
-              <div className="pt-6 border-t border-white/10">
+              {/* Account Actions */}
+              <div className="pt-6 border-t border-white/10 space-y-4">
+                <div className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10">
+                  <div>
+                    <p className="text-sm font-bold text-white">Log Out</p>
+                    <p className="text-xs text-muted-foreground mt-1">Sign out of your account on this device.</p>
+                  </div>
+                  <SignOutButton>
+                    <Button variant="outline" size="sm" className="gap-2 hover:bg-white/10">
+                      <LogOut className="w-3.5 h-3.5" /> Log out
+                    </Button>
+                  </SignOutButton>
+                </div>
+
                 <div className="p-4 rounded-xl bg-red-500/5 border border-red-500/20">
                   <div className="flex items-center gap-2 mb-2">
                     <AlertTriangle className="w-4 h-4 text-red-400" />

@@ -149,28 +149,33 @@ export const MediaLibrary = () => {
                 {item.fileType?.startsWith('image') ? (
                   <img src={item.fileUrl} alt={item.fileName} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
                 ) : item.fileType?.startsWith('video') ? (
-                  <div className="flex flex-col items-center gap-2">
-                    <Video className="w-8 h-8 text-muted-foreground" />
-                    <span className="text-[10px] text-muted-foreground">Video</span>
-                  </div>
+                  <video 
+                    src={item.fileUrl} 
+                    className="w-full h-full object-cover"
+                    muted
+                    onMouseOver={(e) => e.currentTarget.play()}
+                    onMouseOut={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0; }}
+                  />
                 ) : (
                   <FileText className="w-8 h-8 text-muted-foreground" />
                 )}
                 
-                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-8 w-8 text-destructive hover:bg-destructive/20"
-                    onClick={() => handleDelete(item.id)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-white"><MoreVertical className="w-4 h-4" /></Button>
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 pointer-events-none">
+                  <div className="pointer-events-auto flex gap-2">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-8 w-8 text-destructive hover:bg-destructive/20"
+                      onClick={() => handleDelete(item.id)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-white"><MoreVertical className="w-4 h-4" /></Button>
+                  </div>
                 </div>
 
                 {item.fileType?.startsWith('video') && (
-                  <div className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded bg-black/60 text-[10px] font-bold text-white">
+                  <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-purple-500/80 text-[8px] font-bold text-white uppercase tracking-wider">
                     Video
                   </div>
                 )}

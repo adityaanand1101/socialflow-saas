@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import OpenAI from 'openai';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { Client } from '@google/genai';
 import dotenv from 'dotenv';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import fetch from 'node-fetch';
@@ -17,8 +17,8 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || 'dummy-key',
 });
 
-const genAI = process.env.GOOGLE_AI_API_KEY 
-  ? new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY)
+const geminiClient = process.env.GOOGLE_AI_API_KEY 
+  ? new Client({ apiKey: process.env.GOOGLE_AI_API_KEY })
   : null;
 
 // Utility to log AI usage
@@ -45,39 +45,21 @@ router.post('/caption', requireAuth, async (req: any, res: any) => {
   try {
     let variations: string[] = [];
 
-    if (genAI) {
-      // Use Gemini
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-      const systemPrompt = `You are an expert social media manager. Generate 3 variations of a caption for ${platform} with a ${tone} tone. Return the response strictly as a JSON object with a "variations" key containing an array of strings.`;
-      
-      const result = await model.generateContent(`${systemPrompt}\n\nUser Request: ${prompt}`);
-      const response = await result.response;
-      const text = response.text();
+    if (geminiClient) {
+      // Use Gemini 3.1 via the new @google/genai SDK
+      const response = await geminiClient.models.generateContent({
+        model: 'gemini-1.5-flash', // Still use 1.5 for text, or 3.1 if available
+        contents: [{ role: 'user', parts: [{ text: `You are an expert social media manager. Generate 3 variations of a caption for ${platform} with a ${tone} tone. Return the response strictly as a JSON object with a "variations" key containing an array of strings.\n\nUser Request: ${prompt}` }] }],
+      });
+
+      const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '';
       
       try {
-        // Clean up the text in case Gemini wraps it in markdown blocks
         const cleanedText = text.replace(/```json|```/g, '').trim();
         const parsed = JSON.parse(cleanedText);
         variations = parsed.variations || parsed.captions || Object.values(parsed)[0];
       } catch (e) {
         variations = [text];
-      }
-    } else if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'dummy-key') {
-      // Use OpenAI Fallback
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: `You are an expert social media manager. Generate 3 variations of a caption for ${platform} with a ${tone} tone. Return the response strictly as a JSON array of strings.` },
-          { role: 'user', content: prompt }
-        ],
-        response_format: { type: 'json_object' }
-      });
-      const responseText = completion.choices[0].message.content;
-      try {
-        const parsed = JSON.parse(responseText || '{}');
-        variations = parsed.variations || parsed.captions || Object.values(parsed)[0];
-      } catch (e) {
-        variations = [responseText || ''];
       }
     } else {
       return res.status(500).json({ error: 'AI services not configured. Please add GOOGLE_AI_API_KEY to your environment.' });
@@ -99,13 +81,13 @@ router.post('/hashtags', requireAuth, async (req: any, res: any) => {
   try {
     let hashtags: string[] = [];
 
-    if (genAI) {
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-      const systemPrompt = `You are an SEO expert. Generate a list of top trending and contextually relevant hashtags for the given niche and keywords. Return strictly as a JSON object with a "hashtags" key containing an array of strings (including the # symbol).`;
-      
-      const result = await model.generateContent(`${systemPrompt}\n\nNiche: ${niche}, Keywords: ${keywords}`);
-      const response = await result.response;
-      const text = response.text();
+    if (geminiClient) {
+      const response = await geminiClient.models.generateContent({
+        model: 'gemini-1.5-flash',
+        contents: [{ role: 'user', parts: [{ text: `You are an SEO expert. Generate a list of top trending and contextually relevant hashtags for the given niche and keywords. Return strictly as a JSON object with a "hashtags" key containing an array of strings (including the # symbol).\n\nNiche: ${niche}, Keywords: ${keywords}` }] }],
+      });
+
+      const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '';
       
       try {
         const cleanedText = text.replace(/```json|```/g, '').trim();
@@ -113,22 +95,6 @@ router.post('/hashtags', requireAuth, async (req: any, res: any) => {
         hashtags = parsed.hashtags || Object.values(parsed)[0];
       } catch (e) {
         hashtags = text.split(' ').filter(word => word.startsWith('#'));
-      }
-    } else if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'dummy-key') {
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: `You are an SEO expert. Generate a list of top trending and contextually relevant hashtags for the given niche/keywords. Return strictly as a JSON array of strings (including the # symbol).` },
-          { role: 'user', content: `Niche: ${niche}, Keywords: ${keywords}` }
-        ],
-        response_format: { type: 'json_object' }
-      });
-      const responseText = completion.choices[0].message.content;
-      try {
-        const parsed = JSON.parse(responseText || '{}');
-        hashtags = parsed.hashtags || Object.values(parsed)[0];
-      } catch (e) {
-        hashtags = [];
       }
     } else {
       return res.status(500).json({ error: 'AI services not configured.' });
@@ -150,30 +116,17 @@ router.post('/ideas', requireAuth, async (req: any, res: any) => {
   try {
     let ideas = [];
 
-    if (genAI) {
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-      const systemPrompt = `Generate a 30-day social media content plan. Return JSON strictly in this format: { "ideas": [ { "day": 1, "topic": "...", "description": "..." } ] }`;
-      
-      const result = await model.generateContent(`${systemPrompt}\n\nTopic: ${topic}, Industry: ${industry}`);
-      const response = await result.response;
-      const text = response.text();
+    if (geminiClient) {
+      const response = await geminiClient.models.generateContent({
+        model: 'gemini-1.5-flash',
+        contents: [{ role: 'user', parts: [{ text: `Generate a 30-day social media content plan. Return JSON strictly in this format: { "ideas": [ { "day": 1, "topic": "...", "description": "..." } ] }\n\nTopic: ${topic}, Industry: ${industry}` }] }],
+      });
+
+      const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '';
       
       try {
         const cleanedText = text.replace(/```json|```/g, '').trim();
         ideas = JSON.parse(cleanedText).ideas || [];
-      } catch (e) {}
-    } else if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'dummy-key') {
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: `Generate a 30-day content plan. Return JSON strictly in this format: { "ideas": [ { "day": 1, "topic": "...", "description": "..." } ] }` },
-          { role: 'user', content: `Topic: ${topic}, Industry: ${industry}` }
-        ],
-        response_format: { type: 'json_object' }
-      });
-      const responseText = completion.choices[0].message.content;
-      try {
-        ideas = JSON.parse(responseText || '{}').ideas || [];
       } catch (e) {}
     } else {
       return res.status(500).json({ error: 'AI services not configured.' });
@@ -190,74 +143,86 @@ router.post('/ideas', requireAuth, async (req: any, res: any) => {
 
 router.post('/image', requireAuth, async (req: any, res: any) => {
   const { imagePrompt, aspectRatio } = req.body;
+  const userId = req.userId;
+  const workspaceId = req.workspaceId;
 
-  if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY === 'dummy-key') {
-    return res.status(500).json({ error: 'Image generation requires OPENAI_API_KEY (DALL-E 3).' });
-  }
+  if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
 
   try {
-    const userId = req.userId;
-    const workspaceId = req.workspaceId;
-    if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+    let finalUrl = '';
+    let asset = null;
 
-    let size: "1024x1024" | "1024x1792" | "1792x1024" = "1024x1024";
-    if (aspectRatio === '16:9') size = '1792x1024';
-    if (aspectRatio === '9:16') size = '1024x1792';
-
-    const response = await openai.images.generate({
-      model: "dall-e-3",
-      prompt: imagePrompt,
-      n: 1,
-      size: size,
-    });
-
-    const imageUrl = response?.data?.[0]?.url || '';
-    if (!imageUrl) throw new Error('No image URL returned from OpenAI');
-
-    await logAiUsage(userId, 'image', imagePrompt, undefined, 1);
-
-    let finalUrl = imageUrl;
-
-    if (process.env.S3_BUCKET_NAME) {
-      const s3Client = new S3Client({
-        region: process.env.S3_REGION || 'us-east-1',
-        endpoint: process.env.S3_ENDPOINT,
-        credentials: {
-          accessKeyId: process.env.S3_ACCESS_KEY_ID || '',
-          secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || '',
-        },
+    if (geminiClient) {
+      // --- Use Nano Banana (Gemini 3.1 Flash Image) ---
+      const response = await geminiClient.models.generateContent({
+        model: 'gemini-3.1-flash-image', // codenamed Nano Banana 2
+        contents: [{ role: 'user', parts: [{ text: imagePrompt }] }],
+        config: {
+          responseModalities: ["IMAGE"],
+          imageConfig: {
+            aspectRatio: aspectRatio || "1:1",
+            imageSize: "1K"
+          }
+        }
       });
 
-      const imageRes = await fetch(imageUrl);
-      const buffer = await imageRes.buffer();
+      // Find the generated image part
+      const imagePart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+      
+      if (!imagePart || !imagePart.inlineData) {
+        throw new Error('No image was generated by Nano Banana');
+      }
+
+      const buffer = Buffer.from(imagePart.inlineData.data, 'base64');
       const fileName = `ai-images/${Date.now()}-${Math.random().toString(36).substring(7)}.png`;
 
-      await s3Client.send(new PutObjectCommand({
-        Bucket: process.env.S3_BUCKET_NAME,
-        Key: fileName,
-        Body: buffer,
-        ContentType: 'image/png',
-      }));
+      // Upload to Backblaze B2
+      if (process.env.S3_BUCKET_NAME) {
+        const s3Client = new S3Client({
+          region: process.env.S3_REGION || 'us-east-1',
+          endpoint: process.env.S3_ENDPOINT,
+          credentials: {
+            accessKeyId: process.env.S3_ACCESS_KEY_ID || '',
+            secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || '',
+          },
+        });
 
-      finalUrl = process.env.S3_PUBLIC_URL ? `${process.env.S3_PUBLIC_URL}/${fileName}` : `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.S3_REGION}.amazonaws.com/${fileName}`;
+        await s3Client.send(new PutObjectCommand({
+          Bucket: process.env.S3_BUCKET_NAME,
+          Key: fileName,
+          Body: buffer,
+          ContentType: 'image/png',
+        }));
+
+        finalUrl = process.env.S3_PUBLIC_URL 
+          ? `${process.env.S3_PUBLIC_URL}/${fileName}` 
+          : `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.S3_REGION}.amazonaws.com/${fileName}`;
+
+        // Register in Database
+        asset = await prisma.mediaAsset.create({
+          data: {
+            workspaceId,
+            userId,
+            fileName: `NanoBanana-${Date.now()}.png`,
+            fileUrl: finalUrl,
+            fileType: 'image/png',
+            fileSize: buffer.length,
+            tags: ['nanobanana', 'ai-generated']
+          }
+        });
+
+        await logAiUsage(userId, 'image', imagePrompt, 0, 1);
+        return res.json({ url: finalUrl, asset });
+      } else {
+        throw new Error('Storage (Backblaze) not configured for image saving');
+      }
+    } else {
+      return res.status(500).json({ error: 'Gemini AI not configured.' });
     }
 
-    const asset = await prisma.mediaAsset.create({
-      data: {
-        workspaceId,
-        userId: userId,
-        fileName: `AI-Generated-${Date.now()}.png`,
-        fileUrl: finalUrl,
-        fileType: 'image/png',
-        fileSize: 0,
-        tags: ['ai-generated']
-      }
-    });
-
-    res.json({ url: finalUrl, asset });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to generate image' });
+  } catch (error: any) {
+    console.error('Nano Banana Error:', error);
+    res.status(500).json({ error: error.message || 'Failed to generate image with Nano Banana' });
   }
 });
 

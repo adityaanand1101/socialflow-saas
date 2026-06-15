@@ -1,7 +1,9 @@
-import { useRef, useState, useMemo, useEffect } from 'react'
+import { useRef, useState, useMemo } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/api'
 import { 
   Search, 
   Upload, 
@@ -27,17 +29,17 @@ import { useAuth } from '@clerk/react'
 
 export const MediaLibrary = () => {
   const { 
-    media, folders, currentFolderId, 
-    uploadMedia, removeMedia, createFolder, 
-    updateFolder, removeFolder, moveAsset, 
-    fetchData, loading 
+    currentFolderId, uploadMedia, removeMedia, 
+    createFolder, updateFolder, removeFolder, 
+    moveAsset, setCurrentFolder, mediaViewMode, setMediaViewMode
   } = useStore()
-  const { getToken, isLoaded, isSignedIn } = useAuth()
+  
+  const { getToken } = useAuth()
+  const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
   
   const [uploading, setUploading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null)
@@ -50,15 +52,20 @@ export const MediaLibrary = () => {
   const [renameAssetId, setRenameAssetId] = useState<string | null>(null)
   const [newFileName, setNewFileName] = useState('')
 
-  useEffect(() => {
-    const init = async () => {
-      if (isLoaded && isSignedIn) {
-        const token = await getToken()
-        if (token) fetchData(token, currentFolderId)
-      }
-    }
-    init()
-  }, [isLoaded, isSignedIn, currentFolderId])
+  // --- React Query for Data Fetching ---
+  const { data, isLoading } = useQuery({
+    queryKey: ['media', currentFolderId, searchQuery],
+    queryFn: async () => {
+      const token = await getToken()
+      const url = `/api/media?${currentFolderId ? `folderId=${currentFolderId}` : 'folderId=root'}${searchQuery ? `&search=${searchQuery}` : ''}`
+      const res = await apiFetch(url, { headers: { Authorization: `Bearer ${token}` } })
+      return res.json()
+    },
+    staleTime: 1000 * 60 * 2, // 2 minutes stale time
+  })
+
+  const media = data?.assets || []
+  const folders = data?.folders || []
 
   const processFiles = async (files: FileList | File[]) => {
     if (!files || files.length === 0) return
@@ -69,6 +76,7 @@ export const MediaLibrary = () => {
       if (!token) return
 
       await Promise.all(Array.from(files).map(file => uploadMedia(token, file, currentFolderId)))
+      queryClient.invalidateQueries({ queryKey: ['media'] })
       if (fileInputRef.current) fileInputRef.current.value = ''
     } catch (error) {
       console.error('Upload failed:', error)
@@ -109,6 +117,7 @@ export const MediaLibrary = () => {
       } else {
         await createFolder(token, newFolderName, currentFolderId)
       }
+      queryClient.invalidateQueries({ queryKey: ['media'] })
       setNewFolderName('')
       setEditingFolderId(null)
       setIsFolderModalOpen(false)
@@ -127,7 +136,7 @@ export const MediaLibrary = () => {
         },
         body: JSON.stringify({ fileName: newFileName })
       });
-      if (res.ok) fetchData(token, currentFolderId);
+      if (res.ok) queryClient.invalidateQueries({ queryKey: ['media'] })
       
       setNewFileName('')
       setRenameAssetId(null)
@@ -139,7 +148,10 @@ export const MediaLibrary = () => {
     e.stopPropagation()
     if (!confirm('Are you sure you want to delete this folder? Assets will be moved to root.')) return
     const token = await getToken()
-    if (token) await removeFolder(token, id)
+    if (token) {
+      await removeFolder(token, id)
+      queryClient.invalidateQueries({ queryKey: ['media'] })
+    }
   }
 
   const handleRenameFolder = (e: React.MouseEvent, folder: any) => {
@@ -153,7 +165,10 @@ export const MediaLibrary = () => {
     if (!confirm('Are you sure you want to delete this asset?')) return
     try {
       const token = await getToken()
-      if (token) await removeMedia(token, id)
+      if (token) {
+        await removeMedia(token, id)
+        queryClient.invalidateQueries({ queryKey: ['media'] })
+      }
     } catch (error) {
        console.error('Failed to delete', error)
     }
@@ -192,34 +207,22 @@ export const MediaLibrary = () => {
     const assetId = e.dataTransfer.getData('assetId') || draggedAssetId
     if (assetId && assetId !== folderId) {
       const token = await getToken()
-      if (token) await moveAsset(token, assetId, folderId)
+      if (token) {
+        await moveAsset(token, assetId, folderId)
+        queryClient.invalidateQueries({ queryKey: ['media'] })
+      }
     }
     setDraggedAssetId(null)
   }
 
   const navigateToFolder = (id: string | null) => {
-    useStore.getState().setCurrentFolder(id)
+    setCurrentFolder(id)
   }
 
   const currentFolderName = useMemo(() => {
     if (!currentFolderId) return 'Root'
-    return folders.find(f => f.id === currentFolderId)?.name || 'Folder'
+    return folders.find((f: any) => f.id === currentFolderId)?.name || 'Folder'
   }, [currentFolderId, folders])
-
-  const filteredMedia = useMemo(() => {
-    if (!searchQuery) return media
-    const query = searchQuery.toLowerCase()
-    return media.filter(item => 
-      (item.fileName || '').toLowerCase().includes(query) || 
-      (item.name || '').toLowerCase().includes(query)
-    )
-  }, [media, searchQuery])
-
-  const filteredFolders = useMemo(() => {
-    if (!searchQuery) return folders
-    const query = searchQuery.toLowerCase()
-    return folders.filter(f => f.name.toLowerCase().includes(query))
-  }, [folders, searchQuery])
 
   return (
     <div 
@@ -340,16 +343,16 @@ export const MediaLibrary = () => {
           <Button 
             variant="ghost" 
             size="icon" 
-            className={viewMode === 'grid' ? "text-white bg-white/10" : "text-muted-foreground"}
-            onClick={() => setViewMode('grid')}
+            className={mediaViewMode === 'grid' ? "text-white bg-white/10" : "text-muted-foreground"}
+            onClick={() => setMediaViewMode('grid')}
           >
             <Grid className="w-4 h-4" />
           </Button>
           <Button 
             variant="ghost" 
             size="icon" 
-            className={viewMode === 'list' ? "text-white bg-white/10" : "text-muted-foreground"}
-            onClick={() => setViewMode('list')}
+            className={mediaViewMode === 'list' ? "text-white bg-white/10" : "text-muted-foreground"}
+            onClick={() => setMediaViewMode('list')}
           >
             <List className="w-4 h-4" />
           </Button>
@@ -357,11 +360,11 @@ export const MediaLibrary = () => {
         </div>
       </div>
 
-      {loading && media.length === 0 && folders.length === 0 ? (
+      {isLoading ? (
         <div className="flex items-center justify-center h-64">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
-      ) : (filteredMedia.length === 0 && filteredFolders.length === 0) ? (
+      ) : (media.length === 0 && folders.length === 0) ? (
         <div className="flex flex-col items-center justify-center h-64 bg-white/5 rounded-2xl border border-dashed border-white/10">
           <ImageIcon className="w-12 h-12 text-muted-foreground mb-4" />
           <p className="text-white font-medium">{searchQuery ? 'No matching items found' : 'This folder is empty'}</p>
@@ -369,10 +372,10 @@ export const MediaLibrary = () => {
             {searchQuery ? 'Try a different search term.' : 'Upload assets or create folders to organize your media.'}
           </p>
         </div>
-      ) : viewMode === 'grid' ? (
+      ) : mediaViewMode === 'grid' ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6">
           {/* Render Folders First */}
-          {filteredFolders.map((folder) => (
+          {folders.map((folder: any) => (
             <Card 
               key={folder.id} 
               className="group cursor-pointer bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all border-white/10 flex flex-col items-center justify-center aspect-square p-4 relative"
@@ -395,7 +398,7 @@ export const MediaLibrary = () => {
           ))}
 
           {/* Render Assets */}
-          {filteredMedia.map((item) => (
+          {media.map((item: any) => (
             <Card 
               key={item.id} 
               draggable 
@@ -460,13 +463,16 @@ export const MediaLibrary = () => {
                           <div className="h-[1px] bg-white/10 my-1" />
                           <div className="px-4 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Move to Folder</div>
                           {folders.length === 0 && <div className="px-4 py-2 text-[10px] text-muted-foreground italic">No folders found</div>}
-                          {folders.map(f => (
+                          {folders.map((f: any) => (
                              <button 
                                key={f.id}
                                className="w-full text-left px-4 py-2 text-xs text-purple-400 hover:bg-purple-500/10 flex items-center gap-2"
                                onClick={async () => { 
                                  const token = await getToken(); 
-                                 if (token) await moveAsset(token, item.id, f.id); 
+                                 if (token) {
+                                   await moveAsset(token, item.id, f.id); 
+                                   queryClient.invalidateQueries({ queryKey: ['media'] })
+                                 }
                                  setActiveMenuId(null); 
                                }}
                              >
@@ -478,7 +484,10 @@ export const MediaLibrary = () => {
                               className="w-full text-left px-4 py-2 text-xs text-purple-400 hover:bg-purple-500/10 flex items-center gap-2"
                               onClick={async () => { 
                                 const token = await getToken(); 
-                                if (token) await moveAsset(token, item.id, null); 
+                                if (token) {
+                                  await moveAsset(token, item.id, null); 
+                                  queryClient.invalidateQueries({ queryKey: ['media'] })
+                                }
                                 setActiveMenuId(null); 
                               }}
                             >
@@ -531,7 +540,7 @@ export const MediaLibrary = () => {
             </thead>
             <tbody className="divide-y divide-white/10">
               {/* Folders First */}
-              {filteredFolders.map((folder) => (
+              {folders.map((folder: any) => (
                  <tr 
                    key={folder.id} 
                    className="hover:bg-white/5 transition-colors cursor-pointer" 
@@ -559,7 +568,7 @@ export const MediaLibrary = () => {
                  </tr>
               ))}
 
-              {filteredMedia.map((item) => (
+              {media.map((item: any) => (
                 <tr 
                   key={item.id} 
                   draggable 
@@ -635,13 +644,13 @@ export const MediaLibrary = () => {
         <div className="flex items-center justify-between mb-2">
           <p className="text-xs font-bold text-white uppercase tracking-widest">Storage Usage</p>
           <p className="text-xs text-muted-foreground">
-            {media.length > 0 ? `${(media.reduce((acc, curr) => acc + (curr.fileSize || 0), 0) / 1024 / 1024).toFixed(1)} MB` : '0 MB'} / 500 MB
+            {data?.assets?.length > 0 ? `${(data.assets.reduce((acc: number, curr: any) => acc + (curr.fileSize || 0), 0) / 1024 / 1024).toFixed(1)} MB` : '0 MB'} / 500 MB
           </p>
         </div>
         <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
           <div 
             className="h-full bg-gradient-primary rounded-full shadow-glow transition-all" 
-            style={{ width: `${Math.min((media.reduce((acc, curr) => acc + (curr.fileSize || 0), 0) / 1024 / 1024 / 5), 100)}%` }}
+            style={{ width: `${Math.min((data?.assets?.reduce((acc: number, curr: any) => acc + (curr.fileSize || 0), 0) / 1024 / 1024 / 5), 100)}%` }}
           />
         </div>
         <p className="text-[10px] text-muted-foreground mt-2 italic text-center">

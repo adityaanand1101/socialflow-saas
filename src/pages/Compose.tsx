@@ -50,11 +50,50 @@ export const Compose = () => {
   const [mediaFiles, setMediaFiles] = useState<string[]>([])
   const [isUploadingMedia, setIsUploadingMedia] = useState(false)
   const [showMediaLibrary, setShowMediaLibrary] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   
   const { addPost, uploadMedia, media: libraryMedia } = useStore()
   const navigate = useNavigate()
   const { getToken } = useAuth()
+
+  const handleMediaUpload = async (file: File) => {
+    setIsUploadingMedia(true)
+    try {
+      const token = await getToken()
+      if (!token) return
+      const asset = await uploadMedia(token, file)
+      if (asset) {
+        setMediaFiles(prev => [...prev, asset.fileUrl])
+      }
+      return asset
+    } catch (error) {
+      console.error('Upload failed:', error)
+    } finally {
+      setIsUploadingMedia(false)
+    }
+  }
+
+  const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) await handleMediaUpload(file)
+  }
+
+  const onDrop = async (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file) {
+      const asset = await handleMediaUpload(file)
+      if (asset) setShowMediaLibrary(false) // Close modal on successful drop
+    }
+  }
+
+  const toggleLibraryMedia = (url: string) => {
+    setMediaFiles(prev => 
+      prev.includes(url) ? prev.filter(u => u !== url) : [...prev, url]
+    )
+  }
 
   const togglePlatform = (id: SocialPlatform) => {
     setSelectedPlatforms(prev => 
@@ -75,31 +114,6 @@ export const Compose = () => {
     } finally {
       setIsRewriting(false)
     }
-  }
-
-  const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    setIsUploadingMedia(true)
-    try {
-      const token = await getToken()
-      if (!token) return
-      const asset = await uploadMedia(token, file)
-      if (asset) {
-        setMediaFiles(prev => [...prev, asset.fileUrl])
-      }
-    } catch (error) {
-      console.error('Upload failed:', error)
-    } finally {
-      setIsUploadingMedia(false)
-    }
-  }
-
-  const toggleLibraryMedia = (url: string) => {
-    setMediaFiles(prev => 
-      prev.includes(url) ? prev.filter(u => u !== url) : [...prev, url]
-    )
   }
 
   const removeMedia = (index: number) => {
@@ -226,7 +240,7 @@ export const Compose = () => {
 
             <div className="flex items-center justify-between pt-4 border-t border-white/10">
               <div className="flex items-center gap-1">
-                <input type="file" className="hidden" ref={fileInputRef} accept="image/*,video/*" onChange={handleMediaUpload} />
+                <input type="file" className="hidden" ref={fileInputRef} accept="image/*,video/*" onChange={onFileChange} />
                 <Button 
                   variant="ghost" size="icon" 
                   className={cn("text-muted-foreground hover:text-white", isUploadingMedia && "animate-pulse")}
@@ -252,8 +266,19 @@ export const Compose = () => {
 
               {/* Media Selection Modal */}
               {showMediaLibrary && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-                  <div className="bg-[#141218] border border-white/10 rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
+                <div 
+                  className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
+                  onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={onDrop}
+                >
+                  <div className="bg-[#141218] border border-white/10 rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden relative">
+                    {isDragging && (
+                      <div className="absolute inset-0 z-[120] bg-purple-500/20 backdrop-blur-md border-4 border-dashed border-purple-500 rounded-2xl flex flex-col items-center justify-center pointer-events-none">
+                        <Upload className="w-12 h-12 text-white animate-bounce mb-4" />
+                        <h3 className="text-2xl font-bold text-white">Drop to Upload & Attach</h3>
+                      </div>
+                    )}
                     <div className="p-4 border-b border-white/10 flex items-center justify-between bg-white/5">
                       <h3 className="font-bold text-white">Media Library</h3>
                       <button onClick={() => setShowMediaLibrary(false)} className="text-muted-foreground hover:text-white">
@@ -264,7 +289,7 @@ export const Compose = () => {
                       {libraryMedia.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
                           <ImageIcon className="w-12 h-12 mb-2 opacity-20" />
-                          <p>Your library is empty.</p>
+                          <p>Your library is empty. Drag a file here!</p>
                         </div>
                       ) : (
                         <div className="grid grid-cols-3 sm:grid-cols-4 gap-4">

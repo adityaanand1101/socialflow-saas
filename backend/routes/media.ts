@@ -69,14 +69,21 @@ router.post('/register', requireAuth, async (req: any, res: any) => {
         workspaceId,
         userId: req.userId,
         fileName,
-        fileUrl, // This is now the S3 Key
+        fileUrl, // This is the S3 Key
         fileType,
         fileSize,
         tags: tags || []
       }
     });
 
-    res.json(asset);
+    // Generate a signed GET URL so the frontend can display it immediately
+    const command = new GetObjectCommand({
+      Bucket: process.env.S3_BUCKET_NAME || 'dummy-bucket',
+      Key: fileUrl
+    });
+    const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+
+    res.json({ ...asset, fileUrl: signedUrl });
   } catch (error) {
     console.error('Error registering media asset:', error);
     res.status(500).json({ error: 'Failed to register media asset' });

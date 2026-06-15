@@ -17,13 +17,21 @@ import {
   ChevronLeft,
   Folder,
   Edit2,
+  Download,
+  Copy,
+  Move,
   Image as ImageIcon
 } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { useAuth } from '@clerk/react'
 
 export const MediaLibrary = () => {
-  const { media, folders, currentFolderId, uploadMedia, removeMedia, createFolder, updateFolder, removeFolder, moveAsset, fetchData, loading } = useStore()
+  const { 
+    media, folders, currentFolderId, 
+    uploadMedia, removeMedia, createFolder, 
+    updateFolder, removeFolder, moveAsset, 
+    fetchData, loading 
+  } = useStore()
   const { getToken, isLoaded, isSignedIn } = useAuth()
   const fileInputRef = useRef<HTMLInputElement>(null)
   
@@ -35,6 +43,12 @@ export const MediaLibrary = () => {
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [draggedAssetId, setDraggedAssetId] = useState<string | null>(null)
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null)
+  
+  // Asset Rename Modal State
+  const [isRenameModalOpen, setIsRenameModalOpen] = useState(false)
+  const [renameAssetId, setRenameAssetId] = useState<string | null>(null)
+  const [newFileName, setNewFileName] = useState('')
 
   useEffect(() => {
     const init = async () => {
@@ -82,7 +96,7 @@ export const MediaLibrary = () => {
     e.preventDefault()
     setIsDragging(false)
     if (e.dataTransfer.files.length > 0) {
-      processFiles(e.dataTransfer.files)
+       processFiles(e.dataTransfer.files)
     }
   }
 
@@ -98,6 +112,26 @@ export const MediaLibrary = () => {
       setNewFolderName('')
       setEditingFolderId(null)
       setIsFolderModalOpen(false)
+    }
+  }
+
+  const handleRenameAsset = async () => {
+    if (!newFileName.trim() || !renameAssetId) return
+    const token = await getToken()
+    if (token) {
+      const res = await fetch(`/api/media/${renameAssetId}`, {
+        method: 'PATCH',
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ fileName: newFileName })
+      });
+      if (res.ok) fetchData(token, currentFolderId);
+      
+      setNewFileName('')
+      setRenameAssetId(null)
+      setIsRenameModalOpen(false)
     }
   }
 
@@ -123,6 +157,28 @@ export const MediaLibrary = () => {
     } catch (error) {
        console.error('Failed to delete', error)
     }
+  }
+
+  const handleDownload = async (url: string, filename: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error('Download failed', error);
+    }
+  }
+
+  const handleCopyUrl = (url: string) => {
+    navigator.clipboard.writeText(url);
+    alert('Public URL copied to clipboard!');
   }
 
   const onAssetDragStart = (e: React.DragEvent, id: string) => {
@@ -171,6 +227,7 @@ export const MediaLibrary = () => {
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
+      onClick={() => setActiveMenuId(null)}
     >
       {/* Drag & Drop Overlay for External Files */}
       {isDragging && !draggedAssetId && (
@@ -208,7 +265,7 @@ export const MediaLibrary = () => {
             accept="image/*,video/*"
             multiple
           />
-          <Button variant="outline" className="gap-2" onClick={() => { setEditingFolderId(null); setNewFolderName(''); setIsFolderModalOpen(true); }}>
+          <Button variant="outline" className="gap-2" onClick={(e) => { e.stopPropagation(); setEditingFolderId(null); setNewFolderName(''); setIsFolderModalOpen(true); }}>
             <FolderPlus className="w-4 h-4" />
             New Folder
           </Button>
@@ -225,7 +282,7 @@ export const MediaLibrary = () => {
 
       {/* Folder Modal */}
       {isFolderModalOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[110] flex items-center justify-center p-4" onClick={(e) => e.stopPropagation()}>
           <div className="bg-[#141218] border border-white/10 rounded-2xl w-full max-w-md p-6 space-y-4">
             <h3 className="text-xl font-bold text-white">{editingFolderId ? 'Rename Folder' : 'Create New Folder'}</h3>
             <div className="space-y-2">
@@ -241,6 +298,29 @@ export const MediaLibrary = () => {
             <div className="flex justify-end gap-3 pt-2">
               <Button variant="ghost" onClick={() => { setIsFolderModalOpen(false); setEditingFolderId(null); }}>Cancel</Button>
               <Button onClick={handleCreateFolder} disabled={!newFolderName.trim()}>{editingFolderId ? 'Rename' : 'Create Folder'}</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Asset Rename Modal */}
+      {isRenameModalOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[110] flex items-center justify-center p-4" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-[#141218] border border-white/10 rounded-2xl w-full max-w-md p-6 space-y-4">
+            <h3 className="text-xl font-bold text-white">Rename Asset</h3>
+            <div className="space-y-2">
+              <label className="text-sm text-muted-foreground font-medium">New Name</label>
+              <Input 
+                value={newFileName}
+                onChange={(e) => setNewFileName(e.target.value)}
+                placeholder="filename.png"
+                autoFocus
+                onKeyDown={(e) => e.key === 'Enter' && handleRenameAsset()}
+              />
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="ghost" onClick={() => { setIsRenameModalOpen(false); setRenameAssetId(null); }}>Cancel</Button>
+              <Button onClick={handleRenameAsset} disabled={!newFileName.trim()}>Rename</Button>
             </div>
           </div>
         </div>
@@ -296,7 +376,7 @@ export const MediaLibrary = () => {
             <Card 
               key={folder.id} 
               className="group cursor-pointer bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all border-white/10 flex flex-col items-center justify-center aspect-square p-4 relative"
-              onClick={() => navigateToFolder(folder.id)}
+              onClick={(e) => { e.stopPropagation(); navigateToFolder(folder.id); }}
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => onFolderDrop(e, folder.id)}
             >
@@ -338,16 +418,76 @@ export const MediaLibrary = () => {
                 )}
                 
                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 pointer-events-none">
-                  <div className="pointer-events-auto flex gap-2">
+                  <div className="pointer-events-auto flex gap-2 relative">
                     <Button 
                       variant="ghost" 
                       size="icon" 
                       className="h-8 w-8 text-destructive hover:bg-destructive/20"
-                      onClick={() => handleDelete(item.id)}
+                      onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-white"><MoreVertical className="w-4 h-4" /></Button>
+                    <div className="relative">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8 text-white hover:bg-white/10"
+                        onClick={(e) => { e.stopPropagation(); setActiveMenuId(activeMenuId === item.id ? null : item.id); }}
+                      >
+                        <MoreVertical className="w-4 h-4" />
+                      </Button>
+                      
+                      {activeMenuId === item.id && (
+                        <div className="absolute right-0 top-full mt-1 w-48 bg-[#1a1820] border border-white/10 rounded-lg shadow-xl py-1 z-[120]" onClick={(e) => e.stopPropagation()}>
+                          <button 
+                            className="w-full text-left px-4 py-2 text-xs text-white hover:bg-white/5 flex items-center gap-2"
+                            onClick={() => { setRenameAssetId(item.id); setNewFileName(item.fileName); setIsRenameModalOpen(true); setActiveMenuId(null); }}
+                          >
+                            <Edit2 className="w-3.5 h-3.5" /> Rename
+                          </button>
+                          <button 
+                            className="w-full text-left px-4 py-2 text-xs text-white hover:bg-white/5 flex items-center gap-2"
+                            onClick={() => { handleDownload(item.fileUrl, item.fileName); setActiveMenuId(null); }}
+                          >
+                            <Download className="w-3.5 h-3.5" /> Download
+                          </button>
+                          <button 
+                            className="w-full text-left px-4 py-2 text-xs text-white hover:bg-white/5 flex items-center gap-2"
+                            onClick={() => { handleCopyUrl(item.fileUrl); setActiveMenuId(null); }}
+                          >
+                            <Copy className="w-3.5 h-3.5" /> Copy URL
+                          </button>
+                          <div className="h-[1px] bg-white/10 my-1" />
+                          <div className="px-4 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Move to Folder</div>
+                          {folders.length === 0 && <div className="px-4 py-2 text-[10px] text-muted-foreground italic">No folders found</div>}
+                          {folders.map(f => (
+                             <button 
+                               key={f.id}
+                               className="w-full text-left px-4 py-2 text-xs text-purple-400 hover:bg-purple-500/10 flex items-center gap-2"
+                               onClick={async () => { 
+                                 const token = await getToken(); 
+                                 if (token) await moveAsset(token, item.id, f.id); 
+                                 setActiveMenuId(null); 
+                               }}
+                             >
+                               <Folder className="w-3.5 h-3.5" /> {f.name}
+                             </button>
+                          ))}
+                          {currentFolderId && (
+                            <button 
+                              className="w-full text-left px-4 py-2 text-xs text-purple-400 hover:bg-purple-500/10 flex items-center gap-2"
+                              onClick={async () => { 
+                                const token = await getToken(); 
+                                if (token) await moveAsset(token, item.id, null); 
+                                setActiveMenuId(null); 
+                              }}
+                            >
+                              <Move className="w-3.5 h-3.5" /> Move to Root
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -395,7 +535,7 @@ export const MediaLibrary = () => {
                  <tr 
                    key={folder.id} 
                    className="hover:bg-white/5 transition-colors cursor-pointer" 
-                   onClick={() => navigateToFolder(folder.id)}
+                   onClick={(e) => { e.stopPropagation(); navigateToFolder(folder.id); }}
                    onDragOver={(e) => e.preventDefault()}
                    onDrop={(e) => onFolderDrop(e, folder.id)}
                  >
@@ -442,14 +582,46 @@ export const MediaLibrary = () => {
                   </td>
                   <td className="p-4 text-sm text-muted-foreground">{new Date(item.createdAt).toLocaleDateString()}</td>
                   <td className="p-4 text-right">
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="text-destructive hover:bg-destructive/10"
-                      onClick={() => handleDelete(item.id)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <div className="flex justify-end gap-2 relative">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="text-white"
+                        onClick={(e) => { e.stopPropagation(); setActiveMenuId(activeMenuId === item.id ? null : item.id); }}
+                      >
+                        <MoreVertical className="w-4 h-4" />
+                      </Button>
+                      
+                      {activeMenuId === item.id && (
+                        <div className="absolute right-0 top-full mt-1 w-48 bg-[#1a1820] border border-white/10 rounded-lg shadow-xl py-1 z-[120]" onClick={(e) => e.stopPropagation()}>
+                          <button 
+                            className="w-full text-left px-4 py-2 text-xs text-white hover:bg-white/5 flex items-center gap-2"
+                            onClick={() => { setRenameAssetId(item.id); setNewFileName(item.fileName); setIsRenameModalOpen(true); setActiveMenuId(null); }}
+                          >
+                            <Edit2 className="w-3.5 h-3.5" /> Rename
+                          </button>
+                          <button 
+                            className="w-full text-left px-4 py-2 text-xs text-white hover:bg-white/5 flex items-center gap-2"
+                            onClick={() => { handleDownload(item.fileUrl, item.fileName); setActiveMenuId(null); }}
+                          >
+                            <Download className="w-3.5 h-3.5" /> Download
+                          </button>
+                          <button 
+                            className="w-full text-left px-4 py-2 text-xs text-white hover:bg-white/5 flex items-center gap-2"
+                            onClick={() => { handleCopyUrl(item.fileUrl); setActiveMenuId(null); }}
+                          >
+                            <Copy className="w-3.5 h-3.5" /> Copy URL
+                          </button>
+                          <div className="h-[1px] bg-white/10 my-1" />
+                          <button 
+                            className="w-full text-left px-4 py-2 text-xs text-destructive hover:bg-destructive/10 flex items-center gap-2"
+                            onClick={() => { handleDelete(item.id); setActiveMenuId(null); }}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" /> Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -479,5 +651,3 @@ export const MediaLibrary = () => {
     </div>
   )
 }
-
-

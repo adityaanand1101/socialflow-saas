@@ -20,7 +20,6 @@ import {
 } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { useAuth } from '@clerk/react'
-import { cn } from '@/lib/utils'
 
 export const MediaLibrary = () => {
   const { media, folders, currentFolderId, uploadMedia, removeMedia, createFolder, fetchData, loading } = useStore()

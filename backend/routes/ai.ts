@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import OpenAI from 'openai';
-import { Client } from '@google/genai';
+import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import fetch from 'node-fetch';
@@ -17,8 +17,8 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || 'dummy-key',
 });
 
-const geminiClient = process.env.GOOGLE_AI_API_KEY 
-  ? new Client({ apiKey: process.env.GOOGLE_AI_API_KEY })
+const geminiAI = process.env.GOOGLE_AI_API_KEY 
+  ? new GoogleGenAI({ apiKey: process.env.GOOGLE_AI_API_KEY })
   : null;
 
 // Utility to log AI usage
@@ -45,10 +45,10 @@ router.post('/caption', requireAuth, async (req: any, res: any) => {
   try {
     let variations: string[] = [];
 
-    if (geminiClient) {
-      // Use Gemini 3.1 via the new @google/genai SDK
-      const response = await geminiClient.models.generateContent({
-        model: 'gemini-1.5-flash', // Still use 1.5 for text, or 3.1 if available
+    if (geminiAI) {
+      // Use Gemini via the new @google/genai SDK
+      const response = await geminiAI.models.generateContent({
+        model: 'gemini-1.5-flash',
         contents: [{ role: 'user', parts: [{ text: `You are an expert social media manager. Generate 3 variations of a caption for ${platform} with a ${tone} tone. Return the response strictly as a JSON object with a "variations" key containing an array of strings.\n\nUser Request: ${prompt}` }] }],
       });
 
@@ -62,7 +62,7 @@ router.post('/caption', requireAuth, async (req: any, res: any) => {
         variations = [text];
       }
     } else {
-      return res.status(500).json({ error: 'AI services not configured. Please add GOOGLE_AI_API_KEY to your environment.' });
+      return res.status(500).json({ error: 'AI services not configured.' });
     }
 
     await logAiUsage(userId, 'caption', prompt);
@@ -81,8 +81,8 @@ router.post('/hashtags', requireAuth, async (req: any, res: any) => {
   try {
     let hashtags: string[] = [];
 
-    if (geminiClient) {
-      const response = await geminiClient.models.generateContent({
+    if (geminiAI) {
+      const response = await geminiAI.models.generateContent({
         model: 'gemini-1.5-flash',
         contents: [{ role: 'user', parts: [{ text: `You are an SEO expert. Generate a list of top trending and contextually relevant hashtags for the given niche and keywords. Return strictly as a JSON object with a "hashtags" key containing an array of strings (including the # symbol).\n\nNiche: ${niche}, Keywords: ${keywords}` }] }],
       });
@@ -94,7 +94,7 @@ router.post('/hashtags', requireAuth, async (req: any, res: any) => {
         const parsed = JSON.parse(cleanedText);
         hashtags = parsed.hashtags || Object.values(parsed)[0];
       } catch (e) {
-        hashtags = text.split(' ').filter(word => word.startsWith('#'));
+        hashtags = text.split(' ').filter((word: string) => word.startsWith('#'));
       }
     } else {
       return res.status(500).json({ error: 'AI services not configured.' });
@@ -116,8 +116,8 @@ router.post('/ideas', requireAuth, async (req: any, res: any) => {
   try {
     let ideas = [];
 
-    if (geminiClient) {
-      const response = await geminiClient.models.generateContent({
+    if (geminiAI) {
+      const response = await geminiAI.models.generateContent({
         model: 'gemini-1.5-flash',
         contents: [{ role: 'user', parts: [{ text: `Generate a 30-day social media content plan. Return JSON strictly in this format: { "ideas": [ { "day": 1, "topic": "...", "description": "..." } ] }\n\nTopic: ${topic}, Industry: ${industry}` }] }],
       });
@@ -152,24 +152,24 @@ router.post('/image', requireAuth, async (req: any, res: any) => {
     let finalUrl = '';
     let asset = null;
 
-    if (geminiClient) {
+    if (geminiAI) {
       // --- Use Nano Banana (Gemini 3.1 Flash Image) ---
-      const response = await geminiClient.models.generateContent({
-        model: 'gemini-3.1-flash-image', // codenamed Nano Banana 2
+      const response = await geminiAI.models.generateContent({
+        model: 'gemini-3.1-flash-image', 
         contents: [{ role: 'user', parts: [{ text: imagePrompt }] }],
         config: {
-          responseModalities: ["IMAGE"],
+          responseModalities: ["IMAGE"] as any,
           imageConfig: {
             aspectRatio: aspectRatio || "1:1",
             imageSize: "1K"
-          }
+          } as any
         }
       });
 
       // Find the generated image part
-      const imagePart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+      const imagePart = response.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData);
       
-      if (!imagePart || !imagePart.inlineData) {
+      if (!imagePart || !imagePart.inlineData || !imagePart.inlineData.data) {
         throw new Error('No image was generated by Nano Banana');
       }
 

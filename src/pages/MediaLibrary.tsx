@@ -31,6 +31,7 @@ export const MediaLibrary = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
+  const [isDragging, setIsDragging] = useState(false)
 
   useEffect(() => {
     const init = async () => {
@@ -42,8 +43,7 @@ export const MediaLibrary = () => {
     init()
   }, [isLoaded, isSignedIn, currentFolderId])
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
+  const processFiles = async (files: FileList | File[]) => {
     if (!files || files.length === 0) return
 
     setUploading(true)
@@ -57,7 +57,28 @@ export const MediaLibrary = () => {
       console.error('Upload failed:', error)
     } finally {
       setUploading(false)
+      setIsDragging(false)
     }
+  }
+
+  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) processFiles(e.target.files)
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+    if (e.dataTransfer.files) processFiles(e.dataTransfer.files)
   }
 
   const handleCreateFolder = async () => {
@@ -105,7 +126,23 @@ export const MediaLibrary = () => {
   }, [folders, searchQuery])
 
   return (
-    <div className="space-y-6 pb-10">
+    <div 
+      className="space-y-6 pb-10 relative min-h-[80vh]"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* Drag & Drop Overlay */}
+      {isDragging && (
+        <div className="absolute inset-0 z-50 bg-purple-500/10 backdrop-blur-sm border-2 border-dashed border-purple-500 rounded-2xl flex flex-col items-center justify-center pointer-events-none transition-all">
+          <div className="bg-navy-900 p-6 rounded-full shadow-2xl mb-4">
+            <Upload className="w-12 h-12 text-purple-400 animate-bounce" />
+          </div>
+          <h2 className="text-3xl font-bold text-white tracking-tight drop-shadow-lg">Drop files to upload</h2>
+          <p className="text-purple-200 mt-2 font-medium">Files will be saved to {currentFolderId ? currentFolderName : 'the root library'}</p>
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">

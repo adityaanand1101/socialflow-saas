@@ -50,27 +50,28 @@ app.get('/api/diagnostics', async (req, res) => {
     return `✅ CONFIGURED (${val.substring(0, 4)}...)`;
   };
 
+  let dbStats = { users: 0, workspaces: 0, error: null };
+  try {
+    const [userCount, workspaceCount] = await Promise.all([
+      prisma.user.count(),
+      prisma.workspace.count()
+    ]);
+    dbStats.users = userCount;
+    dbStats.workspaces = workspaceCount;
+  } catch (e: any) {
+    dbStats.error = e.message;
+  }
+
   const report = {
-    system: {
-      node_version: process.version,
-      env_keys: Object.keys(process.env).filter(k => !k.includes('KEY') && !k.includes('SECRET')).length,
-      all_keys_count: Object.keys(process.env).length
-    },
+    database_stats: dbStats,
     auth: {
       CLERK_SECRET_KEY: checkEnv('CLERK_SECRET_KEY'),
       CLERK_PUBLISHABLE_KEY: checkEnv('CLERK_PUBLISHABLE_KEY'),
-      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: checkEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY'),
       CLERK_WEBHOOK_SECRET: checkEnv('CLERK_WEBHOOK_SECRET'),
-    },
-    database: {
-      DATABASE_URL: checkEnv('DATABASE_URL'),
-      DIRECT_URL: checkEnv('DIRECT_URL'),
     },
     social_apis: {
       X_ID: checkEnv('X_CLIENT_ID'),
       INSTAGRAM_ID: checkEnv('INSTAGRAM_CLIENT_ID'),
-      FRONTEND: checkEnv('FRONTEND_URL'),
-      BACKEND: checkEnv('BACKEND_URL'),
     }
   };
 

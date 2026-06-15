@@ -48,7 +48,7 @@ router.post('/caption', requireAuth, async (req: any, res: any) => {
     if (geminiAI) {
       // Use Gemini via the new @google/genai SDK
       const response = await geminiAI.models.generateContent({
-        model: 'gemini-1.5-flash',
+        model: 'gemini-2.5-flash', // Updated to latest stable flash model
         contents: [{ role: 'user', parts: [{ text: `You are an expert social media manager. Generate 3 variations of a caption for ${platform} with a ${tone} tone. Return the response strictly as a JSON object with a "variations" key containing an array of strings.\n\nUser Request: ${prompt}` }] }],
       });
 

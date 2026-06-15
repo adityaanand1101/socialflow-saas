@@ -46,14 +46,20 @@ app.get('/api/diagnostics', async (req, res) => {
   const checkEnv = (key: string) => {
     const val = process.env[key];
     if (!val) return '❌ MISSING';
-    if (val.includes('your_') || val.includes('placeholder')) return '⚠️ PLACEHOLDER';
-    return '✅ CONFIGURED';
+    if (val.includes('your_') || val.includes('placeholder')) return `⚠️ PLACEHOLDER (${val.substring(0, 4)}...)`;
+    return `✅ CONFIGURED (${val.substring(0, 4)}...)`;
   };
 
   const report = {
+    system: {
+      node_version: process.version,
+      env_keys: Object.keys(process.env).filter(k => !k.includes('KEY') && !k.includes('SECRET')).length,
+      all_keys_count: Object.keys(process.env).length
+    },
     auth: {
       CLERK_SECRET_KEY: checkEnv('CLERK_SECRET_KEY'),
       CLERK_PUBLISHABLE_KEY: checkEnv('CLERK_PUBLISHABLE_KEY'),
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: checkEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY'),
       CLERK_WEBHOOK_SECRET: checkEnv('CLERK_WEBHOOK_SECRET'),
     },
     database: {
@@ -61,16 +67,10 @@ app.get('/api/diagnostics', async (req, res) => {
       DIRECT_URL: checkEnv('DIRECT_URL'),
     },
     social_apis: {
-      X: checkEnv('X_CLIENT_ID') === '✅ CONFIGURED' && checkEnv('X_CLIENT_SECRET') === '✅ CONFIGURED' ? '✅ READY' : '❌ INCOMPLETE',
-      INSTAGRAM: checkEnv('INSTAGRAM_CLIENT_ID') === '✅ CONFIGURED' && checkEnv('INSTAGRAM_CLIENT_SECRET') === '✅ CONFIGURED' ? '✅ READY' : '❌ INCOMPLETE',
-      FACEBOOK: checkEnv('FACEBOOK_CLIENT_ID') === '✅ CONFIGURED' && checkEnv('FACEBOOK_CLIENT_SECRET') === '✅ CONFIGURED' ? '✅ READY' : '❌ INCOMPLETE',
-      LINKEDIN: checkEnv('LINKEDIN_CLIENT_ID') === '✅ CONFIGURED' && checkEnv('LINKEDIN_CLIENT_SECRET') === '✅ CONFIGURED' ? '✅ READY' : '❌ INCOMPLETE',
-      THREADS: checkEnv('THREADS_CLIENT_ID') === '✅ CONFIGURED' && checkEnv('THREADS_CLIENT_SECRET') === '✅ CONFIGURED' ? '✅ READY' : '❌ INCOMPLETE',
-    },
-    storage: {
-      S3_ACCESS_KEY: checkEnv('S3_ACCESS_KEY_ID'),
-      S3_SECRET: checkEnv('S3_SECRET_ACCESS_KEY'),
-      S3_BUCKET: checkEnv('S3_BUCKET_NAME'),
+      X_ID: checkEnv('X_CLIENT_ID'),
+      INSTAGRAM_ID: checkEnv('INSTAGRAM_CLIENT_ID'),
+      FRONTEND: checkEnv('FRONTEND_URL'),
+      BACKEND: checkEnv('BACKEND_URL'),
     }
   };
 

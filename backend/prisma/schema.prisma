@@ -43,6 +43,7 @@ model Workspace {
   socialAccounts       SocialAccount[]
   posts                Post[]
   mediaAssets          MediaAsset[]
+  mediaFolders         MediaFolder[]
   invites              WorkspaceInvite[]
   apiKeys              ApiKey[]
   webhooks             WebhookEndpoint[]
@@ -172,10 +173,27 @@ model SocialAccountPost {
   @@id([postId, socialAccountId])
 }
 
+model MediaFolder {
+  id          String    @id @default(uuid())
+  name        String
+  workspaceId String
+  parentId    String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assets      MediaAsset[]
+  subfolders  MediaFolder[] @relation("FolderToFolder")
+  parent      MediaFolder?  @relation("FolderToFolder", fields: [parentId], references: [id])
+
+  @@index([workspaceId])
+}
+
 model MediaAsset {
   id          String    @id @default(uuid())
   workspaceId String
   userId      String
+  folderId    String?
   fileName    String
   fileUrl     String    // Public CDN URL of the media file
   fileType    String    // mime-type (e.g., 'image/png', 'video/mp4')
@@ -187,6 +205,7 @@ model MediaAsset {
   // Relations
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   user        User      @relation(fields: [userId], references: [id])
+  folder      MediaFolder? @relation(fields: [folderId], references: [id])
 
   @@index([workspaceId])
 }

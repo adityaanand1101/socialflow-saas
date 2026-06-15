@@ -21,6 +21,42 @@ const s3Client = new S3Client({
   },
 });
 
+// POST /api/media/folders: Create a new folder
+router.post('/folders', requireAuth, async (req: any, res: any) => {
+  const { name, parentId } = req.body;
+  try {
+    const workspaceId = req.workspaceId;
+    if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+
+    const folder = await prisma.mediaFolder.create({
+      data: {
+        name,
+        workspaceId,
+        parentId: parentId || null
+      }
+    });
+    res.json(folder);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to create folder' });
+  }
+});
+
+// GET /api/media/folders: Get all folders for workspace
+router.get('/folders', requireAuth, async (req: any, res: any) => {
+  try {
+    const workspaceId = req.workspaceId;
+    if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+
+    const folders = await prisma.mediaFolder.findMany({
+      where: { workspaceId },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(folders);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch folders' });
+  }
+});
+
 router.post('/presigned-url', requireAuth, async (req: any, res: any) => {
   const { fileName, fileType, fileSize } = req.body;
 
@@ -55,7 +91,7 @@ router.post('/presigned-url', requireAuth, async (req: any, res: any) => {
 });
 
 router.post('/register', requireAuth, async (req: any, res: any) => {
-  const { fileName, fileUrl, fileType, fileSize, tags } = req.body;
+  const { fileName, fileUrl, fileType, fileSize, tags, folderId } = req.body;
 
   try {
     const workspaceId = req.workspaceId;
@@ -72,6 +108,7 @@ router.post('/register', requireAuth, async (req: any, res: any) => {
         fileUrl, // This is the S3 Key
         fileType,
         fileSize,
+        folderId: folderId || null,
         tags: tags || []
       }
     });
@@ -91,7 +128,7 @@ router.post('/register', requireAuth, async (req: any, res: any) => {
 });
 
 router.get('/', requireAuth, async (req: any, res: any) => {
-  const { search } = req.query;
+  const { search, folderId } = req.query;
 
   try {
     const workspaceId = req.workspaceId;
@@ -100,13 +137,26 @@ router.get('/', requireAuth, async (req: any, res: any) => {
       return res.status(404).json({ error: 'Workspace not found' });
     }
 
-    const media = await prisma.mediaAsset.findMany({
-      where: { 
-        workspaceId,
-        ...(search ? { fileName: { contains: search as string, mode: 'insensitive' } } : {})
-      },
-      orderBy: { createdAt: 'desc' }
-    });
+    // Fetch assets and folders in parallel
+    const [media, folders] = await Promise.all([
+      prisma.mediaAsset.findMany({
+        where: { 
+          workspaceId,
+          ...(search 
+            ? { fileName: { contains: search as string, mode: 'insensitive' } } 
+            : { folderId: folderId === 'root' ? null : (folderId as string || null) }
+          )
+        },
+        orderBy: { createdAt: 'desc' }
+      }),
+      search ? [] : prisma.mediaFolder.findMany({
+        where: { 
+          workspaceId,
+          parentId: folderId === 'root' ? null : (folderId as string || null)
+        },
+        orderBy: { createdAt: 'desc' }
+      })
+    ]);
 
     // --- HIGH PERFORMANCE RETRIEVAL ---
     // Instead of signing 50 URLs, we generate ONE download authorization token for the workspace prefix.
@@ -155,7 +205,7 @@ router.get('/', requireAuth, async (req: any, res: any) => {
       };
     });
 
-    res.json(mediaWithUrls);
+    res.json({ assets: mediaWithUrls, folders });
   } catch (error) {
     console.error('Error fetching media assets:', error);
     res.status(500).json({ error: 'Failed to fetch media assets' });

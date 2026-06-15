@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo } from 'react'
+import { useRef, useState, useMemo, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,18 +14,34 @@ import {
   FileText,
   Loader2,
   Trash2,
+  ChevronLeft,
+  Folder,
   Image as ImageIcon
 } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { useAuth } from '@clerk/react'
+import { cn } from '@/lib/utils'
 
 export const MediaLibrary = () => {
-  const { media, uploadMedia, removeMedia, loading } = useStore()
-  const { getToken } = useAuth()
+  const { media, folders, currentFolderId, uploadMedia, removeMedia, createFolder, fetchData, loading } = useStore()
+  const { getToken, isLoaded, isSignedIn } = useAuth()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  
   const [uploading, setUploading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  const [isFolderModalOpen, setIsFolderModalOpen] = useState(false)
+  const [newFolderName, setNewFolderName] = useState('')
+
+  useEffect(() => {
+    const init = async () => {
+      if (isLoaded && isSignedIn) {
+        const token = await getToken()
+        if (token) fetchData(token, currentFolderId)
+      }
+    }
+    init()
+  }, [isLoaded, isSignedIn, currentFolderId])
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
@@ -36,15 +52,22 @@ export const MediaLibrary = () => {
       const token = await getToken()
       if (!token) return
 
-      // Upload files sequentially or in parallel? Parallel for now.
-      await Promise.all(Array.from(files).map(file => uploadMedia(token, file)))
-      
-      // Clear input
+      await Promise.all(Array.from(files).map(file => uploadMedia(token, file, currentFolderId)))
       if (fileInputRef.current) fileInputRef.current.value = ''
     } catch (error) {
       console.error('Upload failed:', error)
     } finally {
       setUploading(false)
+    }
+  }
+
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim()) return
+    const token = await getToken()
+    if (token) {
+      await createFolder(token, newFolderName, currentFolderId)
+      setNewFolderName('')
+      setIsFolderModalOpen(false)
     }
   }
 
@@ -58,6 +81,15 @@ export const MediaLibrary = () => {
     }
   }
 
+  const navigateToFolder = (id: string | null) => {
+    useStore.getState().setCurrentFolder(id)
+  }
+
+  const currentFolderName = useMemo(() => {
+    if (!currentFolderId) return 'Root'
+    return folders.find(f => f.id === currentFolderId)?.name || 'Folder'
+  }, [currentFolderId, folders])
+
   const filteredMedia = useMemo(() => {
     if (!searchQuery) return media
     const query = searchQuery.toLowerCase()
@@ -67,12 +99,29 @@ export const MediaLibrary = () => {
     )
   }, [media, searchQuery])
 
+  const filteredFolders = useMemo(() => {
+    if (!searchQuery) return folders
+    const query = searchQuery.toLowerCase()
+    return folders.filter(f => f.name.toLowerCase().includes(query))
+  }, [folders, searchQuery])
+
   return (
     <div className="space-y-6 pb-10">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">Media Library</h1>
-          <p className="text-muted-foreground mt-1">Manage all your visual assets in one place.</p>
+          <div className="flex items-center gap-2 mb-1">
+             {currentFolderId && (
+               <button onClick={() => navigateToFolder(null)} className="text-muted-foreground hover:text-white transition-colors">
+                 <ChevronLeft className="w-5 h-5" />
+               </button>
+             )}
+             <h1 className="text-3xl font-bold text-white tracking-tight">
+               {currentFolderId ? currentFolderName : 'Media Library'}
+             </h1>
+          </div>
+          <p className="text-muted-foreground">
+            {currentFolderId ? `Viewing contents of ${currentFolderName}` : 'Manage all your visual assets in one place.'}
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <input 
@@ -83,7 +132,7 @@ export const MediaLibrary = () => {
             accept="image/*,video/*"
             multiple
           />
-          <Button variant="outline" className="gap-2" onClick={() => alert('Folder organization coming soon!')}>
+          <Button variant="outline" className="gap-2" onClick={() => setIsFolderModalOpen(true)}>
             <FolderPlus className="w-4 h-4" />
             New Folder
           </Button>
@@ -98,11 +147,34 @@ export const MediaLibrary = () => {
         </div>
       </div>
 
+      {/* Folder Modal */}
+      {isFolderModalOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+          <div className="bg-[#141218] border border-white/10 rounded-2xl w-full max-w-md p-6 space-y-4">
+            <h3 className="text-xl font-bold text-white">Create New Folder</h3>
+            <div className="space-y-2">
+              <label className="text-sm text-muted-foreground font-medium">Folder Name</label>
+              <Input 
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                placeholder="e.g. Summer Campaign"
+                autoFocus
+                onKeyDown={(e) => e.key === 'Enter' && handleCreateFolder()}
+              />
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="ghost" onClick={() => setIsFolderModalOpen(false)}>Cancel</Button>
+              <Button onClick={handleCreateFolder} disabled={!newFolderName.trim()}>Create Folder</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row items-center gap-4 bg-white/5 p-4 rounded-xl border border-white/10">
         <div className="relative flex-1 w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input 
-            placeholder="Search files..." 
+            placeholder="Search files and folders..." 
             className="pl-10 bg-transparent border-none focus-visible:ring-0" 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -129,20 +201,34 @@ export const MediaLibrary = () => {
         </div>
       </div>
 
-      {loading && media.length === 0 ? (
+      {loading && media.length === 0 && folders.length === 0 ? (
         <div className="flex items-center justify-center h-64">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
-      ) : filteredMedia.length === 0 ? (
+      ) : (filteredMedia.length === 0 && filteredFolders.length === 0) ? (
         <div className="flex flex-col items-center justify-center h-64 bg-white/5 rounded-2xl border border-dashed border-white/10">
           <ImageIcon className="w-12 h-12 text-muted-foreground mb-4" />
-          <p className="text-white font-medium">{searchQuery ? 'No matching files found' : 'Your library is empty'}</p>
+          <p className="text-white font-medium">{searchQuery ? 'No matching items found' : 'This folder is empty'}</p>
           <p className="text-muted-foreground text-sm mt-1">
-            {searchQuery ? 'Try a different search term.' : 'Upload your first image or video to get started.'}
+            {searchQuery ? 'Try a different search term.' : 'Upload assets or create folders to organize your media.'}
           </p>
         </div>
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6">
+          {/* Render Folders First */}
+          {filteredFolders.map((folder) => (
+            <Card 
+              key={folder.id} 
+              className="group cursor-pointer bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all border-white/10 flex flex-col items-center justify-center aspect-square p-4"
+              onClick={() => navigateToFolder(folder.id)}
+            >
+              <Folder className="w-16 h-16 text-purple-400 mb-2 opacity-80 group-hover:scale-110 transition-transform" fill="currentColor" fillOpacity={0.1} />
+              <p className="text-xs font-bold text-white text-center truncate w-full">{folder.name}</p>
+              <p className="text-[10px] text-muted-foreground mt-1">Folder</p>
+            </Card>
+          ))}
+
+          {/* Render Assets */}
           {filteredMedia.map((item) => (
             <Card key={item.id} className="group relative overflow-hidden bg-white/5 hover:border-white/20 transition-all border-white/10">
               <div className="aspect-square relative overflow-hidden bg-navy-800 flex items-center justify-center">
@@ -213,6 +299,26 @@ export const MediaLibrary = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/10">
+              {/* Folders First */}
+              {filteredFolders.map((folder) => (
+                 <tr key={folder.id} className="hover:bg-white/5 transition-colors cursor-pointer" onClick={() => navigateToFolder(folder.id)}>
+                   <td className="p-4">
+                     <div className="flex items-center gap-3">
+                       <div className="w-10 h-10 rounded bg-navy-800 flex items-center justify-center">
+                         <Folder className="w-5 h-5 text-purple-400" />
+                       </div>
+                       <span className="text-sm text-white font-medium">{folder.name}</span>
+                     </div>
+                   </td>
+                   <td className="p-4 text-sm text-muted-foreground">Folder</td>
+                   <td className="p-4 text-sm text-muted-foreground">--</td>
+                   <td className="p-4 text-sm text-muted-foreground">{new Date(folder.createdAt).toLocaleDateString()}</td>
+                   <td className="p-4 text-right">
+                     <Button variant="ghost" size="icon" className="text-muted-foreground"><MoreVertical className="w-4 h-4" /></Button>
+                   </td>
+                 </tr>
+              ))}
+
               {filteredMedia.map((item) => (
                 <tr key={item.id} className="hover:bg-white/5 transition-colors">
                   <td className="p-4">
@@ -226,7 +332,9 @@ export const MediaLibrary = () => {
                     </div>
                   </td>
                   <td className="p-4 text-sm text-muted-foreground">{item.fileType}</td>
-                  <td className="p-4 text-sm text-muted-foreground">{(item.fileSize / 1024 / 1024).toFixed(1)} MB</td>
+                  <td className="p-4 text-sm text-muted-foreground">
+                    {item.fileSize > 1024 * 1024 ? (item.fileSize / 1024 / 1024).toFixed(1) + ' MB' : (item.fileSize / 1024).toFixed(0) + ' KB'}
+                  </td>
                   <td className="p-4 text-sm text-muted-foreground">{new Date(item.createdAt).toLocaleDateString()}</td>
                   <td className="p-4 text-right">
                     <Button 

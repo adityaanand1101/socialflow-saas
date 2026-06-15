@@ -35,14 +35,18 @@ interface SocialFlowStore {
   channels: Channel[]
   posts: Post[]
   media: any[]
+  folders: any[]
+  currentFolderId: string | null
   loading: boolean
-  fetchData: (token: string) => Promise<void>
+  fetchData: (token: string, folderId?: string | null) => Promise<void>
   fetchChannels: (token: string) => Promise<void>
   addPost: (token: string, post: Omit<Post, 'id'>) => Promise<void>
   removePost: (token: string, id: string) => Promise<void>
   updatePost: (token: string, id: string, updates: Partial<Post>) => Promise<void>
-  uploadMedia: (token: string, file: File) => Promise<any>
+  uploadMedia: (token: string, file: File, folderId?: string | null) => Promise<any>
   removeMedia: (token: string, id: string) => Promise<void>
+  createFolder: (token: string, name: string, parentId?: string | null) => Promise<void>
+  setCurrentFolder: (folderId: string | null) => void
 }
 
 export const useStore = create<SocialFlowStore>((set) => ({
@@ -51,44 +55,60 @@ export const useStore = create<SocialFlowStore>((set) => ({
   channels: [],
   posts: [],
   media: [],
+  folders: [],
+  currentFolderId: null,
   loading: false,
 
-  fetchData: async (token: string, force = false) => {
-    // If we already have media and it's not a forced refresh, don't show the global loader
-    const { media } = useStore.getState()
-    if (media.length > 0 && !force) {
-      // Background refresh
-      apiFetch('/api/media', { headers: { Authorization: `Bearer ${token}` } })
-        .then(res => res.json())
-        .then(data => set({ media: Array.isArray(data) ? data : [] }))
-      
-      const postsRes = await apiFetch('/api/posts', { headers: { Authorization: `Bearer ${token}` } })
-      if (postsRes.ok) {
-        const posts = await postsRes.json()
-        set({ posts: Array.isArray(posts) ? posts : [] })
-      }
-      return
-    }
+  setCurrentFolder: (folderId) => set({ currentFolderId: folderId }),
+
+  fetchData: async (token: string, folderId = null) => {
+    // If we are navigating to a new folder, we might want to clear current view or show loading
+    const { currentFolderId } = useStore.getState();
+    const targetFolderId = folderId !== undefined ? folderId : currentFolderId;
 
     set({ loading: true })
     try {
+      const url = `/api/media?${targetFolderId ? `folderId=${targetFolderId}` : 'folderId=root'}`;
       const [postsRes, mediaRes] = await Promise.all([
         apiFetch('/api/posts', { headers: { Authorization: `Bearer ${token}` } }),
-        apiFetch('/api/media', { headers: { Authorization: `Bearer ${token}` } })
+        apiFetch(url, { headers: { Authorization: `Bearer ${token}` } })
       ])
       
-      let posts = [], media = []
+      let posts = []
+      let mediaData = { assets: [], folders: [] }
+      
       if (postsRes.ok) posts = await postsRes.json()
-      if (mediaRes.ok) media = await mediaRes.json()
+      if (mediaRes.ok) mediaData = await mediaRes.json()
       
       set({ 
         posts: Array.isArray(posts) ? posts : [], 
-        media: Array.isArray(media) ? media : []
+        media: Array.isArray(mediaData.assets) ? mediaData.assets : [],
+        folders: Array.isArray(mediaData.folders) ? mediaData.folders : [],
+        currentFolderId: targetFolderId
       })
     } catch (e) {
       console.error("Failed to fetch data", e)
     } finally {
       set({ loading: false })
+    }
+  },
+
+  createFolder: async (token, name, parentId = null) => {
+    try {
+      const res = await apiFetch('/api/media/folders', {
+        method: 'POST',
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ name, parentId })
+      });
+      if (res.ok) {
+        const folder = await res.json();
+        set((state) => ({ folders: [folder, ...state.folders] }));
+      }
+    } catch (error) {
+      console.error("Failed to create folder", error);
     }
   },
 
@@ -168,7 +188,7 @@ export const useStore = create<SocialFlowStore>((set) => ({
     }
   },
 
-  uploadMedia: async (token: string, file: File) => {
+  uploadMedia: async (token: string, file: File, folderId?: string | null) => {
     // 1. Create Optimistic Preview
     const optimisticId = Math.random().toString(36).substring(7);
     const localPreviewUrl = URL.createObjectURL(file);
@@ -219,6 +239,7 @@ export const useStore = create<SocialFlowStore>((set) => ({
               fileUrl,
               fileType: file.type,
               fileSize: file.size,
+              folderId: folderId !== undefined ? folderId : useStore.getState().currentFolderId,
               tags: []
             })
           });

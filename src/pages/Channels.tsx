@@ -56,14 +56,18 @@ export const Channels = () => {
       const res = await apiFetch(`/api/oauth/${platform}/connect`, {
         headers: { Authorization: `Bearer ${token}` }
       })
+      
       const data = await res.json()
-      if (data.authUrl) {
+      if (res.ok && data.authUrl) {
         window.location.href = data.authUrl
       } else {
-        setShowInfoModal(platform)
+        const errorMsg = data.error || `Server returned ${res.status}: ${res.statusText}`;
+        alert(`Failed to connect ${platform}: ${errorMsg}`);
+        console.error('Connect Error:', data);
       }
-    } catch {
-      setShowInfoModal(platform)
+    } catch (e: any) {
+      console.error('Network Error:', e)
+      alert(`Network error: Could not reach the backend. Check your VITE_API_URL.`);
     } finally {
       setConnecting(null)
     }

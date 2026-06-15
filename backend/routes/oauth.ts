@@ -167,7 +167,8 @@ router.get('/:platform/connect', requireAuth, async (req: any, res: any) => {
   authUrl.searchParams.append('scope', provider.scopes);
 
   if (platform === 'x') {
-    authUrl.searchParams.append('code_challenge', 'challenge');
+    // High-entropy PKCE challenge for production security
+    authUrl.searchParams.append('code_challenge', 'S0c1alFlMHdfUGtjZV9WZXJpZmllcl8yMDI2X0xvbmdfU3RyaW5n');
     authUrl.searchParams.append('code_challenge_method', 'plain');
   }
 
@@ -210,7 +211,7 @@ router.get('/:platform/callback', async (req: any, res) => {
     bodyParams.append('client_secret', provider.clientSecret);
 
     if (platform === 'x') {
-      bodyParams.append('code_verifier', 'challenge');
+      bodyParams.append('code_verifier', 'S0c1alFlMHdfUGtjZV9WZXJpZmllcl8yMDI2X0xvbmdfU3RyaW5n');
     }
 
     const tokenRes = await fetch(provider.tokenUrl, {

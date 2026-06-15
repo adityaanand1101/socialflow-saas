@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence, useScroll, useTransform, useInView } from "framer-motion";
+import { useAuth } from "@clerk/react";
 import { 
   Sparkles, 
   TrendingUp, 
@@ -29,6 +30,7 @@ const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
 // --- Sub-components ---
 
 const Navbar = () => {
+  const { isSignedIn } = useAuth();
   const [isScrolled, setIsScrolled] = useState(false);
 
   useEffect(() => {
@@ -63,14 +65,14 @@ const Navbar = () => {
         </div>
 
         <div className="flex items-center gap-4">
-          <Link to="/sign-in">
+          <Link to={isSignedIn ? "/app" : "/sign-in"}>
             <Button variant="ghost" className="text-gray-300 hover:text-white text-xs font-bold uppercase tracking-widest">
-              Login
+              {isSignedIn ? "Dashboard" : "Login"}
             </Button>
           </Link>
-          <Link to="/sign-up">
+          <Link to={isSignedIn ? "/app" : "/sign-up"}>
             <Button className="bg-gradient-primary text-white hover:opacity-90 px-6 rounded-lg text-xs font-bold uppercase tracking-widest shadow-glow border-none">
-              Start Free
+              {isSignedIn ? "Go to App" : "Start Free"}
             </Button>
           </Link>
         </div>
@@ -98,7 +100,7 @@ const PlatformMarquee = () => {
       <motion.div 
         animate={{ x: [0, -1000] }}
         transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
-        className="flex gap-20 items-center whitespace-nowrap whitespace-nowrap"
+        className="flex gap-20 items-center whitespace-nowrap"
       >
         {[...platforms, ...platforms, ...platforms].map((p, i) => (
           <div key={i} className={cn("flex items-center gap-3 text-lg font-black uppercase tracking-[0.2em] opacity-30 hover:opacity-100 transition-opacity", p.color)}>
@@ -183,9 +185,19 @@ const BentoFeature = ({ icon: Icon, title, desc, className, delay = 0 }: any) =>
 };
 
 export const LandingPage = () => {
+  const { isSignedIn, isLoaded } = useAuth();
+  const navigate = useNavigate();
   const { scrollYProgress } = useScroll();
   const heroScale = useTransform(scrollYProgress, [0, 0.2], [1, 0.95]);
   const heroRotate = useTransform(scrollYProgress, [0, 0.2], [0, 2]);
+
+  useEffect(() => {
+    if (isLoaded && isSignedIn) {
+      navigate("/app");
+    }
+  }, [isSignedIn, isLoaded, navigate]);
+
+  if (!isLoaded) return null;
 
   return (
     <div className="min-h-screen bg-navy-900 text-white font-sans selection:bg-indigo-500/30 overflow-x-hidden antialiased">

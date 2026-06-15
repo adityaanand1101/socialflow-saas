@@ -53,7 +53,23 @@ export const useStore = create<SocialFlowStore>((set) => ({
   media: [],
   loading: false,
 
-  fetchData: async (token: string) => {
+  fetchData: async (token: string, force = false) => {
+    // If we already have media and it's not a forced refresh, don't show the global loader
+    const { media } = useStore.getState()
+    if (media.length > 0 && !force) {
+      // Background refresh
+      apiFetch('/api/media', { headers: { Authorization: `Bearer ${token}` } })
+        .then(res => res.json())
+        .then(data => set({ media: Array.isArray(data) ? data : [] }))
+      
+      const postsRes = await apiFetch('/api/posts', { headers: { Authorization: `Bearer ${token}` } })
+      if (postsRes.ok) {
+        const posts = await postsRes.json()
+        set({ posts: Array.isArray(posts) ? posts : [] })
+      }
+      return
+    }
+
     set({ loading: true })
     try {
       const [postsRes, mediaRes] = await Promise.all([
@@ -71,7 +87,6 @@ export const useStore = create<SocialFlowStore>((set) => ({
       })
     } catch (e) {
       console.error("Failed to fetch data", e)
-      set({ posts: [], media: [] })
     } finally {
       set({ loading: false })
     }
@@ -154,6 +169,22 @@ export const useStore = create<SocialFlowStore>((set) => ({
   },
 
   uploadMedia: async (token: string, file: File) => {
+    // 1. Create Optimistic Preview
+    const optimisticId = Math.random().toString(36).substring(7);
+    const localPreviewUrl = URL.createObjectURL(file);
+    const optimisticAsset = {
+      id: optimisticId,
+      fileName: file.name,
+      fileUrl: localPreviewUrl,
+      fileType: file.type,
+      fileSize: file.size,
+      createdAt: new Date().toISOString(),
+      optimistic: true
+    };
+
+    // Add to UI immediately
+    set((state) => ({ media: [optimisticAsset, ...state.media] }))
+
     try {
       const presignedRes = await apiFetch('/api/media/presigned-url', {
         method: 'POST',
@@ -173,16 +204,8 @@ export const useStore = create<SocialFlowStore>((set) => ({
 
         const uploadRes = await fetch(uploadUrl, {
           method: 'PUT',
-          body: file,
-          // Removed manual Content-Type as it's often included in the signature 
-          // and can cause CORS preflight issues in some browsers
+          body: file
         });
-
-        if (!uploadRes.ok) {
-          const errorText = await uploadRes.text();
-          console.error('S3 Upload Error:', uploadRes.status, errorText);
-          throw new Error(`S3 upload failed: ${uploadRes.status}`);
-        }
 
         if (uploadRes.ok) {
           const registerRes = await apiFetch('/api/media/register', {
@@ -202,7 +225,10 @@ export const useStore = create<SocialFlowStore>((set) => ({
 
           if (registerRes.ok) {
             const data = await registerRes.json();
-            set((state) => ({ media: [data, ...state.media] }))
+            // Replace optimistic asset with real data
+            set((state) => ({ 
+              media: state.media.map(m => m.id === optimisticId ? data : m) 
+            }))
             return data;
           }
         }
@@ -210,6 +236,9 @@ export const useStore = create<SocialFlowStore>((set) => ({
     } catch (error) {
       console.error("Failed to upload media", error);
     }
+    
+    // If failed, remove optimistic asset
+    set((state) => ({ media: state.media.filter(m => m.id !== optimisticId) }))
     return null;
   },
 

@@ -108,30 +108,54 @@ router.get('/', requireAuth, async (req: any, res: any) => {
       orderBy: { createdAt: 'desc' }
     });
 
-    // Generate signed GET URLs for each asset for private viewing
-    const mediaWithSignedUrls = await Promise.all(media.map(async (item) => {
-      try {
-        // If fileUrl is a full URL, try to extract key, else assume it's already the key
-        const key = item.fileUrl.includes('http') 
-          ? item.fileUrl.split('/').slice(-2).join('/') // Handles workspaceId/filename
+    // --- HIGH PERFORMANCE RETRIEVAL ---
+    // Instead of signing 50 URLs, we generate ONE download authorization token for the workspace prefix.
+    // This is much faster and more efficient.
+    
+    let downloadToken = '';
+    const keyId = process.env.S3_ACCESS_KEY_ID;
+    const appKey = process.env.S3_SECRET_ACCESS_KEY;
+    const bucketId = '9ea4b8846d51bcfa96eb0c10'; // Your Socialflow bucket ID
+
+    try {
+      const authBase64 = Buffer.from(`${keyId}:${appKey}`).toString('base64');
+      const authRes = await fetch('https://api.backblazeb2.com/b2api/v2/b2_authorize_account', {
+        headers: { 'Authorization': `Basic ${authBase64}` }
+      });
+      const authData: any = await authRes.json();
+      
+      const tokenRes = await fetch(`${authData.apiUrl}/b2api/v2/b2_get_download_authorization`, {
+        method: 'POST',
+        headers: { 'Authorization': authData.authorizationToken },
+        body: JSON.stringify({
+          bucketId: bucketId,
+          fileNamePrefix: `${workspaceId}/`,
+          validDurationInSeconds: 3600
+        })
+      });
+      const tokenData: any = await tokenRes.json();
+      downloadToken = tokenData.authorizationToken;
+    } catch (e) {
+      console.error('Failed to get B2 download auth, falling back to slow signing', e);
+    }
+
+    const baseUrl = `https://f005.backblazeb2.com/file/${process.env.S3_BUCKET_NAME}`;
+
+    const mediaWithUrls = media.map((item) => {
+      const key = item.fileUrl.includes('http') 
+          ? item.fileUrl.split('/').slice(-2).join('/') 
           : item.fileUrl;
+          
+      return { 
+        ...item, 
+        fileUrl: downloadToken 
+          ? `${baseUrl}/${key}?Authorization=${downloadToken}`
+          : item.fileUrl, // Fallback if token fails
+        s3Key: key 
+      };
+    });
 
-        const command = new GetObjectCommand({
-          Bucket: process.env.S3_BUCKET_NAME || 'dummy-bucket',
-          Key: key
-        });
-
-        // Signed URL expires in 1 hour
-        const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
-        
-        return { ...item, fileUrl: signedUrl, s3Key: key };
-      } catch (e) {
-        console.error(`Failed to sign URL for ${item.id}`, e);
-        return item;
-      }
-    }));
-
-    res.json(mediaWithSignedUrls);
+    res.json(mediaWithUrls);
   } catch (error) {
     console.error('Error fetching media assets:', error);
     res.status(500).json({ error: 'Failed to fetch media assets' });

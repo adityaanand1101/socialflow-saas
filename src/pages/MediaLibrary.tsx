@@ -179,7 +179,13 @@ export const MediaLibrary = () => {
                 <p className="text-xs font-medium text-white truncate" title={item.fileName}>{item.fileName}</p>
                 <div className="flex items-center justify-between mt-1">
                   <span className="text-[10px] text-muted-foreground uppercase font-bold">
-                    {item.fileSize ? (item.fileSize / 1024 / 1024).toFixed(1) + ' MB' : '0 MB'}
+                    {item.fileSize 
+                      ? item.fileSize > 1024 * 1024 
+                        ? (item.fileSize / 1024 / 1024).toFixed(1) + ' MB'
+                        : item.fileSize > 1024
+                          ? (item.fileSize / 1024).toFixed(0) + ' KB'
+                          : item.fileSize + ' B'
+                      : '0 B'}
                   </span>
                   <span className="text-[10px] text-muted-foreground">
                     {new Date(item.createdAt).toLocaleDateString()}

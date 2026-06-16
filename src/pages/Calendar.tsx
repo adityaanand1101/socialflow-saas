@@ -212,14 +212,14 @@ export const Calendar = () => {
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto custom-scrollbar">
+        <div className="flex-1 flex flex-col min-h-0">
           {/* Day Headers */}
-          <div className="grid grid-cols-7 border-b border-white/10 bg-black/20 sticky top-0 z-20">
+          <div className="grid grid-cols-7 border-b border-white/10 bg-black/20">
             {(viewMode === 'day' ? [currentDate] : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']).map((day, idx) => (
               <div 
                 key={typeof day === 'string' ? day : idx} 
                 className={cn(
-                  "p-3 text-center text-[10px] font-bold text-muted-foreground uppercase tracking-widest border-r border-white/10 last:border-r-0",
+                  "py-2 text-center text-[10px] font-bold text-muted-foreground uppercase tracking-widest border-r border-white/10 last:border-r-0",
                   viewMode === 'day' && "col-span-7"
                 )}
               >
@@ -230,7 +230,7 @@ export const Calendar = () => {
 
           {/* Grid */}
           <div className={cn(
-            "grid flex-1 min-h-[600px]",
+            "grid flex-1 overflow-hidden",
             viewMode === 'day' ? "grid-cols-1" : "grid-cols-7"
           )}>
             {calendarDays.map((day, i) => {
@@ -247,15 +247,15 @@ export const Calendar = () => {
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => handleDrop(e, day)}
                   className={cn(
-                    "min-h-[140px] p-2 border-r border-b border-white/10 last:border-r-0 relative group transition-all duration-200",
+                    "p-2 border-r border-b border-white/10 last:border-r-0 relative group transition-all duration-200 overflow-hidden flex flex-col",
                     !isCurrentMonth && viewMode === 'month' ? "bg-black/40 opacity-40" : "hover:bg-white/2",
                     isToday(day) && "bg-purple-500/5 ring-1 ring-inset ring-purple-500/20"
                   )}
                 >
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center justify-between mb-1">
                     <span className={cn(
-                      "text-xs font-bold transition-all",
-                      isToday(day) ? "w-7 h-7 rounded-lg bg-gradient-primary flex items-center justify-center text-white shadow-glow rotate-3" : 
+                      "text-[10px] sm:text-xs font-bold transition-all",
+                      isToday(day) ? "w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-gradient-primary flex items-center justify-center text-white shadow-glow rotate-3" : 
                       isCurrentMonth ? "text-white/80" : "text-white/20"
                     )}>
                       {format(day, 'd')}
@@ -264,11 +264,11 @@ export const Calendar = () => {
                       onClick={() => handleAddPost(day)}
                       className="p-1 rounded-md hover:bg-white/10 text-muted-foreground hover:text-white opacity-0 group-hover:opacity-100 transition-all"
                     >
-                      <Plus className="w-3.5 h-3.5" />
+                      <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                     </button>
                   </div>
 
-                  <div className="space-y-1.5">
+                  <div className="space-y-1 overflow-y-auto custom-scrollbar flex-1 pr-1">
                     {dayPosts.map((post) => (
                       <div 
                         key={post.id} 
@@ -276,7 +276,7 @@ export const Calendar = () => {
                         onDragStart={(e) => handleDragStart(e, post.id)}
                         onClick={() => navigate(`/app/compose?postId=${post.id}`)}
                         className={cn(
-                          "p-1.5 rounded-lg border flex flex-col gap-1 cursor-grab hover:scale-[1.02] transition-all active:cursor-grabbing group/post relative",
+                          "p-1 sm:p-1.5 rounded-lg border flex flex-col gap-0.5 sm:gap-1 cursor-grab hover:scale-[1.02] transition-all active:cursor-grabbing group/post relative",
                           post.status === 'published' ? "bg-green-500/10 border-green-500/20 shadow-[0_0_10px_rgba(34,197,94,0.1)]" :
                           post.status === 'scheduled' ? "bg-purple-500/10 border-purple-500/20 shadow-[0_0_10px_rgba(168,85,247,0.1)]" :
                           "bg-white/5 border-white/10"
@@ -286,21 +286,21 @@ export const Calendar = () => {
                             <div className="flex -space-x-1">
                                {post.platforms?.map((plat: string) => {
                                  const Icon = platformIcons[plat] || ImageIcon;
-                                 return <Icon key={plat} className="w-3 h-3 text-white/80 ring-2 ring-[#1a1820] rounded-sm bg-[#1a1820]" />;
+                                 return <Icon key={plat} className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-white/80 ring-[1px] sm:ring-2 ring-[#1a1820] rounded-sm bg-[#1a1820]" />;
                                })}
                             </div>
-                            <span className="text-[8px] font-bold text-white/40">
+                            <span className="text-[7px] sm:text-[8px] font-bold text-white/40">
                               {format(new Date(post.scheduledAt || post.scheduledTime), 'HH:mm')}
                             </span>
                          </div>
-                         <p className="text-[10px] text-white/90 line-clamp-2 leading-tight">
+                         <p className="text-[9px] sm:text-[10px] text-white/90 line-clamp-1 sm:line-clamp-2 leading-tight">
                            {post.caption || post.content || 'No caption'}
                          </p>
 
                          {/* Quick Actions Hover */}
-                         <div className="absolute top-0 right-0 p-1 opacity-0 group-hover/post:opacity-100 transition-opacity">
-                            <button onClick={(e) => handleDeletePost(e, post.id)} className="p-1 rounded bg-black/60 text-red-400 hover:text-red-300">
-                              <Trash2 className="w-2.5 h-2.5" />
+                         <div className="absolute top-0 right-0 p-0.5 sm:p-1 opacity-0 group-hover/post:opacity-100 transition-opacity">
+                            <button onClick={(e) => handleDeletePost(e, post.id)} className="p-0.5 sm:p-1 rounded bg-black/60 text-red-400 hover:text-red-300">
+                              <Trash2 className="w-2 h-2 sm:w-2.5 sm:h-2.5" />
                             </button>
                          </div>
                       </div>

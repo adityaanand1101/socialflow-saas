@@ -212,14 +212,14 @@ export const Calendar = () => {
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col min-h-0">
+        <div className="flex-1 overflow-auto custom-scrollbar">
           {/* Day Headers */}
-          <div className="grid grid-cols-7 border-b border-white/10 bg-black/20">
+          <div className="grid grid-cols-7 border-b border-white/10 bg-black/20 sticky top-0 z-20">
             {(viewMode === 'day' ? [currentDate] : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']).map((day, idx) => (
               <div 
                 key={typeof day === 'string' ? day : idx} 
                 className={cn(
-                  "py-2 text-center text-[10px] font-bold text-muted-foreground uppercase tracking-widest border-r border-white/10 last:border-r-0",
+                  "p-3 text-center text-[10px] font-bold text-muted-foreground uppercase tracking-widest border-r border-white/10 last:border-r-0",
                   viewMode === 'day' && "col-span-7"
                 )}
               >
@@ -230,7 +230,7 @@ export const Calendar = () => {
 
           {/* Grid */}
           <div className={cn(
-            "grid flex-1 overflow-hidden",
+            "grid flex-1 min-h-[700px]",
             viewMode === 'day' ? "grid-cols-1" : "grid-cols-7"
           )}>
             {calendarDays.map((day, i) => {
@@ -247,7 +247,7 @@ export const Calendar = () => {
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => handleDrop(e, day)}
                   className={cn(
-                    "p-2 border-r border-b border-white/10 last:border-r-0 relative group transition-all duration-200 overflow-hidden flex flex-col",
+                    "min-h-[140px] p-2 border-r border-b border-white/10 last:border-r-0 relative group transition-all duration-200 flex flex-col",
                     !isCurrentMonth && viewMode === 'month' ? "bg-black/40 opacity-40" : "hover:bg-white/2",
                     isToday(day) && "bg-purple-500/5 ring-1 ring-inset ring-purple-500/20"
                   )}

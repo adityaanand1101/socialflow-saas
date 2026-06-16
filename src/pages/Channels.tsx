@@ -274,10 +274,16 @@ export const Channels = () => {
                   </CardHeader>
                   <CardContent className="pt-4">
                     <div className="flex items-center gap-4">
-                      <Avatar className="w-14 h-14 border-2 border-white/10">
-                        <AvatarImage src={channel.avatar} />
-                        <AvatarFallback>{channel.name?.[0]}</AvatarFallback>
-                      </Avatar>
+                      {channel.avatar ? (
+                        <Avatar className="w-14 h-14 border-2 border-white/10">
+                          <AvatarImage src={channel.avatar} />
+                          <AvatarFallback>{channel.name?.[0]?.toUpperCase()}</AvatarFallback>
+                        </Avatar>
+                      ) : (
+                        <div className={cn("w-14 h-14 rounded-full border-2 border-white/10 flex items-center justify-center bg-white/5", platform?.color)}>
+                          <PlatformIcon className="w-6 h-6" />
+                        </div>
+                      )}
                       <div>
                         <h3 className="font-bold text-white">{channel.name}</h3>
                         <p className="text-xs text-muted-foreground capitalize">{channel.platform}</p>

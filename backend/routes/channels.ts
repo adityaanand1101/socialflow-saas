@@ -25,7 +25,7 @@ router.get('/', requireAuth, async (req: any, res: any) => {
       platform: acc.platform.toLowerCase(),
       name: acc.displayName || acc.username,
       username: acc.username,
-      avatar: acc.avatarUrl || 'https://github.com/shadcn.png',
+      avatar: acc.avatarUrl || null,
       followers: 0, // Placeholder: Real stats would require fetching from platform APIs
       status: 'connected',
       engagementRate: 0,

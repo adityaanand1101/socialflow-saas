@@ -214,7 +214,7 @@ export const Calendar = () => {
 
         <div className="">
           {/* Day Headers */}
-          <div className="grid grid-cols-7 border-b border-white/10 bg-black/20 sticky top-[73px] sm:top-[73px] z-20">
+          <div className="grid grid-cols-7 border-b border-white/10 bg-[#16141a] sticky top-[73px] sm:top-[73px] z-[40] shadow-md">
             {(viewMode === 'day' ? [currentDate] : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']).map((day, idx) => (
               <div 
                 key={typeof day === 'string' ? day : idx} 

@@ -163,7 +163,7 @@ export const Calendar = () => {
   }
 
   return (
-    <div className="space-y-6 h-full flex flex-col pb-10">
+    <div className="space-y-6 pb-10">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -180,9 +180,9 @@ export const Calendar = () => {
         </div>
       </div>
 
-      <Card className="flex-1 flex flex-col overflow-hidden border-white/10 bg-white/5 backdrop-blur-sm">
+      <Card className="flex flex-col border-white/10 bg-white/5 backdrop-blur-sm">
         {/* Toolbar */}
-        <div className="p-4 border-b border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white/2">
+        <div className="p-4 border-b border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white/2 sticky top-0 z-30">
           <div className="flex items-center gap-4">
             <div className="flex items-center bg-black/40 rounded-xl p-1 border border-white/10">
               <Button variant="ghost" size="icon" onClick={prev} className="h-9 w-9 text-white hover:bg-white/10"><ChevronLeft className="w-5 h-5" /></Button>
@@ -212,9 +212,9 @@ export const Calendar = () => {
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto custom-scrollbar">
+        <div className="">
           {/* Day Headers */}
-          <div className="grid grid-cols-7 border-b border-white/10 bg-black/20 sticky top-0 z-20">
+          <div className="grid grid-cols-7 border-b border-white/10 bg-black/20 sticky top-[73px] sm:top-[73px] z-20">
             {(viewMode === 'day' ? [currentDate] : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']).map((day, idx) => (
               <div 
                 key={typeof day === 'string' ? day : idx} 
@@ -268,7 +268,7 @@ export const Calendar = () => {
                     </button>
                   </div>
 
-                  <div className="space-y-1 overflow-y-auto custom-scrollbar flex-1 pr-1">
+                  <div className="space-y-1 pr-1">
                     {dayPosts.map((post) => (
                       <div 
                         key={post.id} 

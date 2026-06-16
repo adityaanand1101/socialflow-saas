@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { 
   format, 
   startOfMonth, 
@@ -9,46 +9,117 @@ import {
   isSameMonth, 
   isSameDay, 
   addMonths, 
-  subMonths 
+  subMonths,
+  addWeeks,
+  subWeeks,
+  addDays,
+  subDays,
+  startOfDay,
+  endOfDay,
+  isToday
 } from 'date-fns'
+import { useNavigate } from 'react-router-dom'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { 
   ChevronLeft, 
   ChevronRight, 
   Plus, 
-  Filter, 
-  Download,
+  Clock,
+  Trash2,
+  Image as ImageIcon
 } from 'lucide-react'
-import { Instagram, Linkedin, Twitter } from '@/components/icons'
+import { 
+  Instagram, Linkedin, Twitter, Youtube, Facebook, Threads, Bluesky, 
+  Slack, Pinterest, Mastodon, Reddit, Medium, Discord, Telegram, GMB, Tumblr 
+} from '@/components/icons'
 import { cn } from '@/lib/utils'
 import { useStore } from '@/store/useStore'
 import { useAuth } from '@clerk/react'
+import { apiFetch } from '@/lib/api'
+
+type ViewMode = 'month' | 'week' | 'day'
+
+const platformIcons: Record<string, any> = {
+  instagram: Instagram,
+  linkedin: Linkedin,
+  x: Twitter,
+  twitter: Twitter,
+  facebook: Facebook,
+  youtube: Youtube,
+  threads: Threads,
+  bluesky: Bluesky,
+  slack: Slack,
+  pinterest: Pinterest,
+  mastodon: Mastodon,
+  reddit: Reddit,
+  medium: Medium,
+  discord: Discord,
+  telegram: Telegram,
+  gmb: GMB,
+  tumblr: Tumblr
+}
 
 export const Calendar = () => {
-  const [currentMonth, setCurrentMonth] = useState(new Date())
-  const { posts, updatePost } = useStore()
+  const [currentDate, setCurrentDate] = useState(new Date())
+  const [viewMode, setViewMode] = useState<ViewMode>('month')
+  const { updatePost, removePost } = useStore()
   const { getToken } = useAuth()
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
-  const monthStart = startOfMonth(currentMonth)
-  const monthEnd = endOfMonth(monthStart)
-  const startDate = startOfWeek(monthStart)
-  const endDate = endOfWeek(monthEnd)
-
-  const calendarDays = eachDayOfInterval({
-    start: startDate,
-    end: endDate,
+  // --- React Query for Posts ---
+  const { data: postsData } = useQuery({
+    queryKey: ['posts'],
+    queryFn: async () => {
+      const token = await getToken()
+      const res = await apiFetch('/api/posts', { headers: { Authorization: `Bearer ${token}` } })
+      return res.json()
+    },
+    staleTime: 1000 * 60 * 5,
   })
 
-  const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1))
-  const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1))
+  const posts = useMemo(() => Array.isArray(postsData) ? postsData : [], [postsData])
 
-  const handleDragStart = (e: React.DragEvent, postId: string) => {
-    e.dataTransfer.setData('postId', postId)
+  // --- Navigation Logic ---
+  const next = () => {
+    if (viewMode === 'month') setCurrentDate(addMonths(currentDate, 1))
+    else if (viewMode === 'week') setCurrentDate(addWeeks(currentDate, 1))
+    else setCurrentDate(addDays(currentDate, 1))
   }
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault() // Required to allow drop
+  const prev = () => {
+    if (viewMode === 'month') setCurrentDate(subMonths(currentDate, 1))
+    else if (viewMode === 'week') setCurrentDate(subWeeks(currentDate, 1))
+    else setCurrentDate(subDays(currentDate, 1))
+  }
+
+  const goToToday = () => setCurrentDate(new Date())
+
+  // --- Date Range Calculation ---
+  const calendarDays = useMemo(() => {
+    let start, end;
+    if (viewMode === 'month') {
+      const monthStart = startOfMonth(currentDate)
+      const monthEnd = endOfMonth(monthStart)
+      start = startOfWeek(monthStart)
+      end = endOfWeek(monthEnd)
+    } else if (viewMode === 'week') {
+      start = startOfWeek(currentDate)
+      end = endOfWeek(currentDate)
+    } else {
+      start = startOfDay(currentDate)
+      end = endOfDay(currentDate)
+    }
+
+    return eachDayOfInterval({ start, end })
+  }, [currentDate, viewMode])
+
+  // --- Drag & Drop ---
+  const handleDragStart = (e: React.DragEvent, postId: string) => {
+    e.dataTransfer.setData('postId', postId)
+    e.dataTransfer.effectAllowed = 'move'
   }
 
   const handleDrop = async (e: React.DragEvent, targetDate: Date) => {
@@ -60,111 +131,204 @@ export const Calendar = () => {
       const token = await getToken()
       if (!token) return
       
-      // Keep the same time of day but change the date
       const post = posts.find(p => p.id === postId)
       if (!post) return
 
-      const newDate = new Date(post.scheduledTime || post.scheduledAt || new Date())
-      newDate.setFullYear(targetDate.getFullYear())
-      newDate.setMonth(targetDate.getMonth())
-      newDate.setDate(targetDate.getDate())
+      const existingDate = new Date(post.scheduledAt || post.scheduledTime || new Date())
+      const newDate = new Date(targetDate)
+      newDate.setHours(existingDate.getHours())
+      newDate.setMinutes(existingDate.getMinutes())
 
       await updatePost(token, postId, { scheduledTime: newDate.toISOString() })
+      queryClient.invalidateQueries({ queryKey: ['posts'] })
     } catch (error) {
       console.error('Failed to reschedule post', error)
     }
   }
 
+  const handleAddPost = (date?: Date) => {
+    const targetDate = date || new Date()
+    const dateStr = format(targetDate, "yyyy-MM-dd'T'HH:mm")
+    navigate(`/app/compose?date=${encodeURIComponent(dateStr)}`)
+  }
+
+  const handleDeletePost = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation()
+    if (!confirm('Are you sure you want to delete this scheduled post?')) return
+    const token = await getToken()
+    if (token) {
+      await removePost(token, id)
+      queryClient.invalidateQueries({ queryKey: ['posts'] })
+    }
+  }
+
   return (
     <div className="space-y-6 h-full flex flex-col pb-10">
+      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white tracking-tight">Content Calendar</h1>
-          <p className="text-muted-foreground mt-1">Visualize and schedule your social strategy.</p>
+          <p className="text-muted-foreground mt-1">Visualize and manage your multi-platform strategy.</p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" className="gap-2"><Filter className="w-4 h-4" /> Filter</Button>
-          <Button variant="outline" className="gap-2"><Download className="w-4 h-4" /> Bulk Import</Button>
-          <Button className="gap-2"><Plus className="w-4 h-4" /> Add Post</Button>
+          <Button variant="outline" className="gap-2" onClick={() => queryClient.invalidateQueries({ queryKey: ['posts'] })}>
+            <Clock className="w-4 h-4" /> Refresh
+          </Button>
+          <Button className="gap-2 bg-gradient-primary border-none shadow-glow hover:scale-105 transition-transform" onClick={() => handleAddPost()}>
+            <Plus className="w-4 h-4" /> Create Post
+          </Button>
         </div>
       </div>
 
-      <Card className="flex-1 flex flex-col overflow-hidden border-white/10 bg-white/5">
-        <div className="p-4 border-b border-white/10 flex items-center justify-between">
+      <Card className="flex-1 flex flex-col overflow-hidden border-white/10 bg-white/5 backdrop-blur-sm">
+        {/* Toolbar */}
+        <div className="p-4 border-b border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white/2">
           <div className="flex items-center gap-4">
-            <h2 className="text-lg font-bold text-white">{format(currentMonth, 'MMMM yyyy')}</h2>
-            <div className="flex items-center bg-white/5 rounded-lg border border-white/10">
-              <Button variant="ghost" size="icon" onClick={prevMonth} className="h-8 w-8 text-white"><ChevronLeft className="w-4 h-4" /></Button>
-              <Button variant="ghost" size="icon" onClick={nextMonth} className="h-8 w-8 text-white"><ChevronRight className="w-4 h-4" /></Button>
+            <div className="flex items-center bg-black/40 rounded-xl p-1 border border-white/10">
+              <Button variant="ghost" size="icon" onClick={prev} className="h-9 w-9 text-white hover:bg-white/10"><ChevronLeft className="w-5 h-5" /></Button>
+              <Button variant="ghost" className="px-4 text-white hover:bg-white/10 font-bold" onClick={goToToday}>Today</Button>
+              <Button variant="ghost" size="icon" onClick={next} className="h-9 w-9 text-white hover:bg-white/10"><ChevronRight className="w-5 h-5" /></Button>
             </div>
+            <h2 className="text-xl font-bold text-white min-w-[200px]">
+              {format(currentDate, viewMode === 'month' ? 'MMMM yyyy' : 'MMM d, yyyy')}
+            </h2>
           </div>
-          <div className="flex p-1 bg-white/5 rounded-lg border border-white/10">
-            <Button variant="ghost" size="sm" className="h-7 text-white bg-white/10">Month</Button>
-            <Button variant="ghost" size="sm" className="h-7 text-muted-foreground">Week</Button>
-            <Button variant="ghost" size="sm" className="h-7 text-muted-foreground">Day</Button>
+          
+          <div className="flex p-1 bg-black/40 rounded-xl border border-white/10">
+            {(['month', 'week', 'day'] as ViewMode[]).map((mode) => (
+              <Button 
+                key={mode}
+                variant="ghost" 
+                size="sm" 
+                className={cn(
+                  "h-8 px-4 rounded-lg transition-all capitalize font-medium",
+                  viewMode === mode ? "text-white bg-purple-500/20 shadow-inner" : "text-muted-foreground hover:text-white"
+                )}
+                onClick={() => setViewMode(mode)}
+              >
+                {mode}
+              </Button>
+            ))}
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto">
-          <div className="grid grid-cols-7 border-b border-white/10">
-            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-              <div key={day} className="p-3 text-center text-xs font-bold text-muted-foreground uppercase tracking-widest border-r border-white/10 last:border-r-0">
-                {day}
+        <div className="flex-1 overflow-auto custom-scrollbar">
+          {/* Day Headers */}
+          <div className="grid grid-cols-7 border-b border-white/10 bg-black/20 sticky top-0 z-20">
+            {(viewMode === 'day' ? [currentDate] : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']).map((day, idx) => (
+              <div 
+                key={typeof day === 'string' ? day : idx} 
+                className={cn(
+                  "p-3 text-center text-[10px] font-bold text-muted-foreground uppercase tracking-widest border-r border-white/10 last:border-r-0",
+                  viewMode === 'day' && "col-span-7"
+                )}
+              >
+                {typeof day === 'string' ? day : format(day, 'EEEE')}
               </div>
             ))}
           </div>
 
-          <div className="grid grid-cols-7 flex-1 min-h-[600px]">
+          {/* Grid */}
+          <div className={cn(
+            "grid flex-1 min-h-[600px]",
+            viewMode === 'day' ? "grid-cols-1" : "grid-cols-7"
+          )}>
             {calendarDays.map((day, i) => {
-              // Note: handling both scheduledTime (mock schema) and scheduledAt (new backend schema)
-              const dayPosts = posts.filter(p => p.scheduledTime || (p as any).scheduledAt ? isSameDay(new Date(p.scheduledTime || (p as any).scheduledAt), day) : false)
-              const isCurrentMonth = isSameMonth(day, monthStart)
+              const dayPosts = posts.filter(p => {
+                const pDate = new Date(p.scheduledAt || p.scheduledTime);
+                return isSameDay(pDate, day);
+              }).sort((a, b) => new Date(a.scheduledAt || a.scheduledTime).getTime() - new Date(b.scheduledAt || b.scheduledTime).getTime());
+
+              const isCurrentMonth = isSameMonth(day, currentDate)
               
               return (
                 <div 
                   key={i} 
-                  onDragOver={handleDragOver}
+                  onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => handleDrop(e, day)}
                   className={cn(
-                    "min-h-[120px] p-2 border-r border-b border-white/10 last:border-r-0 relative group transition-colors",
-                    !isCurrentMonth ? "bg-black/20" : "hover:bg-white/5"
+                    "min-h-[140px] p-2 border-r border-b border-white/10 last:border-r-0 relative group transition-all duration-200",
+                    !isCurrentMonth && viewMode === 'month' ? "bg-black/40 opacity-40" : "hover:bg-white/2",
+                    isToday(day) && "bg-purple-500/5 ring-1 ring-inset ring-purple-500/20"
                   )}
                 >
-                  <span className={cn(
-                    "text-xs font-medium",
-                    isSameDay(day, new Date()) ? "w-6 h-6 rounded-full bg-gradient-primary flex items-center justify-center text-white" : 
-                    isCurrentMonth ? "text-white/60" : "text-white/20"
-                  )}>
-                    {format(day, 'd')}
-                  </span>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={cn(
+                      "text-xs font-bold transition-all",
+                      isToday(day) ? "w-7 h-7 rounded-lg bg-gradient-primary flex items-center justify-center text-white shadow-glow rotate-3" : 
+                      isCurrentMonth ? "text-white/80" : "text-white/20"
+                    )}>
+                      {format(day, 'd')}
+                    </span>
+                    <button 
+                      onClick={() => handleAddPost(day)}
+                      className="p-1 rounded-md hover:bg-white/10 text-muted-foreground hover:text-white opacity-0 group-hover:opacity-100 transition-all"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
 
-                  <div className="mt-2 space-y-1">
+                  <div className="space-y-1.5">
                     {dayPosts.map((post) => (
                       <div 
                         key={post.id} 
                         draggable
                         onDragStart={(e) => handleDragStart(e, post.id)}
-                        className="p-1 rounded bg-gradient-primary/20 border border-purple-500/30 flex items-center gap-1 cursor-grab hover:bg-gradient-primary/30 transition-all active:cursor-grabbing"
+                        onClick={() => navigate(`/app/compose?postId=${post.id}`)}
+                        className={cn(
+                          "p-1.5 rounded-lg border flex flex-col gap-1 cursor-grab hover:scale-[1.02] transition-all active:cursor-grabbing group/post relative",
+                          post.status === 'published' ? "bg-green-500/10 border-green-500/20 shadow-[0_0_10px_rgba(34,197,94,0.1)]" :
+                          post.status === 'scheduled' ? "bg-purple-500/10 border-purple-500/20 shadow-[0_0_10px_rgba(168,85,247,0.1)]" :
+                          "bg-white/5 border-white/10"
+                        )}
                       >
-                         <div className="shrink-0">
-                            {post.platforms?.[0] === 'instagram' && <Instagram className="w-2.5 h-2.5 text-pink-400" />}
-                            {post.platforms?.[0] === 'linkedin' && <Linkedin className="w-2.5 h-2.5 text-blue-400" />}
-                            {post.platforms?.[0] === 'x' && <Twitter className="w-2.5 h-2.5 text-white" />}
+                         <div className="flex items-center justify-between">
+                            <div className="flex -space-x-1">
+                               {post.platforms?.map((plat: string) => {
+                                 const Icon = platformIcons[plat] || ImageIcon;
+                                 return <Icon key={plat} className="w-3 h-3 text-white/80 ring-2 ring-[#1a1820] rounded-sm bg-[#1a1820]" />;
+                               })}
+                            </div>
+                            <span className="text-[8px] font-bold text-white/40">
+                              {format(new Date(post.scheduledAt || post.scheduledTime), 'HH:mm')}
+                            </span>
                          </div>
-                         <span className="text-[10px] text-white truncate">{post.caption || (post as any).content}</span>
+                         <p className="text-[10px] text-white/90 line-clamp-2 leading-tight">
+                           {post.caption || post.content || 'No caption'}
+                         </p>
+
+                         {/* Quick Actions Hover */}
+                         <div className="absolute top-0 right-0 p-1 opacity-0 group-hover/post:opacity-100 transition-opacity">
+                            <button onClick={(e) => handleDeletePost(e, post.id)} className="p-1 rounded bg-black/60 text-red-400 hover:text-red-300">
+                              <Trash2 className="w-2.5 h-2.5" />
+                            </button>
+                         </div>
                       </div>
                     ))}
                   </div>
-
-                  <button className="absolute bottom-2 right-2 p-1 rounded-full bg-white/5 border border-white/10 text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Plus className="w-3 h-3" />
-                  </button>
                 </div>
               )
             })}
           </div>
         </div>
+
+        {/* Footer info */}
+        <div className="p-3 border-t border-white/10 bg-black/40 flex items-center gap-6 justify-center">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-green-500" />
+              <span className="text-[10px] font-bold text-muted-foreground uppercase">Published</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-purple-500" />
+              <span className="text-[10px] font-bold text-muted-foreground uppercase">Scheduled</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-white/20" />
+              <span className="text-[10px] font-bold text-muted-foreground uppercase">Draft</span>
+            </div>
+        </div>
       </Card>
     </div>
   )
 }
+

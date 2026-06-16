@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useRef, useState, useEffect } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -17,7 +17,7 @@ import { useStore } from '@/store/useStore'
 import type { SocialPlatform } from '@/store/useStore'
 import { rewriteCaption } from '@/lib/gemini'
 import { useAuth } from '@clerk/react'
-import { format, addDays } from 'date-fns'
+import { format, addDays, isValid, parseISO } from 'date-fns'
 
 const platforms = [
   { id: 'instagram' as SocialPlatform, icon: Instagram, color: 'text-pink-400', label: 'Instagram', limit: 2200 },
@@ -41,27 +41,37 @@ const platforms = [
 const toneOptions = ['Professional', 'Casual', 'Funny', 'Inspirational', 'Urgent']
 
 export const Compose = () => {
+  const [searchParams] = useSearchParams()
   const [selectedPlatforms, setSelectedPlatforms] = useState<SocialPlatform[]>(['instagram'])
   const [caption, setCaption] = useState('')
   const [previewDevice, setPreviewDevice] = useState<'mobile' | 'desktop'>('mobile')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isRewriting, setIsRewriting] = useState(false)
-  const [showScheduler, setShowScheduler] = useState(false)
-  const [scheduledDate, setScheduledDate] = useState(() => format(addDays(new Date(), 1), "yyyy-MM-dd'T'HH:mm"))
+  const [showScheduler, setShowScheduler] = useState(() => !!searchParams.get('date'))
+  const [scheduledDate, setScheduledDate] = useState(() => {
+    const dateParam = searchParams.get('date')
+    if (dateParam) {
+       const parsed = parseISO(dateParam)
+       if (isValid(parsed)) return format(parsed, "yyyy-MM-dd'T'HH:mm")
+    }
+    return format(addDays(new Date(), 1), "yyyy-MM-dd'T'HH:mm")
+  })
   const [selectedTone, setSelectedTone] = useState('Professional')
   const [mediaFiles, setMediaFiles] = useState<string[]>([])
   const [isUploadingMedia, setIsUploadingMedia] = useState(false)
   const [showMediaLibrary, setShowMediaLibrary] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
+  const [editingPostId] = useState<string | null>(searchParams.get('postId'))
   const fileInputRef = useRef<HTMLInputElement>(null)
   
-  const { addPost, uploadMedia } = useStore()
+  const { addPost, updatePost, uploadMedia } = useStore()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const { getToken } = useAuth()
 
+  // --- React Query for Media ---
   const { data: mediaData } = useQuery({
-    queryKey: ['media', 'root'], // Fetch root media for simple selection
+    queryKey: ['media', 'root'],
     queryFn: async () => {
       const token = await getToken()
       const res = await apiFetch('/api/media?folderId=root', { headers: { Authorization: `Bearer ${token}` } })
@@ -69,6 +79,27 @@ export const Compose = () => {
     },
     staleTime: 1000 * 60 * 5,
   })
+
+  // --- Fetch Post if editing ---
+  useEffect(() => {
+    const fetchPost = async () => {
+      if (editingPostId) {
+        const token = await getToken()
+        const res = await apiFetch(`/api/posts/${editingPostId}`, { headers: { Authorization: `Bearer ${token}` } })
+        if (res.ok) {
+          const post = await res.json()
+          setCaption(post.content || post.caption || '')
+          setSelectedPlatforms(post.platforms || ['instagram'])
+          setMediaFiles(post.mediaUrls || post.media || [])
+          if (post.scheduledAt || post.scheduledTime) {
+            setScheduledDate(format(new Date(post.scheduledAt || post.scheduledTime), "yyyy-MM-dd'T'HH:mm"))
+            setShowScheduler(true)
+          }
+        }
+      }
+    }
+    fetchPost()
+  }, [editingPostId])
 
   const libraryMedia = mediaData?.assets || []
 
@@ -101,7 +132,7 @@ export const Compose = () => {
     const file = e.dataTransfer.files?.[0]
     if (file) {
       const asset = await handleMediaUpload(file)
-      if (asset) setShowMediaLibrary(false) // Close modal on successful drop
+      if (asset) setShowMediaLibrary(false)
     }
   }
 
@@ -144,15 +175,28 @@ export const Compose = () => {
       const token = await getToken()
       if (!token) return
       const time = status === 'scheduled' ? new Date(scheduledDate).toISOString() : new Date().toISOString()
-      await addPost(token, {
-        platforms: selectedPlatforms,
-        caption,
-        media: mediaFiles,
-        scheduledTime: time,
-        status,
-        tags: []
-      })
-      navigate('/')
+      
+      if (editingPostId) {
+        await updatePost(token, editingPostId, {
+          platforms: selectedPlatforms,
+          caption,
+          media: mediaFiles,
+          scheduledTime: time,
+          status
+        })
+      } else {
+        await addPost(token, {
+          platforms: selectedPlatforms,
+          caption,
+          media: mediaFiles,
+          scheduledTime: time,
+          status,
+          tags: []
+        })
+      }
+      
+      queryClient.invalidateQueries({ queryKey: ['posts'] })
+      navigate('/app/calendar') // Go back to calendar after scheduling
     } catch (error) {
       console.error('Failed to save post:', error)
     } finally {

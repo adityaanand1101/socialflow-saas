@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -43,6 +43,15 @@ export const Channels = () => {
   const [customCreds, setCustomCreds] = useState({ identifier: '', password: '' })
   const [menuOpen, setMenuOpen] = useState<string | null>(null)
   const [connectSuccess] = useState<string | null>(null)
+  
+  // Force a fetch when the page loads, especially to catch new OAuth redirects
+  useEffect(() => {
+    const initFetch = async () => {
+      const token = await getToken()
+      if (token) await fetchChannels(token)
+    }
+    initFetch()
+  }, [getToken, fetchChannels])
 
   const handleConnect = async (platform: string) => {
     if (platform === 'bluesky' || platform === 'medium') {

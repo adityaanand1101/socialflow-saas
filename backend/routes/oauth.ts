@@ -11,8 +11,8 @@ const router = Router();
 const prisma = new PrismaClient();
 
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'default_32_byte_secret_key_for_dev!';
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3001';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://socialflow-saas.vercel.app';
+const BACKEND_URL = process.env.BACKEND_URL || 'https://socialflow-saas.onrender.com';
 
 // Helper to determine redirect URL
 const getRedirectUri = (platform: string) => `${BACKEND_URL}/api/oauth/${platform}/callback`;
@@ -112,7 +112,7 @@ const providers = {
     profileUrl: 'https://slack.com/api/users.identity',
     clientId: process.env.SLACK_CLIENT_ID || '',
     clientSecret: process.env.SLACK_CLIENT_SECRET || '',
-    scopes: '', // User scopes are passed separately in the authUrl for Slack
+    scopes: 'chat:write,users.profile:read', 
   },
   discord: {
     authUrl: 'https://discord.com/api/oauth2/authorize',
@@ -164,11 +164,7 @@ router.get('/:platform/connect', requireAuth, async (req: any, res: any) => {
   authUrl.searchParams.append('client_id', provider.clientId);
   authUrl.searchParams.append('redirect_uri', redirectUri);
   authUrl.searchParams.append('state', state);
-  if (platform === 'slack') {
-    authUrl.searchParams.append('user_scope', 'chat:write,users.profile:read,identity.basic');
-  } else {
-    authUrl.searchParams.append('scope', provider.scopes);
-  }
+  authUrl.searchParams.append('scope', provider.scopes);
 
   if (platform === 'x') {
     // High-entropy PKCE challenge for production security

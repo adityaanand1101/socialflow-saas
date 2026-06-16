@@ -115,6 +115,29 @@ export const Channels = () => {
     }
   }
 
+  const handleDisconnect = async (channelId: string) => {
+    if (!confirm('Are you sure you want to disconnect this account?')) return
+    try {
+      const token = await getToken()
+      if (!token) return
+      
+      const res = await apiFetch(`/api/channels/${channelId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      
+      if (res.ok) {
+        await fetchChannels(token)
+        setMenuOpen(null)
+      } else {
+        const data = await res.json()
+        alert(data.error || 'Failed to disconnect channel')
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
   const connectedPlatforms = new Set(channels.map((c: any) => c.platform))
   const availablePlatforms = ALL_PLATFORMS.filter(p => !connectedPlatforms.has(p.id as any))
 
@@ -265,7 +288,10 @@ export const Channels = () => {
                           <button className="w-full text-left px-3 py-2 text-sm text-muted-foreground hover:text-white hover:bg-white/5 flex items-center gap-2">
                             <RefreshCw className="w-3 h-3" /> Sync Now
                           </button>
-                          <button className="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2">
+                          <button 
+                            className="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2"
+                            onClick={() => handleDisconnect(channel.id)}
+                          >
                             <Unplug className="w-3 h-3" /> Disconnect
                           </button>
                         </div>

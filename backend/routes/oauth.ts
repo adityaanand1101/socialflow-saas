@@ -112,7 +112,7 @@ const providers = {
     profileUrl: 'https://slack.com/api/users.identity',
     clientId: process.env.SLACK_CLIENT_ID || '',
     clientSecret: process.env.SLACK_CLIENT_SECRET || '',
-    scopes: 'chat:write,incoming-webhook',
+    scopes: '', // User scopes are passed separately in the authUrl for Slack
   },
   discord: {
     authUrl: 'https://discord.com/api/oauth2/authorize',
@@ -164,7 +164,11 @@ router.get('/:platform/connect', requireAuth, async (req: any, res: any) => {
   authUrl.searchParams.append('client_id', provider.clientId);
   authUrl.searchParams.append('redirect_uri', redirectUri);
   authUrl.searchParams.append('state', state);
-  authUrl.searchParams.append('scope', provider.scopes);
+  if (platform === 'slack') {
+    authUrl.searchParams.append('user_scope', 'chat:write,users.profile:read,identity.basic');
+  } else {
+    authUrl.searchParams.append('scope', provider.scopes);
+  }
 
   if (platform === 'x') {
     // High-entropy PKCE challenge for production security

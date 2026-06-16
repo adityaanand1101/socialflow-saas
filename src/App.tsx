@@ -27,6 +27,16 @@ function App() {
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<TermsOfService />} />
         
+        {/* Legacy/Convenience Redirects */}
+        <Route path="/calendar" element={<Navigate to="/app/calendar" replace />} />
+        <Route path="/compose" element={<Navigate to="/app/compose" replace />} />
+        <Route path="/media" element={<Navigate to="/app/media" replace />} />
+        <Route path="/analytics" element={<Navigate to="/app/analytics" replace />} />
+        <Route path="/channels" element={<Navigate to="/app/channels" replace />} />
+        <Route path="/ai-studio" element={<Navigate to="/app/ai-studio" replace />} />
+        <Route path="/team" element={<Navigate to="/app/team" replace />} />
+        <Route path="/settings" element={<Navigate to="/app/settings" replace />} />
+        
         {/* Protected Routes */}
         <Route path="/app/*" element={
           <>

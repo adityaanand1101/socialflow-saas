@@ -69,10 +69,10 @@ const providers = {
   youtube: {
     authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
     tokenUrl: 'https://oauth2.googleapis.com/token',
-    profileUrl: 'https://www.googleapis.com/oauth2/v2/userinfo',
+    profileUrl: 'https://www.googleapis.com/oauth2/v3/userinfo',
     clientId: process.env.YOUTUBE_CLIENT_ID || '',
     clientSecret: process.env.YOUTUBE_CLIENT_SECRET || '',
-    scopes: 'https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly',
+    scopes: 'https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly profile email',
   },
   pinterest: {
     authUrl: 'https://www.pinterest.com/oauth/',

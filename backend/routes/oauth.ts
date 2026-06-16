@@ -96,7 +96,7 @@ const providers = {
     profileUrl: `${process.env.MASTODON_INSTANCE_URL}/api/v1/accounts/verify_credentials`,
     clientId: process.env.MASTODON_CLIENT_ID || '',
     clientSecret: process.env.MASTODON_CLIENT_SECRET || '',
-    scopes: 'read write:statuses',
+    scopes: 'read write', // Mastodon scopes are space-separated, 'read write' is standard
   },
   bluesky: {
     authUrl: '', // Uses ATP/lexicon directly with handle + app password
@@ -136,15 +136,15 @@ const providers = {
     profileUrl: 'https://api.tumblr.com/v2/user/info',
     clientId: process.env.TUMBLR_CLIENT_ID || '',
     clientSecret: process.env.TUMBLR_CLIENT_SECRET || '',
-    scopes: 'basic write',
+    scopes: 'basic write', // Ensure these match Tumblr portal exactly
   },
-  medium: {
-    authUrl: '', // Uses Integration Tokens
-    tokenUrl: '',
-    profileUrl: 'https://api.medium.com/v1/me',
-    clientId: 'MEDIUM_MANUAL',
-    clientSecret: '',
-    scopes: 'basicProfile,publishPost',
+  wordpress: {
+    authUrl: 'https://public-api.wordpress.com/oauth2/authorize',
+    tokenUrl: 'https://public-api.wordpress.com/oauth2/token',
+    profileUrl: 'https://public-api.wordpress.com/rest/v1.1/me',
+    clientId: process.env.WORDPRESS_CLIENT_ID || '',
+    clientSecret: process.env.WORDPRESS_CLIENT_SECRET || '',
+    scopes: 'global',
   }
 };
 
@@ -222,6 +222,9 @@ router.get('/:platform/callback', async (req: any, res) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
+        ...(platform === 'tumblr' && {
+          'Authorization': 'Basic ' + Buffer.from(`${provider.clientId}:${provider.clientSecret}`).toString('base64')
+        })
       },
       body: bodyParams.toString()
     });

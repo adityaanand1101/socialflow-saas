@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { 
-  MoreVertical, RefreshCw, Unplug, TrendingUp, Users, Eye, Info, X, Loader2, Check
+  MoreVertical, RefreshCw, Unplug, TrendingUp, Users, Eye, Info, X, Loader2, Check, FileText
 } from 'lucide-react'
 import { 
   Instagram, Linkedin, Twitter, Youtube, Facebook, Threads, Bluesky, 
@@ -26,6 +26,7 @@ const ALL_PLATFORMS = [
   { id: 'bluesky', label: 'Bluesky', icon: Bluesky, color: 'text-blue-400', bgHover: 'hover:border-blue-500/30 hover:bg-blue-500/5', description: 'Decentralized Social', authNote: 'Requires Bluesky handle & app password' },
   { id: 'mastodon', label: 'Mastodon', icon: Mastodon, color: 'text-purple-500', bgHover: 'hover:border-purple-600/50 hover:bg-purple-600/5', description: 'Federated microblogging', authNote: 'Requires Mastodon instance URL' },
   { id: 'reddit', label: 'Reddit', icon: Reddit, color: 'text-orange-500', bgHover: 'hover:border-orange-600/50 hover:bg-orange-600/5', description: 'Subreddit communities', authNote: 'Requires Reddit app credentials' },
+  { id: 'wordpress', label: 'WordPress', icon: FileText, color: 'text-blue-500', bgHover: 'hover:border-blue-500/50 hover:bg-blue-500/5', description: 'Blogs & Articles', authNote: 'Requires WordPress.com REST API OAuth' },
   { id: 'discord', label: 'Discord', icon: Discord, color: 'text-indigo-400', bgHover: 'hover:border-indigo-500/50 hover:bg-indigo-500/5', description: 'Server Webhooks & Bots', authNote: 'Requires Discord Bot permissions' },
   { id: 'telegram', label: 'Telegram', icon: Telegram, color: 'text-blue-400', bgHover: 'hover:border-blue-500/50 hover:bg-blue-500/5', description: 'Channels & Groups', authNote: 'Requires Telegram Bot API Token' },
   { id: 'tumblr', label: 'Tumblr', icon: Tumblr, color: 'text-blue-900', bgHover: 'hover:border-blue-900/50 hover:bg-blue-900/5', description: 'Microblogging & Social', authNote: 'Requires Tumblr Consumer Key' },

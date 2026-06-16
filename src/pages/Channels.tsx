@@ -328,9 +328,9 @@ export const Channels = () => {
                     {/* Stats row */}
                     <div className="grid grid-cols-3 gap-2 mt-5">
                       {[
-                        { icon: Users, label: 'Followers', value: `${(channel.followers/1000).toFixed(1)}K` },
+                        { icon: Users, label: 'Followers', value: channel.followers >= 1000 ? `${(channel.followers/1000).toFixed(1)}K` : channel.followers },
                         { icon: TrendingUp, label: 'Engagement', value: `${channel.engagementRate}%` },
-                        { icon: Eye, label: 'Reach', value: '2.1K' },
+                        { icon: Eye, label: 'Reach', value: channel.reach >= 1000 ? `${(channel.reach/1000).toFixed(1)}K` : channel.reach },
                       ].map(stat => (
                         <div key={stat.label} className="p-2 rounded-lg bg-white/5 text-center">
                           <p className="text-xs font-bold text-white">{stat.value}</p>

@@ -640,23 +640,25 @@ export const MediaLibrary = () => {
       )}
 
       {/* Storage Usage indicator */}
-      <div className="mt-8 p-4 glass-card rounded-xl">
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-xs font-bold text-white uppercase tracking-widest">Storage Usage</p>
-          <p className="text-xs text-muted-foreground">
-            {data?.assets?.length > 0 ? `${(data.assets.reduce((acc: number, curr: any) => acc + (curr.fileSize || 0), 0) / 1024 / 1024).toFixed(1)} MB` : '0 MB'} / 500 MB
+      {!currentFolderId && (
+        <div className="mt-8 p-4 glass-card rounded-xl">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-bold text-white uppercase tracking-widest">Storage Usage</p>
+            <p className="text-xs text-muted-foreground">
+              {data?.assets?.length > 0 ? `${(data.assets.reduce((acc: number, curr: any) => acc + (curr.fileSize || 0), 0) / 1024 / 1024).toFixed(1)} MB` : '0 MB'} / 500 MB
+            </p>
+          </div>
+          <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-gradient-primary rounded-full shadow-glow transition-all" 
+              style={{ width: `${Math.min((data?.assets?.reduce((acc: number, curr: any) => acc + (curr.fileSize || 0), 0) / 1024 / 1024 / 5), 100)}%` }}
+            />
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-2 italic text-center">
+            Powered by Backblaze B2
           </p>
         </div>
-        <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
-          <div 
-            className="h-full bg-gradient-primary rounded-full shadow-glow transition-all" 
-            style={{ width: `${Math.min((data?.assets?.reduce((acc: number, curr: any) => acc + (curr.fileSize || 0), 0) / 1024 / 1024 / 5), 100)}%` }}
-          />
-        </div>
-        <p className="text-[10px] text-muted-foreground mt-2 italic text-center">
-          Powered by Backblaze B2
-        </p>
-      </div>
+      )}
     </div>
   )
 }

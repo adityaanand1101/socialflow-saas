@@ -68,7 +68,11 @@ export const Channels = () => {
       
       const data = await res.json()
       if (res.ok && data.authUrl) {
-        window.location.href = data.authUrl
+        // Open the OAuth screen in a new tab
+        window.open(data.authUrl, '_blank', 'noopener,noreferrer')
+        
+        // Show the user a message that they need to finish in the new tab
+        alert(`A new tab has opened to connect ${platform}. Once you finish, close that tab and refresh this page.`)
       } else {
         const errorMsg = data.error || `Server returned ${res.status}: ${res.statusText}`;
         alert(`Failed to connect ${platform}: ${errorMsg}`);

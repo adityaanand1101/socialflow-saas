@@ -275,7 +275,7 @@ router.get('/:platform/callback', async (req: any, res) => {
       profile.displayName = userObj.name;
       profile.avatarUrl = userObj.profile_image_url || 'https://github.com/shadcn.png';
     } else if (platform === 'youtube') {
-      profile.id = profileData.id;
+      profile.id = profileData.sub || profileData.id;
       profile.username = profileData.email || 'youtube_channel';
       profile.displayName = profileData.name || 'YouTube User';
       profile.avatarUrl = profileData.picture || 'https://github.com/shadcn.png';

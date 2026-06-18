@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { 
-  MoreVertical, RefreshCw, Unplug, TrendingUp, Users, Eye, Info, X, Loader2, Check, FileText
+  MoreVertical, RefreshCw, Unplug, TrendingUp, Users, Eye, Info, X, Loader2, Check
 } from 'lucide-react'
 import { 
   Instagram, Linkedin, Twitter, Youtube, Facebook, Threads, Bluesky, 

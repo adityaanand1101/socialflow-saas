@@ -216,7 +216,7 @@ export const Settings = () => {
                 <div className="shrink-0 flex flex-col items-center gap-3">
                   <div className="relative">
                     <div className="w-24 h-24 rounded-full overflow-hidden bg-gradient-primary p-0.5">
-                      {profile.avatarUrl ? (
+                      {(profile.avatarUrl && !profile.avatarUrl.includes('shadcn.png')) ? (
                         <img src={profile.avatarUrl} alt="Profile" className="w-full h-full rounded-full object-cover" />
                       ) : (
                         <div className="w-full h-full rounded-full bg-white/10 flex items-center justify-center">

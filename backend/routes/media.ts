@@ -186,7 +186,7 @@ router.post('/register', requireAuth, async (req: any, res: any) => {
 });
 
 router.get('/', requireAuth, async (req: any, res: any) => {
-  const { search, folderId } = req.query;
+  const { search, folderId, sort, type } = req.query;
 
   try {
     const workspaceId = req.workspaceId;
@@ -195,25 +195,45 @@ router.get('/', requireAuth, async (req: any, res: any) => {
       return res.status(404).json({ error: 'Workspace not found' });
     }
 
+    const where: any = { workspaceId };
+
+    if (search) {
+      where.fileName = { contains: search as string, mode: 'insensitive' };
+      if (folderId && folderId !== 'root') {
+        where.folderId = folderId as string;
+      }
+    } else if (folderId === 'root') {
+      where.folderId = null;
+    } else if (folderId) {
+      where.folderId = folderId as string;
+    }
+
+    if (type && type !== 'all') {
+      where.fileType = type === 'image' ? { startsWith: 'image/' } : { startsWith: 'video/' };
+    }
+
+    const orderBy: any = {};
+    switch (sort) {
+      case 'name': orderBy.fileName = 'asc'; break;
+      case 'size': orderBy.fileSize = 'desc'; break;
+      default: orderBy.createdAt = 'desc';
+    }
+
     // Fetch assets and folders in parallel
     const [media, folders] = await Promise.all([
       prisma.mediaAsset.findMany({
-        where: { 
-          workspaceId,
-          ...(search 
-            ? { fileName: { contains: search as string, mode: 'insensitive' } } 
-            : { folderId: folderId === 'root' ? null : (folderId as string || null) }
-          )
-        },
-        orderBy: { createdAt: 'desc' }
+        where,
+        orderBy,
       }),
-      search ? [] : prisma.mediaFolder.findMany({
-        where: { 
-          workspaceId,
-          parentId: folderId === 'root' ? null : (folderId as string || null)
-        },
-        orderBy: { createdAt: 'desc' }
-      })
+      search
+        ? []
+        : prisma.mediaFolder.findMany({
+            where: {
+              workspaceId,
+              parentId: folderId === 'root' ? null : (folderId as string || null)
+            },
+            orderBy: { createdAt: 'desc' }
+          })
     ]);
 
     // --- HIGH PERFORMANCE RETRIEVAL ---

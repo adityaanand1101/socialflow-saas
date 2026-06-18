@@ -4,6 +4,7 @@ import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { requireAuth } from '../middlewares/auth';
+import fetch from 'node-fetch';
 
 dotenv.config();
 
@@ -34,6 +35,21 @@ const PLATFORM_MAP: Record<string, string> = {
 const GEMINI_AI = process.env.GOOGLE_AI_API_KEY
   ? new GoogleGenAI({ apiKey: process.env.GOOGLE_AI_API_KEY })
   : null;
+
+// ---------- Image Generation Config ----------
+// Uses Pollinations.ai — free, no API key, no signup.
+// Supports flux, turbo, gpt-image, nanobanana, seedream, etc.
+
+const AI_IMAGE_MODEL = process.env.AI_IMAGE_MODEL || 'flux';
+const AI_PRIVATE_MODE = process.env.AI_PRIVATE_MODE === 'true';
+
+const ASPECT_RATIOS: Record<string, { width: number; height: number }> = {
+  '1:1': { width: 1024, height: 1024 },
+  '16:9': { width: 1344, height: 768 },
+  '4:3': { width: 1152, height: 896 },
+  '3:4': { width: 896, height: 1152 },
+  '9:16': { width: 768, height: 1344 },
+};
 
 // ---------- Helpers ----------
 
@@ -192,26 +208,22 @@ router.post('/image', requireAuth, async (req: any, res: any) => {
     return res.status(400).json({ error: 'imagePrompt is required' });
   }
   if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
-  if (!GEMINI_AI) return res.status(503).json({ error: 'AI service unavailable' });
 
   const hit = await checkAiRateLimit(userId);
   if (hit !== null) return res.status(429).json({ error: `Rate limit exceeded (${hit + 1} requests this hour)` });
 
   try {
-    const response = await GEMINI_AI.models.generateContent({
-      model: AI_MODELS.image,
-      contents: [{ role: 'user', parts: [{ text: imagePrompt.slice(0, 1000) }] }],
-      config: {
-        responseModalities: ['TEXT', 'IMAGE'],
-      },
-    });
+    const dims = aspectRatio && ASPECT_RATIOS[aspectRatio] ? ASPECT_RATIOS[aspectRatio] : { width: 1024, height: 1024 };
+    const encoded = encodeURIComponent(imagePrompt.slice(0, 1000));
+    const url = `https://image.pollinations.ai/prompt/${encoded}?width=${dims.width}&height=${dims.height}&model=${AI_IMAGE_MODEL}&nologo=true${AI_PRIVATE_MODE ? '&private=true' : ''}`;
 
-    const imagePart = response.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData);
-    if (!imagePart?.inlineData?.data) {
-      return res.status(500).json({ error: 'AI did not return an image' });
+    const pollRes = await fetch(url);
+    if (!pollRes.ok) {
+      const errText = await pollRes.text();
+      throw new Error(`Pollinations error (${pollRes.status}): ${errText.substring(0, 200)}`);
     }
 
-    const buffer = Buffer.from(imagePart.inlineData.data, 'base64');
+    const buffer = await pollRes.buffer();
     const fileName = `ai-images/${Date.now()}-${Math.random().toString(36).substring(7)}.png`;
 
     if (!process.env.S3_BUCKET_NAME) {

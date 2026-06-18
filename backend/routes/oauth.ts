@@ -148,43 +148,62 @@ const providers = {
   }
 };
 
+// Diagnostic route to verify what URLs the server thinks it should use
+router.get('/test-redirects', (req: any, res: any) => {
+  res.json({
+    FRONTEND_URL,
+    BACKEND_URL,
+    env: {
+      FRONTEND: process.env.FRONTEND_URL,
+      BACKEND: process.env.BACKEND_URL
+    },
+    redirects: {
+      tumblr: getRedirectUri('tumblr'),
+      x: getRedirectUri('x'),
+      youtube: getRedirectUri('youtube')
+    }
+  });
+});
+
 router.get('/:platform/connect', requireAuth, async (req: any, res: any) => {
-  const { platform } = req.params;
-  const provider = providers[platform as keyof typeof providers];
-  
-  if (!provider || !provider.clientId) {
-    return res.status(400).json({ error: `OAuth for ${platform} is not configured on the server.` });
+  try {
+    const { platform } = req.params;
+    const provider = providers[platform as keyof typeof providers];
+    
+    if (!provider || !provider.clientId) {
+      return res.status(400).json({ error: `OAuth for ${platform} is not configured on the server.` });
+    }
+
+    const redirectUri = getRedirectUri(platform);
+    const state = req.auth.userId; 
+
+    const authUrl = new URL(provider.authUrl);
+    authUrl.searchParams.append('response_type', 'code');
+    authUrl.searchParams.append('client_id', provider.clientId);
+    authUrl.searchParams.append('redirect_uri', redirectUri);
+    authUrl.searchParams.append('state', state);
+    
+    if (platform === 'slack') {
+      authUrl.searchParams.append('user_scope', provider.scopes);
+    } else {
+      authUrl.searchParams.append('scope', provider.scopes);
+    }
+
+    if (platform === 'youtube' || platform === 'gmb') {
+      authUrl.searchParams.append('access_type', 'offline');
+      authUrl.searchParams.append('prompt', 'consent');
+    }
+
+    if (platform === 'x') {
+      authUrl.searchParams.append('code_challenge', 'S0c1alFlMHdfUGtjZV9WZXJpZmllcl8yMDI2X0xvbmdfU3RyaW5n');
+      authUrl.searchParams.append('code_challenge_method', 'plain');
+    }
+
+    res.json({ authUrl: authUrl.toString() });
+  } catch (err: any) {
+    console.error('Connect Route Error:', err);
+    res.status(500).json({ error: err.message, stack: err.stack });
   }
-
-  const redirectUri = getRedirectUri(platform);
-  const state = req.auth.userId; 
-
-  const authUrl = new URL(provider.authUrl);
-  authUrl.searchParams.append('response_type', 'code');
-  authUrl.searchParams.append('client_id', provider.clientId);
-  authUrl.searchParams.append('redirect_uri', redirectUri);
-  authUrl.searchParams.append('state', state);
-
-  if (platform === 'slack') {
-    // Slack requires 'user_scope' for user-level permissions, bypassing bot requirements
-    authUrl.searchParams.append('user_scope', provider.scopes);
-  } else {
-    authUrl.searchParams.append('scope', provider.scopes);
-  }
-
-  // Google APIs require these flags to return a refresh token
-  if (platform === 'youtube' || platform === 'gmb') {
-    authUrl.searchParams.append('access_type', 'offline');
-    authUrl.searchParams.append('prompt', 'consent');
-  }
-
-  if (platform === 'x') {
-    // High-entropy PKCE challenge for production security
-    authUrl.searchParams.append('code_challenge', 'S0c1alFlMHdfUGtjZV9WZXJpZmllcl8yMDI2X0xvbmdfU3RyaW5n');
-    authUrl.searchParams.append('code_challenge_method', 'plain');
-  }
-
-  res.json({ authUrl: authUrl.toString() });
 });
 
 router.get('/:platform/callback', async (req: any, res) => {

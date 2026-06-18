@@ -127,7 +127,19 @@ router.post('/caption', requireAuth, async (req: any, res: any) => {
   try {
     const response = await GEMINI_AI.models.generateContent({
       model: AI_MODELS.caption,
-      contents: [{ role: 'user', parts: [{ text: `You are an expert social media manager. Generate 3 variations of a caption for ${platform || 'Instagram'} with a ${tone || 'Professional'} tone. Return the response strictly as a JSON object with a "variations" key containing an array of strings.\n\nUser Request: ${prompt.slice(0, 2000)}` }] }],
+      contents: [{ role: 'user', parts: [{ text: `You are an expert social media copywriter. Generate 3 distinct, high-impact caption variations for ${platform || 'Instagram'} in a ${tone || 'Professional'} tone.
+
+Each caption must:
+- Start with a strong hook (question, bold statement, or relatable opener)
+- Use natural line breaks and formatting for social media readability
+- Include 3–5 relevant emojis (not forced, placed naturally)
+- End with a clear call-to-action (question, comment prompt, or link tease)
+- Stay under 280 characters for Twitter / 2200 characters for other platforms
+- Match the brand voice: confident, human, never robotic
+
+Return the response strictly as a JSON object with a "variations" key containing an array of 3 strings.
+
+User Request: ${prompt.slice(0, 2000)}` }] }],
     });
 
     const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '';
@@ -156,7 +168,19 @@ router.post('/hashtags', requireAuth, async (req: any, res: any) => {
   try {
     const response = await GEMINI_AI.models.generateContent({
       model: AI_MODELS.hashtags,
-      contents: [{ role: 'user', parts: [{ text: `You are an SEO expert. Generate a list of top trending and contextually relevant hashtags for the given niche and keywords. Return strictly as a JSON object with a "hashtags" key containing an array of strings (including the # symbol).\n\nNiche: ${niche.slice(0, 500)}, Keywords: ${(keywords || niche).slice(0, 500)}` }] }],
+      contents: [{ role: 'user', parts: [{ text: `You are a social media growth strategist. Generate 20 optimized hashtags for the given niche, strategically stratified:
+
+- 5 broad hashtags (1M–10M+ posts) for maximum reach
+- 8 mid-tier hashtags (100K–1M posts) for targeted engagement
+- 7 niche-specific hashtags (<100K posts) for conversion
+
+Rules:
+- Mix popular, trending, and long-tail hashtags
+- Exclude banned or shadowbanned tags
+- Prioritize hashtags that have been active in the last 24 hours
+- Return strictly as JSON: { "hashtags": ["#tag1", "#tag2", ...] }
+
+Niche: ${niche.slice(0, 500)}, Keywords: ${(keywords || niche).slice(0, 500)}` }] }],
     });
 
     const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '';
@@ -185,7 +209,16 @@ router.post('/ideas', requireAuth, async (req: any, res: any) => {
   try {
     const response = await GEMINI_AI.models.generateContent({
       model: AI_MODELS.ideas,
-      contents: [{ role: 'user', parts: [{ text: `Generate a 30-day social media content plan. Return JSON strictly in this format: { "ideas": [ { "day": 1, "topic": "...", "description": "..." } ] }\n\nTopic: ${topic.slice(0, 500)}, Industry: ${(industry || topic).slice(0, 500)}` }] }],
+      contents: [{ role: 'user', parts: [{ text: `You are a social media content strategist. Generate a 30-day content calendar with diverse formats and strategic variety.
+
+Requirements:
+- Each day must have a unique format type (carousel, reel script, poll, infographic, testimonial, behind-the-scenes, tip, story, Q&A, challenge, industry news take, user-generated content spotlight, tutorial, comparison, milestone, trend-jack, myth-buster, data drop, collaboration, giveaway)
+- Each topic must be specific, timely, and tied to real audience pain points
+- Each description must be actionable (include the format, the core message, and the CTA)
+- No two consecutive days should use the same format
+- Return strictly as JSON: { "ideas": [ { "day": 1, "topic": "...", "description": "..." } ] }
+
+Topic: ${topic.slice(0, 500)}, Industry: ${(industry || topic).slice(0, 500)}` }] }],
     });
 
     const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '';
@@ -214,7 +247,10 @@ router.post('/image', requireAuth, async (req: any, res: any) => {
 
   try {
     const dims = aspectRatio && ASPECT_RATIOS[aspectRatio] ? ASPECT_RATIOS[aspectRatio] : { width: 1024, height: 1024 };
-    const encoded = encodeURIComponent(imagePrompt.slice(0, 1000));
+
+    // Enhance the user's image prompt with professional photography terms for better Pollinations output
+    const enhancedPrompt = `${imagePrompt.slice(0, 800)} — professional photography, soft natural lighting, shallow depth of field, high detail, 8K, sharp focus, vibrant colors, cinematic composition, shot on premium camera`;
+    const encoded = encodeURIComponent(enhancedPrompt);
     const url = `https://image.pollinations.ai/prompt/${encoded}?width=${dims.width}&height=${dims.height}&model=${AI_IMAGE_MODEL}&nologo=true${AI_PRIVATE_MODE ? '&private=true' : ''}`;
 
     const pollRes = await fetch(url);

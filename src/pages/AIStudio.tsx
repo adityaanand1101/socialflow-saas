@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { 
-  Sparkles, MessageSquare, Hash, Lightbulb, ImageIcon,
+  MessageSquare, Hash, Lightbulb, ImageIcon,
   RefreshCcw, Loader2, Copy, Check, Wand2, ArrowRight, AlertCircle,
   ChevronDown
 } from 'lucide-react'
@@ -253,7 +253,14 @@ export const AIStudio = () => {
       return (
         <Card className="animate-in fade-in overflow-hidden border-white/10 bg-white/5">
           <CardContent className="p-0 relative group">
-            <img src={results.url} alt="Generated" className="w-full h-auto rounded-xl" />
+            <div className="relative w-full max-h-[600px] overflow-hidden flex items-center justify-center bg-black/40">
+              <img
+                src={results.url}
+                alt="Generated"
+                className="w-full h-full object-contain max-h-[600px]"
+                loading="lazy"
+              />
+            </div>
             <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 rounded-xl">
               <Button onClick={() => window.open(results.url, '_blank')} variant="outline">View Full</Button>
               <Button onClick={() => navigate('/media')}>Save to Library</Button>
@@ -271,11 +278,7 @@ export const AIStudio = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white tracking-tight">AI Studio</h1>
-          <p className="text-muted-foreground mt-1">Powered by Google Gemini — create content in seconds.</p>
-        </div>
-        <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-primary/10 border border-purple-500/20">
-          <Sparkles className="w-4 h-4 text-purple-400" />
-          <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">Gemini AI Active</span>
+          <p className="text-muted-foreground mt-1">AI-powered social media toolkit — create content in seconds.</p>
         </div>
       </div>
 
@@ -312,7 +315,7 @@ export const AIStudio = () => {
                 <textarea 
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && e.metaKey) handleGenerate() }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleGenerate() } }}
                   placeholder={
                     activeTool === 'caption' ? "Describe your post (e.g. 'launching a new coffee brand for Gen Z')..." :
                     activeTool === 'hashtag' ? "Enter your niche or topic (e.g. 'sustainable fashion')..." :
@@ -384,7 +387,7 @@ export const AIStudio = () => {
                   Reset
                 </Button>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">⌘ + Enter</span>
+                  <span className="text-xs text-muted-foreground">Enter ↵</span>
                   <Button onClick={handleGenerate} disabled={!prompt.trim() || isGenerating} className="gap-2 px-8 bg-gradient-primary shadow-glow">
                     {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
                     {isGenerating ? 'Generating...' : 'Generate'}

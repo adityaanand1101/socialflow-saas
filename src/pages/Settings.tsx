@@ -216,7 +216,7 @@ export const Settings = () => {
                 <div className="shrink-0 flex flex-col items-center gap-3">
                   <div className="relative">
                     <div className="w-24 h-24 rounded-full overflow-hidden bg-gradient-primary p-0.5">
-                      <img src={profile.avatarUrl || "/default-avatar.png"} alt="Profile" className="w-full h-full rounded-full object-cover" />
+                      <img src={profile.avatarUrl || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'%3E%3Crect width='96' height='96' fill='%23333'/%3E%3Ctext x='48' y='56' font-size='36' fill='%23999' text-anchor='middle' dominant-baseline='middle' font-family='sans-serif'%3E?%3C/text%3E%3C/svg%3E"} alt="Profile" className="w-full h-full rounded-full object-cover" />
                     </div>
                     <button className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-[#141218] border border-white/10 flex items-center justify-center hover:bg-white/5 transition-colors">
                       <Camera className="w-3.5 h-3.5 text-white" />

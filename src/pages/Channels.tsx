@@ -151,8 +151,7 @@ export const Channels = () => {
     }
   }
 
-  const connectedPlatforms = new Set(channels.map((c: any) => c.platform))
-  const availablePlatforms = ALL_PLATFORMS.filter(p => !connectedPlatforms.has(p.id as any))
+  const availablePlatforms = ALL_PLATFORMS
 
   return (
     <div className="space-y-8 pb-10">

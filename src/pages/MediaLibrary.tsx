@@ -50,7 +50,7 @@ function formatSize(bytes: number): string {
 
 export const MediaLibrary = () => {
   const {
-    currentFolderId, uploadMedia, removeMedia,
+    currentFolderId, removeMedia,
     createFolder, updateFolder, removeFolder,
     moveAsset, setCurrentFolder, mediaViewMode, setMediaViewMode
   } = useStore()
@@ -59,7 +59,6 @@ export const MediaLibrary = () => {
   const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const [uploading, setUploading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState('date')
   const [typeFilter, setTypeFilter] = useState('all')
@@ -73,6 +72,7 @@ export const MediaLibrary = () => {
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
   // Bulk selection
+  // Bulk selection
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -82,6 +82,11 @@ export const MediaLibrary = () => {
   const [isRenameModalOpen, setIsRenameModalOpen] = useState(false)
   const [renameAssetId, setRenameAssetId] = useState<string | null>(null)
   const [newFileName, setNewFileName] = useState('')
+
+  // Bulk Import Modal
+  const [showImportModal, setShowImportModal] = useState(false)
+  const [importFiles, setImportFiles] = useState<{ file: File; status: 'pending' | 'uploading' | 'done' | 'error' }[]>([])
+  const [importRunning, setImportRunning] = useState(false)
 
   const showToast = (type: 'success' | 'error', message: string) => {
     setToast({ type, message })
@@ -108,28 +113,6 @@ export const MediaLibrary = () => {
   const media = data?.assets || []
   const folders = data?.folders || []
 
-  const processFiles = async (files: FileList | File[]) => {
-    if (!files || files.length === 0) return
-    setUploading(true)
-    try {
-      const token = await getToken()
-      if (!token) return
-      await Promise.all(Array.from(files).map(file => uploadMedia(token, file, currentFolderId)))
-      queryClient.invalidateQueries({ queryKey: ['media'] })
-      if (fileInputRef.current) fileInputRef.current.value = ''
-      showToast('success', `${files.length} file${files.length > 1 ? 's' : ''} uploaded`)
-    } catch (error) {
-      showToast('error', 'Upload failed')
-    } finally {
-      setUploading(false)
-      setIsDragging(false)
-    }
-  }
-
-  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) processFiles(e.target.files)
-  }
-
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
     if (!draggedAssetId) setIsDragging(true)
@@ -143,8 +126,8 @@ export const MediaLibrary = () => {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     setIsDragging(false)
-    if (e.dataTransfer.files.length > 0) {
-      processFiles(e.dataTransfer.files)
+    if (!draggedAssetId && e.dataTransfer.files.length > 0) {
+      openImportModal(e.dataTransfer.files)
     }
   }
 
@@ -245,6 +228,88 @@ export const MediaLibrary = () => {
   const handleCopyUrl = (url: string) => {
     navigator.clipboard.writeText(url)
     showToast('success', 'URL copied to clipboard')
+  }
+
+  const openImportModal = (files?: FileList | File[]) => {
+    const list = files ? Array.from(files) : []
+    setImportFiles(list.map(f => ({ file: f, status: 'pending' as const })))
+    setShowImportModal(true)
+  }
+
+  const handleAddFiles = (files: FileList | File[]) => {
+    const newFiles = Array.from(files).filter(
+      f => !importFiles.some(existing => existing.file.name === f.name && existing.file.size === f.size)
+    )
+    setImportFiles(prev => [...prev, ...newFiles.map(f => ({ file: f, status: 'pending' as const }))])
+  }
+
+  const removeImportFile = (index: number) => {
+    setImportFiles(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const uploadFileWithProgress = async (
+    token: string,
+    file: File,
+    folderId: string | null,
+    onProgress: (pct: number) => void
+  ): Promise<void> => {
+    const presignedRes = await apiFetch('/api/media/presigned-url', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileName: file.name, fileType: file.type, fileSize: file.size })
+    })
+    if (!presignedRes.ok) throw new Error('Failed to get upload URL')
+    const { uploadUrl, fileUrl } = await presignedRes.json()
+
+    await new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100))
+      }
+      xhr.onload = () => resolve()
+      xhr.onerror = () => reject(new Error('Upload failed'))
+      xhr.open('PUT', uploadUrl)
+      xhr.setRequestHeader('Content-Type', file.type)
+      xhr.send(file)
+    })
+
+    const registerRes = await apiFetch('/api/media/register', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fileName: file.name,
+        fileUrl,
+        fileType: file.type,
+        fileSize: file.size,
+        folderId: folderId || undefined
+      })
+    })
+    if (!registerRes.ok) throw new Error('Failed to register asset')
+  }
+
+  const handleStartImport = async () => {
+    if (importFiles.length === 0 || importRunning) return
+    setImportRunning(true)
+    const token = await getToken()
+    if (!token) { setImportRunning(false); return }
+
+    let successCount = 0
+    let failCount = 0
+    for (let i = 0; i < importFiles.length; i++) {
+      if (importFiles[i].status === 'done') { successCount++; continue }
+      setImportFiles(prev => prev.map((item, idx) => idx === i ? { ...item, status: 'uploading' } : item))
+      try {
+        await uploadFileWithProgress(token, importFiles[i].file, currentFolderId, () => {})
+        setImportFiles(prev => prev.map((item, idx) => idx === i ? { ...item, status: 'done' } : item))
+        successCount++
+      } catch {
+        setImportFiles(prev => prev.map((item, idx) => idx === i ? { ...item, status: 'error' } : item))
+        failCount++
+      }
+    }
+    setImportRunning(false)
+    queryClient.invalidateQueries({ queryKey: ['media'] })
+    showToast('success', `Imported ${successCount} file${successCount !== 1 ? 's' : ''}${failCount > 0 ? `, ${failCount} failed` : ''}`)
   }
 
   const onAssetDragStart = (e: React.DragEvent, id: string) => {
@@ -373,6 +438,76 @@ export const MediaLibrary = () => {
         </div>
       )}
 
+      {/* Import Modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4" onClick={() => { if (!importRunning) setShowImportModal(false) }}>
+          <div className="bg-[#141218] border border-white/10 rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-white/10">
+              <h2 className="text-xl font-bold text-white">Import Assets</h2>
+              <button onClick={() => { if (!importRunning) { setShowImportModal(false); setImportFiles([]) } }} className="text-muted-foreground hover:text-white transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Drop Zone */}
+            <div
+              className="mx-6 mt-6 mb-2 p-8 border-2 border-dashed border-white/10 rounded-xl text-center hover:border-purple-500/50 transition-colors cursor-pointer"
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => { e.preventDefault(); handleAddFiles(e.dataTransfer.files) }}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+              <p className="text-sm text-white">Drop files here or click to browse</p>
+              <p className="text-xs text-muted-foreground mt-1">Supports images, videos, PDFs, documents, and more</p>
+            </div>
+
+            {/* File List */}
+            {importFiles.length > 0 && (
+              <div className="flex-1 overflow-y-auto px-6 space-y-2 my-4">
+                {importFiles.map((item, i) => (
+                  <div key={i} className="flex items-center gap-3 p-3 bg-white/5 rounded-lg">
+                    <div className="w-8 h-8 rounded bg-navy-800 flex items-center justify-center shrink-0">
+                      {item.file.type.startsWith('image') ? <ImageIcon className="w-4 h-4 text-purple-400" />
+                      : item.file.type.startsWith('video') ? <Video className="w-4 h-4 text-purple-400" />
+                      : <FileText className="w-4 h-4 text-muted-foreground" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-white truncate">{item.file.name}</p>
+                      <p className="text-xs text-muted-foreground">{formatSize(item.file.size)}</p>
+                    </div>
+                    <div className="shrink-0">
+                      {item.status === 'pending' && !importRunning && (
+                        <button onClick={() => removeImportFile(i)} className="text-muted-foreground hover:text-red-400 transition-colors">
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                      {item.status === 'uploading' && <Loader2 className="w-4 h-4 animate-spin text-purple-400" />}
+                      {item.status === 'done' && <Check className="w-4 h-4 text-green-400" />}
+                      {item.status === 'error' && <AlertCircle className="w-4 h-4 text-red-400" />}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="p-6 border-t border-white/10 flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">{importFiles.length} file{importFiles.length !== 1 ? 's' : ''} selected</span>
+              <div className="flex items-center gap-3">
+                <Button variant="ghost" onClick={() => { if (!importRunning) { setShowImportModal(false); setImportFiles([]) } }}>
+                  Cancel
+                </Button>
+                <Button onClick={handleStartImport} disabled={importFiles.length === 0 || importRunning}>
+                  {importRunning ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Upload className="w-4 h-4 mr-2" />}
+                  {importRunning ? 'Importing...' : 'Start Import'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Drag & Drop Overlay */}
       {isDragging && !draggedAssetId && (
         <div className="absolute inset-0 z-50 bg-purple-500/10 backdrop-blur-sm border-2 border-dashed border-purple-500 rounded-2xl flex flex-col items-center justify-center pointer-events-none transition-all">
@@ -405,8 +540,7 @@ export const MediaLibrary = () => {
             type="file"
             className="hidden"
             ref={fileInputRef}
-            onChange={handleUpload}
-            accept="image/*,video/*"
+            onChange={(e) => { if (e.target.files?.length) { openImportModal(e.target.files); e.target.value = '' } }}
             multiple
           />
           <Button variant="outline" className="gap-2" onClick={(e) => { e.stopPropagation(); setEditingFolderId(null); setNewFolderName(''); setIsFolderModalOpen(true); }}>
@@ -415,11 +549,10 @@ export const MediaLibrary = () => {
           </Button>
           <Button
             className="gap-2"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
+            onClick={() => openImportModal()}
           >
-            {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-            {uploading ? 'Uploading...' : 'Upload Assets'}
+            <Upload className="w-4 h-4" />
+            Import Assets
           </Button>
         </div>
       </div>

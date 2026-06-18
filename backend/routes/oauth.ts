@@ -418,7 +418,15 @@ router.get('/:platform/callback', async (req: any, res) => {
     res.redirect(`${FRONTEND_URL}/app/channels?success=true`);
   } catch (error: any) {
     console.error('OAuth Callback Error:', error);
-    res.redirect(`${FRONTEND_URL}/app/channels?error=${encodeURIComponent(error.message)}`);
+    // Return the raw error to the browser so we can debug the silent failure
+    res.status(500).send(`
+      <html><body>
+      <h2>OAuth Callback Failed</h2>
+      <p><strong>Error:</strong> ${error.message}</p>
+      <pre>${error.stack}</pre>
+      <a href="${FRONTEND_URL}/app/channels">Return to App</a>
+      </body></html>
+    `);
   }
 });
 

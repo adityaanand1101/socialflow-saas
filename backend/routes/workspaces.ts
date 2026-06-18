@@ -78,7 +78,7 @@ router.post('/:id/invites', requireAuth, requireRole(['OWNER', 'ADMIN']), checkS
       }
     });
 
-    const inviteLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/accept-invite?token=${token}`;
+    const inviteLink = `${process.env.FRONTEND_URL || 'https://socialflow-saas.vercel.app'}/accept-invite?token=${token}`;
 
     try {
       await resend.emails.send({

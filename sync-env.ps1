@@ -14,21 +14,23 @@ if (-not (Test-Path $ENV_FILE)) {
     exit
 }
 
-$envVars = @()
+$envMap = @{}
 Get-Content $ENV_FILE | ForEach-Object {
     $line = $_.Trim()
     if ($line -and -not $line.StartsWith("#") -and $line.Contains("=")) {
         $parts = $line.Split("=", 2)
         $key = $parts[0].Trim()
         $value = $parts[1].Trim().Trim('"').Trim("'")
-        $envVars += @{ key = $key; value = $value }
+        $envMap[$key] = $value
     }
 }
 
-# Add Production specific overrides
-$envVars += @{ key = "NODE_ENV"; value = "production" }
-$envVars += @{ key = "BACKEND_URL"; value = "https://socialflow-saas.onrender.com" }
-$envVars += @{ key = "FRONTEND_URL"; value = "https://socialflow-saas.vercel.app" }
+# Production specific overrides (take precedence over .env)
+$envMap["NODE_ENV"] = "production"
+$envMap["BACKEND_URL"] = "https://socialflow-saas.onrender.com"
+$envMap["FRONTEND_URL"] = "https://socialflow-saas.vercel.app"
+
+$envVars = $envMap.GetEnumerator() | ForEach-Object { @{ key = $_.Key; value = $_.Value } }
 
 # 2. Push to Render
 Write-Host "Syncing $($envVars.Count) environment variables to Render..."

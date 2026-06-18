@@ -3,6 +3,7 @@ import { PrismaClient, PlatformType } from '@prisma/client';
 import { encryptToken } from '../utils/crypto';
 import { requireAuth } from '../middlewares/auth';
 import fetch from 'node-fetch';
+import crypto from 'crypto';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -10,9 +11,12 @@ dotenv.config();
 const router = Router();
 const prisma = new PrismaClient();
 
+// In-memory store for PKCE code_verifiers (keyed by Clerk userId / state param)
+const pkceStore = new Map<string, string>();
+
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'default_32_byte_secret_key_for_dev!';
-const FRONTEND_URL = 'https://socialflow-saas.vercel.app';
-const BACKEND_URL = 'https://socialflow-saas.onrender.com';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://socialflow-saas.vercel.app';
+const BACKEND_URL = process.env.BACKEND_URL || 'https://socialflow-saas.onrender.com';
 
 // Helper to determine redirect URL
 const getRedirectUri = (platform: string) => `${BACKEND_URL}/api/oauth/${platform}/callback`;
@@ -195,8 +199,11 @@ router.get('/:platform/connect', requireAuth, async (req: any, res: any) => {
     }
 
     if (platform === 'x') {
-      authUrl.searchParams.append('code_challenge', 'S0c1alFlMHdfUGtjZV9WZXJpZmllcl8yMDI2X0xvbmdfU3RyaW5n');
-      authUrl.searchParams.append('code_challenge_method', 'plain');
+      const codeVerifier = crypto.randomBytes(32).toString('base64url');
+      const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
+      pkceStore.set(state, codeVerifier);
+      authUrl.searchParams.append('code_challenge', codeChallenge);
+      authUrl.searchParams.append('code_challenge_method', 'S256');
     }
 
     res.json({ authUrl: authUrl.toString() });
@@ -242,7 +249,11 @@ router.get('/:platform/callback', async (req: any, res) => {
     bodyParams.append('client_secret', provider.clientSecret);
 
     if (platform === 'x') {
-      bodyParams.append('code_verifier', 'S0c1alFlMHdfUGtjZV9WZXJpZmllcl8yMDI2X0xvbmdfU3RyaW5n');
+      const codeVerifier = pkceStore.get(clerkId as string);
+      if (codeVerifier) {
+        bodyParams.append('code_verifier', codeVerifier);
+        pkceStore.delete(clerkId as string);
+      }
     }
 
     const tokenRes = await fetch(provider.tokenUrl, {

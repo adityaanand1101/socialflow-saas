@@ -26,6 +26,7 @@ model User {
   posts            Post[]
   mediaAssets      MediaAsset[]
   aiLogs           AiGenerationLog[]
+  activityLogs     ActivityLog[]
 }
 
 model Workspace {
@@ -45,6 +46,7 @@ model Workspace {
   mediaAssets          MediaAsset[]
   mediaFolders         MediaFolder[]
   invites              WorkspaceInvite[]
+  activityLogs         ActivityLog[]
   apiKeys              ApiKey[]
   webhooks             WebhookEndpoint[]
 }
@@ -221,6 +223,20 @@ model AiGenerationLog {
 
   // Relations
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ActivityLog {
+  id          String    @id @default(uuid())
+  workspaceId String
+  userId      String
+  action      String
+  details     String?   @db.Text
+  createdAt   DateTime  @default(now())
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@index([workspaceId])
 }
 
 model WorkspaceInvite {

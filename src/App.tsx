@@ -9,6 +9,7 @@ import { AIStudio } from './pages/AIStudio'
 import { Channels } from './pages/Channels'
 import { Calendar } from './pages/Calendar'
 import { Team } from './pages/Team'
+import { AcceptInvite } from './pages/AcceptInvite'
 import { Settings } from './pages/Settings'
 import { PrivacyPolicy } from './pages/PrivacyPolicy'
 import { TermsOfService } from './pages/TermsOfService'
@@ -26,6 +27,7 @@ function App() {
         <Route path="/sign-up/*" element={<AuthPage />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<TermsOfService />} />
+        <Route path="/accept-invite" element={<AcceptInvite />} />
         
         {/* Legacy/Convenience Redirects */}
         <Route path="/calendar" element={<Navigate to="/app/calendar" replace />} />

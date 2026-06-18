@@ -53,6 +53,11 @@ interface SocialFlowStore {
   removeFolder: (token: string, id: string) => Promise<void>
   moveAsset: (token: string, id: string, folderId: string | null) => Promise<void>
   setCurrentFolder: (folderId: string | null) => void
+  workspaces: any[]
+  activeWorkspaceId: string | null
+  activeWorkspaceRole: string | null
+  setWorkspaces: (workspaces: any[]) => void
+  setActiveWorkspace: (id: string, role: string) => void
 }
 
 export const useStore = create<SocialFlowStore>((set) => ({
@@ -75,6 +80,12 @@ export const useStore = create<SocialFlowStore>((set) => ({
   loading: false,
 
   setCurrentFolder: (folderId) => set({ currentFolderId: folderId }),
+  workspaces: [],
+  activeWorkspaceId: null,
+  activeWorkspaceRole: null,
+
+  setWorkspaces: (workspaces) => set({ workspaces }),
+  setActiveWorkspace: (id, role) => set({ activeWorkspaceId: id, activeWorkspaceRole: role }),
 
   fetchData: async (_token: string, _folderId = null) => {
     // Redundant now that we use React Query, but keeping as placeholder for other data if needed

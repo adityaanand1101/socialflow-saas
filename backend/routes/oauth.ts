@@ -31,9 +31,9 @@ const providers = {
     scopes: 'w_member_social openid profile email',
   },
   x: {
-    authUrl: 'https://twitter.com/i/oauth2/authorize',
-    tokenUrl: 'https://api.twitter.com/2/oauth2/token',
-    profileUrl: 'https://api.twitter.com/2/users/me',
+    authUrl: 'https://x.com/i/oauth2/authorize',
+    tokenUrl: 'https://api.x.com/2/oauth2/token',
+    profileUrl: 'https://api.x.com/2/users/me',
     clientId: process.env.X_CLIENT_ID || '',
     clientSecret: process.env.X_CLIENT_SECRET || '',
     scopes: 'tweet.read tweet.write users.read offline.access',
@@ -245,8 +245,12 @@ router.get('/:platform/callback', async (req: any, res) => {
     bodyParams.append('grant_type', 'authorization_code');
     bodyParams.append('code', code as string);
     bodyParams.append('redirect_uri', redirectUri);
-    bodyParams.append('client_id', provider.clientId);
-    bodyParams.append('client_secret', provider.clientSecret);
+
+    // X (confidential client) uses Basic Auth header instead of body params
+    if (platform !== 'x') {
+      bodyParams.append('client_id', provider.clientId);
+      bodyParams.append('client_secret', provider.clientSecret);
+    }
 
     if (platform === 'x') {
       const codeVerifier = pkceStore.get(clerkId as string);
@@ -256,11 +260,13 @@ router.get('/:platform/callback', async (req: any, res) => {
       }
     }
 
+    const usesBasicAuth = platform === 'tumblr' || platform === 'slack' || platform === 'x';
+
     const tokenRes = await fetch(provider.tokenUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        ...((platform === 'tumblr' || platform === 'slack') && {
+        ...(usesBasicAuth && {
           'Authorization': 'Basic ' + Buffer.from(`${provider.clientId}:${provider.clientSecret}`).toString('base64')
         })
       },

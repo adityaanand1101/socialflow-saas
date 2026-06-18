@@ -10,20 +10,9 @@ import {
 import { cn } from '@/lib/utils'
 import { useAuth } from '@clerk/react'
 import { apiFetch } from '@/lib/api'
+import { ALL_PLATFORMS } from '@/lib/platforms'
 
-const PLATFORM_OPTIONS = [
-  { id: 'instagram', label: 'Instagram' },
-  { id: 'facebook', label: 'Facebook' },
-  { id: 'threads', label: 'Threads' },
-  { id: 'x', label: 'X (Twitter)' },
-  { id: 'linkedin', label: 'LinkedIn' },
-  { id: 'youtube', label: 'YouTube' },
-  { id: 'tiktok', label: 'TikTok' },
-  { id: 'pinterest', label: 'Pinterest' },
-  { id: 'bluesky', label: 'Bluesky' },
-  { id: 'mastodon', label: 'Mastodon' },
-  { id: 'tumblr', label: 'Tumblr' },
-]
+const PLATFORM_OPTIONS = ALL_PLATFORMS.map(p => ({ id: p.id, label: p.label }))
 
 const tools = [
   { id: 'caption', icon: MessageSquare, title: 'Caption Generator', description: 'Create engaging captions from a prompt.', color: 'from-purple-500 to-blue-500' },

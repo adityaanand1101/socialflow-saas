@@ -8,35 +8,13 @@ import {
   Image as ImageIcon, Smile, Hash, Send, Calendar,
   Save, Sparkles, Smartphone, Monitor, Loader2, X, Clock, User, Upload
 } from 'lucide-react'
-import { 
-  Instagram, Linkedin, Twitter, Youtube, Facebook, Threads, Bluesky, 
-  Slack, Pinterest, Mastodon, Reddit, Medium, Discord, Telegram, GMB, Tumblr 
-} from '@/components/icons'
 import { cn } from '@/lib/utils'
 import { useStore } from '@/store/useStore'
 import type { SocialPlatform } from '@/store/useStore'
 import { rewriteCaption } from '@/lib/gemini'
 import { useAuth } from '@clerk/react'
 import { format, addDays, isValid, parseISO } from 'date-fns'
-
-const platforms = [
-  { id: 'instagram' as SocialPlatform, icon: Instagram, color: 'text-pink-400', label: 'Instagram', limit: 2200 },
-  { id: 'facebook' as SocialPlatform, icon: Facebook, color: 'text-blue-500', label: 'Facebook', limit: 63206 },
-  { id: 'threads' as SocialPlatform, icon: Threads, color: 'text-white', label: 'Threads', limit: 500 },
-  { id: 'x' as SocialPlatform, icon: Twitter, color: 'text-white', label: 'X', limit: 280 },
-  { id: 'linkedin' as SocialPlatform, icon: Linkedin, color: 'text-blue-400', label: 'LinkedIn', limit: 3000 },
-  { id: 'youtube' as SocialPlatform, icon: Youtube, color: 'text-red-500', label: 'YouTube', limit: 5000 },
-  { id: 'gmb' as SocialPlatform, icon: GMB, color: 'text-blue-600', label: 'GMB', limit: 1500 },
-  { id: 'pinterest' as SocialPlatform, icon: Pinterest, color: 'text-red-600', label: 'Pinterest', limit: 500 },
-  { id: 'bluesky' as SocialPlatform, icon: Bluesky, color: 'text-blue-400', label: 'Bluesky', limit: 300 },
-  { id: 'mastodon' as SocialPlatform, icon: Mastodon, color: 'text-purple-500', label: 'Mastodon', limit: 500 },
-  { id: 'reddit' as SocialPlatform, icon: Reddit, color: 'text-orange-500', label: 'Reddit', limit: 10000 },
-  { id: 'medium' as SocialPlatform, icon: Medium, color: 'text-white', label: 'Medium', limit: 100000 },
-  { id: 'tumblr' as SocialPlatform, icon: Tumblr, color: 'text-blue-900', label: 'Tumblr', limit: 10000 },
-  { id: 'discord' as SocialPlatform, icon: Discord, color: 'text-indigo-400', label: 'Discord', limit: 2000 },
-  { id: 'telegram' as SocialPlatform, icon: Telegram, color: 'text-blue-400', label: 'Telegram', limit: 4096 },
-  { id: 'slack' as SocialPlatform, icon: Slack, color: 'text-green-500', label: 'Slack', limit: 12000 },
-]
+import { ALL_PLATFORMS } from '@/lib/platforms'
 
 const toneOptions = ['Professional', 'Casual', 'Funny', 'Inspirational', 'Urgent']
 
@@ -148,7 +126,7 @@ export const Compose = () => {
     )
   }
 
-  const activeLimit = platforms.find(p => p.id === selectedPlatforms[0])?.limit || 2200
+  const activeLimit = ALL_PLATFORMS.find(p => p.id === selectedPlatforms[0])?.limit || 2200
 
   const handleRewrite = async () => {
     if (!caption) return
@@ -229,7 +207,7 @@ export const Compose = () => {
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-3">
-              {platforms.map((p) => (
+              {ALL_PLATFORMS.map((p: any) => (
                 <button
                   key={p.id}
                   onClick={() => togglePlatform(p.id)}

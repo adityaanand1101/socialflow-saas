@@ -10,16 +10,19 @@ dotenv.config();
 const router = Router();
 const prisma = new PrismaClient();
 
-const razorpayKeyId = process.env.RAZORPAY_KEY_ID;
-const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
-if (!razorpayKeyId || !razorpayKeySecret) {
-  console.error('CRITICAL: RAZORPAY_KEY_ID or RAZORPAY_KEY_SECRET not set');
-}
+let razorpay: Razorpay | null = null;
 
-const razorpay = new Razorpay({
-  key_id: razorpayKeyId ?? '',
-  key_secret: razorpayKeySecret ?? '',
-});
+function getRazorpay(): Razorpay {
+  if (!razorpay) {
+    const key_id = process.env.RAZORPAY_KEY_ID;
+    const key_secret = process.env.RAZORPAY_KEY_SECRET;
+    if (!key_id || !key_secret) {
+      throw new Error('RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET must be set');
+    }
+    razorpay = new Razorpay({ key_id, key_secret });
+  }
+  return razorpay;
+}
 
 // Create an order for a subscription upgrade
 router.post('/create-order', requireAuth, async (req: any, res: any) => {
@@ -47,7 +50,7 @@ router.post('/create-order', requireAuth, async (req: any, res: any) => {
       }
     };
 
-    const order = await razorpay.orders.create(options);
+    const order = await getRazorpay().orders.create(options);
     res.json(order);
   } catch (error) {
     console.error('Razorpay order creation error:', error);

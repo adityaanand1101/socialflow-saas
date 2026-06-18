@@ -373,7 +373,7 @@ export const Team = () => {
                     <div key={member.id} className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/5 hover:border-white/10 transition-colors">
                       <div className="flex items-center gap-4">
                         <Avatar className="w-10 h-10 border border-white/10">
-                          <AvatarImage src={member.user.avatarUrl} />
+                          <AvatarImage src={member.user.avatarUrl || undefined} />
                           <AvatarFallback>{(member.user.name || member.user.email)[0]}</AvatarFallback>
                         </Avatar>
                         <div>
@@ -520,7 +520,7 @@ export const Team = () => {
                   {activities.map((activity) => (
                     <div key={activity.id} className="flex items-start gap-3">
                       <Avatar className="w-6 h-6 mt-0.5 border border-white/10">
-                        <AvatarImage src={activity.user?.avatarUrl} />
+                        <AvatarImage src={activity.user?.avatarUrl || undefined} />
                         <AvatarFallback className="text-[8px]">{(activity.user?.name || activity.user?.email || '?')[0]}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0">
@@ -529,7 +529,7 @@ export const Team = () => {
                         </p>
                         <p className="text-[11px] text-muted-foreground">
                           {formatActivity(activity.action)}
-                          {activity.details && !activity.details.startsWith(activity.user?.name) && (
+                          {activity.details && activity.user?.name && !activity.details.startsWith(activity.user.name) && (
                             <> — {activity.details}</>
                           )}
                         </p>

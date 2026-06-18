@@ -65,7 +65,7 @@ const providers = {
   gmb: {
     authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
     tokenUrl: 'https://oauth2.googleapis.com/token',
-    profileUrl: 'https://mybusinessbusinessinformation.googleapis.com/v1/accounts',
+    profileUrl: 'https://mybusinessaccountmanagement.googleapis.com/v1/accounts',
     clientId: process.env.GMB_CLIENT_ID || '',
     clientSecret: process.env.GMB_CLIENT_SECRET || '',
     scopes: 'https://www.googleapis.com/auth/business.manage',
@@ -344,9 +344,9 @@ router.get('/:platform/callback', async (req: any, res) => {
     } else if (platform === 'gmb') {
        const userObj = profileData.accounts?.[0] || {};
        profile.id = userObj.name;
-       profile.username = userObj.accountName || 'gmb_account';
-       profile.displayName = userObj.accountName;
-       profile.avatarUrl = 'https://github.com/shadcn.png';
+       profile.username = userObj.accountName?.replace(/\s+/g, '').toLowerCase() || 'gmb_account';
+       profile.displayName = userObj.accountName || 'Google Business Profile';
+       profile.avatarUrl = userObj.profilePhotoUrl || 'https://github.com/shadcn.png';
     } else if (platform === 'pinterest') {
       profile.id = profileData.username;
       profile.username = profileData.username;

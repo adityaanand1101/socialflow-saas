@@ -243,7 +243,17 @@ router.get('/:platform/callback', async (req: any, res) => {
     }
 
     const tokenData = await tokenRes.json() as any;
-    accessToken = tokenData.access_token || tokenData.accessToken;
+    
+    // Slack sometimes nests the user token inside authed_user depending on the scopes requested
+    if (platform === 'slack') {
+       if (!tokenData.ok) {
+           throw new Error(`Slack API Error: ${tokenData.error}`);
+       }
+       accessToken = tokenData.authed_user?.access_token || tokenData.access_token;
+    } else {
+       accessToken = tokenData.access_token || tokenData.accessToken;
+    }
+    
     refreshToken = tokenData.refresh_token || tokenData.refreshToken || null;
     tokenExpiresIn = tokenData.expires_in || 3600;
 

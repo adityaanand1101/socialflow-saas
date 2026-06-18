@@ -116,6 +116,13 @@ export const GMB = (props: React.SVGProps<SVGSVGElement>) => (
   </svg>
 )
 
+export const WordPress = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <circle cx="12" cy="12" r="10" />
+    <path d="M7 17l3-10 2 6 2-6 3 10" />
+  </svg>
+)
+
 export const Tumblr = (props: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
     <path d="M14.5 2v5H11v4h3.5v7c0 2 1.5 3 3.5 3h3v-4h-2c-1 0-1.5-.5-1.5-1.5V11h3.5V7H18V2h-3.5z" />

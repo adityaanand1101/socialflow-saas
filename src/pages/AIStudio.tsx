@@ -29,6 +29,7 @@ type ImageWizard = { subject: string; style: string; mood: string; colors: strin
 const GOAL_OPTIONS = ['Awareness', 'Engagement', 'Sales', 'Education', 'Entertainment']
 const FORMAT_OPTIONS = ['Carousel', 'Reel', 'Poll', 'Story', 'Tutorial', 'Behind-scenes', 'Q&A', 'Trend']
 const STYLE_OPTIONS = ['Photorealistic', 'Illustration', '3D Render', 'Oil Painting', 'Digital Art', 'Anime', 'Minimalist']
+const IMAGE_MODELS = ['nanobanana', 'flux', 'turbo', 'gpt-image', 'seedream']
 const MOOD_OPTIONS = ['Professional', 'Playful', 'Dark', 'Bright', 'Minimal', 'Dramatic', 'Warm', 'Cool']
 const LIGHTING_OPTIONS = ['Natural', 'Studio', 'Golden Hour', 'Dramatic', 'Neon', 'Soft']
 
@@ -44,6 +45,7 @@ export const AIStudio = () => {
   const [tone, setTone] = useState('Professional')
   const [platform, setPlatform] = useState('instagram')
   const [aspectRatio, setAspectRatio] = useState('1:1')
+  const [imageModel, setImageModel] = useState('nanobanana')
   const [isGenerating, setIsGenerating] = useState(false)
   const [results, setResults] = useState<any>(null)
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
@@ -201,7 +203,7 @@ export const AIStudio = () => {
             const res = await apiFetch('/api/ai/image', {
               method: 'POST',
               headers,
-              body: JSON.stringify({ imagePrompt: prompt, aspectRatio })
+              body: JSON.stringify({ imagePrompt: prompt, aspectRatio, model: imageModel })
             });
             const data = await res.json();
             if (res.ok) {
@@ -600,7 +602,22 @@ export const AIStudio = () => {
                   </div>
                 )}
                 {activeTool === 'image' && (
-                  <div className="mt-3 pt-3 border-t border-white/10">
+                  <div className="mt-3 pt-3 border-t border-white/10 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Model</span>
+                      <div className="relative">
+                        <select
+                          value={imageModel}
+                          onChange={(e) => setImageModel(e.target.value)}
+                          className="appearance-none bg-white/10 border border-white/20 rounded-lg px-3 py-1.5 pr-8 text-xs text-white font-medium cursor-pointer hover:bg-white/20 transition-colors outline-none"
+                        >
+                          {IMAGE_MODELS.map(m => (
+                            <option key={m} value={m} className="bg-gray-900">{m}</option>
+                          ))}
+                        </select>
+                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-white/60 pointer-events-none" />
+                      </div>
+                    </div>
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Aspect Ratio</span>
                       <div className="relative">

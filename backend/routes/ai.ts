@@ -41,7 +41,7 @@ const GEMINI_AI = process.env.GOOGLE_AI_API_KEY
 // Uses Pollinations.ai — free, no API key, no signup.
 // Supports flux, turbo, gpt-image, nanobanana, seedream, etc.
 
-const AI_IMAGE_MODEL = process.env.AI_IMAGE_MODEL || 'flux';
+const AI_IMAGE_MODEL = process.env.AI_IMAGE_MODEL || 'nanobanana';
 const AI_PRIVATE_MODE = process.env.AI_PRIVATE_MODE === 'true';
 
 const ASPECT_RATIOS: Record<string, { width: number; height: number }> = {
@@ -223,7 +223,7 @@ Topic: ${topic.slice(0, 500)}, Industry: ${(industry || topic).slice(0, 500)}` }
 });
 
 router.post('/image', requireAuth, async (req: any, res: any) => {
-  const { imagePrompt, aspectRatio } = req.body;
+  const { imagePrompt, aspectRatio, model } = req.body;
   const userId = req.userId;
   const workspaceId = req.workspaceId;
 
@@ -239,9 +239,10 @@ router.post('/image', requireAuth, async (req: any, res: any) => {
     const dims = aspectRatio && ASPECT_RATIOS[aspectRatio] ? ASPECT_RATIOS[aspectRatio] : { width: 1024, height: 1024 };
 
     // Enhance prompt with professional photography terms for better Pollinations output
+    const aiModel = model || AI_IMAGE_MODEL;
     const enhancedPrompt = `${imagePrompt.slice(0, 800)} professional photography, soft natural lighting, shallow depth of field, high detail, 8K, sharp focus, vibrant colors, cinematic composition`;
     const encoded = encodeURIComponent(enhancedPrompt);
-    const url = `https://image.pollinations.ai/prompt/${encoded}?width=${dims.width}&height=${dims.height}&model=${AI_IMAGE_MODEL}&nologo=true${AI_PRIVATE_MODE ? '&private=true' : ''}`;
+    const url = `https://image.pollinations.ai/prompt/${encoded}?width=${dims.width}&height=${dims.height}&model=${aiModel}&nologo=true${AI_PRIVATE_MODE ? '&private=true' : ''}`;
 
     const pollRes = await fetch(url);
     if (!pollRes.ok) {

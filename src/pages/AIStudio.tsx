@@ -4,11 +4,26 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button'
 import { 
   Sparkles, MessageSquare, Hash, Lightbulb, ImageIcon,
-  RefreshCcw, Loader2, Copy, Check, Wand2, ArrowRight
+  RefreshCcw, Loader2, Copy, Check, Wand2, ArrowRight, AlertCircle,
+  ChevronDown
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@clerk/react'
 import { apiFetch } from '@/lib/api'
+
+const PLATFORM_OPTIONS = [
+  { id: 'instagram', label: 'Instagram' },
+  { id: 'facebook', label: 'Facebook' },
+  { id: 'threads', label: 'Threads' },
+  { id: 'x', label: 'X (Twitter)' },
+  { id: 'linkedin', label: 'LinkedIn' },
+  { id: 'youtube', label: 'YouTube' },
+  { id: 'tiktok', label: 'TikTok' },
+  { id: 'pinterest', label: 'Pinterest' },
+  { id: 'bluesky', label: 'Bluesky' },
+  { id: 'mastodon', label: 'Mastodon' },
+  { id: 'tumblr', label: 'Tumblr' },
+]
 
 const tools = [
   { id: 'caption', icon: MessageSquare, title: 'Caption Generator', description: 'Create engaging captions from a prompt.', color: 'from-purple-500 to-blue-500' },
@@ -21,9 +36,11 @@ export const AIStudio = () => {
   const [activeTool, setActiveTool] = useState('caption')
   const [prompt, setPrompt] = useState('')
   const [tone, setTone] = useState('Professional')
+  const [platform, setPlatform] = useState('instagram')
   const [isGenerating, setIsGenerating] = useState(false)
   const [results, setResults] = useState<any>(null)
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const navigate = useNavigate()
   const { getToken } = useAuth()
@@ -38,7 +55,8 @@ export const AIStudio = () => {
     if (!prompt.trim()) return
     setIsGenerating(true)
     setResults(null)
-    
+    setError(null)
+
     let token = '';
     try {
       token = await getToken() || '';
@@ -60,7 +78,7 @@ export const AIStudio = () => {
             const res = await apiFetch('/api/ai/caption', {
               method: 'POST',
               headers,
-              body: JSON.stringify({ prompt, tone, platform: 'Instagram' })
+              body: JSON.stringify({ prompt, tone, platform })
             });
             const data = await res.json();
             if (res.ok) {
@@ -71,7 +89,7 @@ export const AIStudio = () => {
             }
           } catch (e: any) {
             console.error('Backend caption generation failed:', e);
-            alert(`AI Error: ${e.message}`);
+            setError(e.message);
           }
           break
         }
@@ -91,7 +109,7 @@ export const AIStudio = () => {
             }
           } catch (e: any) {
             console.error('Backend hashtag generation failed:', e);
-            alert(`AI Error: ${e.message}`);
+            setError(e.message);
           }
           break
         }
@@ -111,7 +129,7 @@ export const AIStudio = () => {
             }
           } catch (e: any) {
             console.error('Backend ideas generation failed:', e);
-            alert(`AI Error: ${e.message}`);
+            setError(e.message);
           }
           break
         }
@@ -131,14 +149,14 @@ export const AIStudio = () => {
             }
           } catch (e: any) {
             console.error('Backend image generation failed:', e);
-            alert(`AI Error: ${e.message}`);
+            setError(e.message);
           }
           break
         }
       }
     } catch (error) {
       console.error('Generation error:', error)
-      alert('Generation failed. Please try again.')
+      setError('Generation failed. Please try again.')
     } finally {
       setIsGenerating(false)
     }
@@ -266,7 +284,7 @@ export const AIStudio = () => {
           {tools.map((tool) => (
             <button
               key={tool.id}
-              onClick={() => { setActiveTool(tool.id); setResults(null); setPrompt('') }}
+              onClick={() => { setActiveTool(tool.id); setResults(null); setError(null) }}
               className={cn(
                 "w-full text-left p-4 rounded-xl border transition-all duration-200 group",
                 activeTool === tool.id 
@@ -285,7 +303,7 @@ export const AIStudio = () => {
         <div className="lg:col-span-3 space-y-6">
           <Card className="min-h-[280px] flex flex-col border-white/10 bg-white/5">
             <CardHeader>
-              <CardTitle>{tools.find(t => t.id === activeTool)?.title}</CardTitle>
+                <CardTitle>{tools.find(t => t.id === activeTool)?.title}</CardTitle>
               <CardDescription>Enter a prompt to generate content with AI.</CardDescription>
             </CardHeader>
             <CardContent className="flex-1 flex flex-col gap-6">
@@ -305,18 +323,35 @@ export const AIStudio = () => {
                 
                 {activeTool === 'caption' && (
                   <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-white/10">
-                    {['Professional', 'Casual', 'Funny', 'Inspirational', 'Urgent', 'Educational'].map(t => (
-                      <button
-                        key={t}
-                        onClick={() => setTone(t)}
-                        className={cn(
-                          "px-3 py-1 rounded-full text-xs font-medium border transition-all",
-                          tone === t ? "bg-white/20 border-white/30 text-white" : "bg-white/5 border-white/10 text-muted-foreground hover:border-white/20 hover:text-white"
-                        )}
-                      >
-                        {t}
-                      </button>
-                    ))}
+                    <div className="flex items-center gap-2 w-full mb-2">
+                      <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Target Platform</span>
+                      <div className="relative">
+                        <select
+                          value={platform}
+                          onChange={(e) => setPlatform(e.target.value)}
+                          className="appearance-none bg-white/10 border border-white/20 rounded-lg px-3 py-1.5 pr-8 text-xs text-white font-medium cursor-pointer hover:bg-white/20 transition-colors outline-none"
+                        >
+                          {PLATFORM_OPTIONS.map(p => (
+                            <option key={p.id} value={p.id} className="bg-gray-900">{p.label}</option>
+                          ))}
+                        </select>
+                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-white/60 pointer-events-none" />
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {['Professional', 'Casual', 'Funny', 'Inspirational', 'Urgent', 'Educational'].map(t => (
+                        <button
+                          key={t}
+                          onClick={() => setTone(t)}
+                          className={cn(
+                            "px-3 py-1 rounded-full text-xs font-medium border transition-all",
+                            tone === t ? "bg-white/20 border-white/30 text-white" : "bg-white/5 border-white/10 text-muted-foreground hover:border-white/20 hover:text-white"
+                          )}
+                        >
+                          {t}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -337,8 +372,38 @@ export const AIStudio = () => {
             </CardContent>
           </Card>
 
+          {/* Error */}
+          {error && (
+            <Card className="border-red-500/30 bg-red-500/5">
+              <CardContent className="p-4 flex items-center gap-3">
+                <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
+                <p className="text-sm text-red-300">{error}</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Loading Skeleton */}
+          {isGenerating && !results && (
+            <div className="space-y-4 animate-pulse">
+              {[1, 2, 3].map(i => (
+                <Card key={i} className="border-white/10 bg-white/5">
+                  <CardContent className="p-5">
+                    <div className="h-4 bg-white/10 rounded w-3/4 mb-3" />
+                    <div className="h-3 bg-white/10 rounded w-full mb-2" />
+                    <div className="h-3 bg-white/10 rounded w-5/6 mb-2" />
+                    <div className="h-3 bg-white/10 rounded w-2/3" />
+                    <div className="mt-4 pt-4 border-t border-white/10 flex justify-between">
+                      <div className="h-3 bg-white/10 rounded w-16" />
+                      <div className="h-3 bg-white/10 rounded w-12" />
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
           {/* Results */}
-          {renderResults()}
+          {!isGenerating && renderResults()}
         </div>
       </div>
     </div>

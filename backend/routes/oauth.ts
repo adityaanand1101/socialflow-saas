@@ -172,6 +172,12 @@ router.get('/:platform/connect', requireAuth, async (req: any, res: any) => {
     authUrl.searchParams.append('scope', provider.scopes);
   }
 
+  // Google APIs require these flags to return a refresh token
+  if (platform === 'youtube' || platform === 'gmb') {
+    authUrl.searchParams.append('access_type', 'offline');
+    authUrl.searchParams.append('prompt', 'consent');
+  }
+
   if (platform === 'x') {
     // High-entropy PKCE challenge for production security
     authUrl.searchParams.append('code_challenge', 'S0c1alFlMHdfUGtjZV9WZXJpZmllcl8yMDI2X0xvbmdfU3RyaW5n');

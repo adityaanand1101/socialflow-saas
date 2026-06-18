@@ -45,18 +45,14 @@ async function runTests() {
     console.error("❌ Idea Error:", e.message); 
   }
 
-  // 4. IMAGE (NANO BANANA)
-  console.log("\n4. Testing Image Generation (gemini-3.1-flash-image)...");
+  // 4. IMAGE
+  console.log("\n4. Testing Image Generation (gemini-2.5-flash-image)...");
   try {
     const res4 = await genAI.models.generateContent({
-      model: 'gemini-3.1-flash-image', // Nano Banana
+      model: 'gemini-2.5-flash-image',
       contents: [{ role: 'user', parts: [{ text: "A futuristic server rack glowing with neon blue lights, highly detailed, 4k" }] }],
       config: {
-        responseModalities: ["IMAGE"] as any,
-        imageConfig: {
-          aspectRatio: "1:1",
-          imageSize: "1K"
-        } as any
+        responseModalities: ["TEXT", "IMAGE"] as any,
       }
     });
     const imagePart = res4.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData);

@@ -13,10 +13,10 @@ const prisma = new PrismaClient();
 // ---------- Config ----------
 
 const AI_MODELS = {
-  caption: process.env.AI_MODEL_CAPTION || 'gemini-1.5-flash-8b',
+  caption: process.env.AI_MODEL_CAPTION || 'gemini-2.0-flash',
   hashtags: process.env.AI_MODEL_HASHTAGS || 'gemini-2.0-flash',
   ideas: process.env.AI_MODEL_IDEAS || 'gemini-2.0-flash',
-  image: process.env.AI_MODEL_IMAGE || 'gemini-2.0-flash-exp',
+  image: process.env.AI_MODEL_IMAGE || 'gemini-2.5-flash-image',
 } as const;
 
 const ALLOWED_TONES = ['Professional', 'Casual', 'Funny', 'Inspirational', 'Urgent', 'Educational'] as const;

@@ -1,5 +1,11 @@
-$API_KEY = "rnd_lSulW8r9o3rAbgmOVIo834NpMqqE"
-$SERVICE_ID = "srv-d8nfeicm0tmc73e3gah0"
+# Load config from sync-env-config.ps1 (gitignored — keeps secrets out of repo)
+if (Test-Path "$PSScriptRoot\sync-env-config.ps1") {
+    . "$PSScriptRoot\sync-env-config.ps1"
+} else {
+    Write-Error "Missing sync-env-config.ps1 — create it with:`n`$`$API_KEY = 'your_render_api_key'`n`$`$SERVICE_ID = 'your_render_service_id'"
+    exit 1
+}
+
 $ENV_FILE = "backend/.env"
 
 $headers = @{

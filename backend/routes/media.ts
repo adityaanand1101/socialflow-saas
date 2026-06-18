@@ -16,8 +16,8 @@ const s3Client = new S3Client({
     ? process.env.S3_ENDPOINT 
     : `https://${process.env.S3_ENDPOINT}`,
   credentials: {
-    accessKeyId: process.env.S3_ACCESS_KEY_ID || 'dummy-access-key',
-    secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || 'dummy-secret-key',
+    accessKeyId: process.env.S3_ACCESS_KEY_ID ?? '',
+    secretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? '',
   },
 });
 
@@ -129,7 +129,7 @@ router.post('/presigned-url', requireAuth, async (req: any, res: any) => {
     const key = `${workspaceId}/${Date.now()}-${fileName.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
 
     const command = new PutObjectCommand({
-      Bucket: process.env.S3_BUCKET_NAME || 'dummy-bucket',
+      Bucket: process.env.S3_BUCKET_NAME || '',
       Key: key,
       ContentType: fileType,
     });
@@ -173,7 +173,7 @@ router.post('/register', requireAuth, async (req: any, res: any) => {
 
     // Generate a signed GET URL so the frontend can display it immediately
     const command = new GetObjectCommand({
-      Bucket: process.env.S3_BUCKET_NAME || 'dummy-bucket',
+      Bucket: process.env.S3_BUCKET_NAME || '',
       Key: fileUrl
     });
     const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
@@ -294,7 +294,7 @@ router.delete('/:id', requireAuth, async (req: any, res: any) => {
       const key = `${urlParts[urlParts.length - 2]}/${urlParts[urlParts.length - 1]}`;
 
       await s3Client.send(new DeleteObjectCommand({
-        Bucket: process.env.S3_BUCKET_NAME || 'dummy-bucket',
+        Bucket: process.env.S3_BUCKET_NAME || '',
         Key: key,
       }));
     } catch (s3Error) {

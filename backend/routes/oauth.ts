@@ -14,7 +14,10 @@ const prisma = new PrismaClient();
 // In-memory store for PKCE code_verifiers (keyed by Clerk userId / state param)
 const pkceStore = new Map<string, string>();
 
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'default_32_byte_secret_key_for_dev!';
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+if (!ENCRYPTION_KEY) {
+  console.error('CRITICAL: ENCRYPTION_KEY not set — OAuth token encryption will fail');
+}
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://socialflow-saas.vercel.app';
 const BACKEND_URL = process.env.BACKEND_URL || 'https://socialflow-saas.onrender.com';
 

@@ -16,7 +16,10 @@ connection.on('error', (err) => {
 });
 
 const prisma = new PrismaClient();
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'default_32_byte_secret_key_for_dev!';
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+if (!ENCRYPTION_KEY) {
+  console.error('CRITICAL: ENCRYPTION_KEY not set — queue token decryption will fail');
+}
 
 let postQueue: any;
 let postWorker: any;

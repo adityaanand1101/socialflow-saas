@@ -3,7 +3,11 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const apiKey = process.env.GOOGLE_AI_API_KEY || 'AIzaSyBu8loQuaFAbStm9QxyHBD82rKPgbjugNw';
+const apiKey = process.env.GOOGLE_AI_API_KEY;
+if (!apiKey) {
+  console.error('❌ GOOGLE_AI_API_KEY is required in .env');
+  process.exit(1);
+}
 const genAI = new GoogleGenAI({ apiKey });
 
 async function runTests() {

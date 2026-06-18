@@ -24,6 +24,10 @@ dist-ssr
 *.sw?
 .vercel
 
+# Environment files
 .env
 *.env
 .env.local
+.env.*
+!backend/.env.example
+sync-env-config.ps1

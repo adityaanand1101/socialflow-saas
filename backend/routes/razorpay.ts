@@ -10,9 +10,15 @@ dotenv.config();
 const router = Router();
 const prisma = new PrismaClient();
 
+const razorpayKeyId = process.env.RAZORPAY_KEY_ID;
+const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
+if (!razorpayKeyId || !razorpayKeySecret) {
+  console.error('CRITICAL: RAZORPAY_KEY_ID or RAZORPAY_KEY_SECRET not set');
+}
+
 const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_placeholder',
-  key_secret: process.env.RAZORPAY_KEY_SECRET || 'placeholder_secret',
+  key_id: razorpayKeyId ?? '',
+  key_secret: razorpayKeySecret ?? '',
 });
 
 // Create an order for a subscription upgrade
@@ -51,7 +57,10 @@ router.post('/create-order', requireAuth, async (req: any, res: any) => {
 
 // Webhook to handle successful payments
 router.post('/webhook', async (req: any, res: any) => {
-  const secret = process.env.RAZORPAY_WEBHOOK_SECRET || 'placeholder_webhook_secret';
+  const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+  if (!secret) {
+    return res.status(500).json({ error: 'Webhook secret not configured' });
+  }
   const signature = req.headers['x-razorpay-signature'];
 
   const body = JSON.stringify(req.body);

@@ -7,7 +7,7 @@ import { Resend } from 'resend';
 
 const router = Router();
 const prisma = new PrismaClient();
-const resend = new Resend(process.env.RESEND_API_KEY || 're_AhZP9Wt8_LW2ZnJipTHaSt4RNDRpA3qT3');
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 // POST /api/workspaces: Create new workspace
 router.post('/', requireAuth, checkSaaSLimits('workspaces'), async (req: any, res: any) => {
@@ -80,24 +80,28 @@ router.post('/:id/invites', requireAuth, requireRole(['OWNER', 'ADMIN']), checkS
 
     const inviteLink = `${process.env.FRONTEND_URL || 'https://socialflow-saas.vercel.app'}/accept-invite?token=${token}`;
 
-    try {
-      await resend.emails.send({
-        from: 'onboarding@resend.dev',
-        to: email,
-        subject: "You've been invited to join a workspace on SocialFlow",
-        html: `
-          <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
-            <h2>You're Invited!</h2>
-            <p>You have been invited to join a workspace on SocialFlow with the role of <strong>${role || 'MEMBER'}</strong>.</p>
-            <p>Click the button below to accept the invitation:</p>
-            <a href="${inviteLink}" style="display: inline-block; padding: 10px 20px; background-color: #6d28d9; color: #fff; text-decoration: none; border-radius: 5px; margin-top: 10px;">Accept Invitation</a>
-            <p style="margin-top: 20px; font-size: 12px; color: #888;">If the button doesn't work, copy and paste this link into your browser: <br>${inviteLink}</p>
-          </div>
-        `,
-      });
-      console.log(`Invite email successfully sent to ${email} via Resend`);
-    } catch (emailError) {
-      console.error('Failed to send email via Resend:', emailError);
+    if (!resend) {
+      console.warn('RESEND_API_KEY not set — skipping invite email');
+    } else {
+      try {
+        await resend.emails.send({
+          from: 'onboarding@resend.dev',
+          to: email,
+          subject: "You've been invited to join a workspace on SocialFlow",
+          html: `
+            <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+              <h2>You're Invited!</h2>
+              <p>You have been invited to join a workspace on SocialFlow with the role of <strong>${role || 'MEMBER'}</strong>.</p>
+              <p>Click the button below to accept the invitation:</p>
+              <a href="${inviteLink}" style="display: inline-block; padding: 10px 20px; background-color: #6d28d9; color: #fff; text-decoration: none; border-radius: 5px; margin-top: 10px;">Accept Invitation</a>
+              <p style="margin-top: 20px; font-size: 12px; color: #888;">If the button doesn't work, copy and paste this link into your browser: <br>${inviteLink}</p>
+            </div>
+          `,
+        });
+        console.log(`Invite email successfully sent to ${email} via Resend`);
+      } catch (emailError) {
+        console.error('Failed to send email via Resend:', emailError);
+      }
     }
 
     res.status(201).json(invite);

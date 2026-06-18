@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { requireAuth } from '../middlewares/auth';
 import fetch from 'node-fetch';
 
@@ -127,19 +128,9 @@ router.post('/caption', requireAuth, async (req: any, res: any) => {
   try {
     const response = await GEMINI_AI.models.generateContent({
       model: AI_MODELS.caption,
-      contents: [{ role: 'user', parts: [{ text: `You are an expert social media copywriter. Generate 3 distinct, high-impact caption variations for ${platform || 'Instagram'} in a ${tone || 'Professional'} tone.
+      contents: [{ role: 'user', parts: [{ text: `Write 3 social media captions for ${platform || 'Instagram'} (${tone || 'Professional'} tone). Each must: start with a hook, include emojis, end with a CTA. Keep under 280 chars for Twitter, 2200 for others. Return JSON: { "variations": ["...", "...", "..."] }
 
-Each caption must:
-- Start with a strong hook (question, bold statement, or relatable opener)
-- Use natural line breaks and formatting for social media readability
-- Include 3–5 relevant emojis (not forced, placed naturally)
-- End with a clear call-to-action (question, comment prompt, or link tease)
-- Stay under 280 characters for Twitter / 2200 characters for other platforms
-- Match the brand voice: confident, human, never robotic
-
-Return the response strictly as a JSON object with a "variations" key containing an array of 3 strings.
-
-User Request: ${prompt.slice(0, 2000)}` }] }],
+Prompt: ${prompt.slice(0, 2000)}` }] }],
     });
 
     const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '';
@@ -209,14 +200,13 @@ router.post('/ideas', requireAuth, async (req: any, res: any) => {
   try {
     const response = await GEMINI_AI.models.generateContent({
       model: AI_MODELS.ideas,
-      contents: [{ role: 'user', parts: [{ text: `You are a social media content strategist. Generate a 30-day content calendar with diverse formats and strategic variety.
+      contents: [{ role: 'user', parts: [{ text: `Generate a 10-day content calendar. Return JSON: { "ideas": [ { "day": 1, "topic": "...", "description": "..." } ] }
 
 Requirements:
-- Each day must have a unique format type (carousel, reel script, poll, infographic, testimonial, behind-the-scenes, tip, story, Q&A, challenge, industry news take, user-generated content spotlight, tutorial, comparison, milestone, trend-jack, myth-buster, data drop, collaboration, giveaway)
-- Each topic must be specific, timely, and tied to real audience pain points
-- Each description must be actionable (include the format, the core message, and the CTA)
-- No two consecutive days should use the same format
-- Return strictly as JSON: { "ideas": [ { "day": 1, "topic": "...", "description": "..." } ] }
+- Vary formats: carousel, reel script, poll, tip, story, Q&A, trend take, testimonial, behind-the-scenes, tutorial
+- Each topic must be specific and actionable
+- Keep descriptions under 40 words
+- Return ONLY valid JSON
 
 Topic: ${topic.slice(0, 500)}, Industry: ${(industry || topic).slice(0, 500)}` }] }],
     });
@@ -286,14 +276,18 @@ router.post('/image', requireAuth, async (req: any, res: any) => {
       ContentType: contentType,
     }));
 
-    const finalUrl = buildPublicUrl(fileName);
+    // Generate a time-limited signed URL so the image is viewable (bucket is private)
+    const viewUrl = await getSignedUrl(s3Client, new GetObjectCommand({
+      Bucket: process.env.S3_BUCKET_NAME,
+      Key: fileName,
+    }), { expiresIn: 86400 });
 
     const asset = await prisma.mediaAsset.create({
       data: {
         workspaceId,
         userId,
         fileName: `AI-${Date.now()}.${ext}`,
-        fileUrl: finalUrl,
+        fileUrl: viewUrl,
         fileType: contentType,
         fileSize: buffer.length,
         tags: ['ai-generated'],
@@ -301,7 +295,7 @@ router.post('/image', requireAuth, async (req: any, res: any) => {
     });
 
     await logAiUsage(userId, 'image', imagePrompt, 0, 1);
-    return res.json({ url: finalUrl, asset });
+    return res.json({ url: viewUrl, asset });
   } catch (error: any) {
     console.error('AI Image Error:', error);
     return res.status(500).json({ error: 'Failed to generate image' });

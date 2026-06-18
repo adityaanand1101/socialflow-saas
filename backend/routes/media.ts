@@ -237,8 +237,8 @@ router.get('/', requireAuth, async (req: any, res: any) => {
     ]);
 
     // --- HIGH PERFORMANCE RETRIEVAL ---
-    // Instead of signing 50 URLs, we generate ONE download authorization token for the workspace prefix.
-    // This is much faster and more efficient.
+    // Try B2 download auth token first (fast, single token for all assets)
+    // Fall back to individual signed URLs if that fails
     
     let downloadToken = '';
     const keyId = process.env.S3_ACCESS_KEY_ID;
@@ -264,24 +264,39 @@ router.get('/', requireAuth, async (req: any, res: any) => {
       const tokenData: any = await tokenRes.json();
       downloadToken = tokenData.authorizationToken;
     } catch (e) {
-      console.error('Failed to get B2 download auth, falling back to slow signing', e);
+      console.error('Failed to get B2 download auth, will sign individually', e);
     }
 
     const baseUrl = `https://f005.backblazeb2.com/file/${process.env.S3_BUCKET_NAME}`;
 
-    const mediaWithUrls = media.map((item) => {
+    const mediaWithUrls = await Promise.all(media.map(async (item) => {
       const key = item.fileUrl.includes('http') 
           ? item.fileUrl.split('/').slice(-2).join('/') 
           : item.fileUrl;
+
+      let fileUrl: string;
+      if (downloadToken) {
+        fileUrl = `${baseUrl}/${key}?Authorization=${downloadToken}`;
+      } else {
+        // Fallback: generate individual signed URL (reliable)
+        try {
+          const command = new GetObjectCommand({
+            Bucket: process.env.S3_BUCKET_NAME || '',
+            Key: key
+          });
+          fileUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+        } catch (signErr) {
+          console.error('Failed to sign URL for asset', item.id, signErr);
+          fileUrl = key;
+        }
+      }
           
       return { 
         ...item, 
-        fileUrl: downloadToken 
-          ? `${baseUrl}/${key}?Authorization=${downloadToken}`
-          : item.fileUrl, // Fallback if token fails
+        fileUrl,
         s3Key: key 
       };
-    });
+    }));
 
     res.json({ assets: mediaWithUrls, folders });
   } catch (error) {

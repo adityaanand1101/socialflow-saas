@@ -65,19 +65,15 @@ export const AIStudio = () => {
         if (cw.brand) parts.push(`Brand: ${cw.brand}`)
         if (cw.audience) parts.push(`Target audience: ${cw.audience}`)
         if (cw.goal) parts.push(`Goal: ${cw.goal}`)
-        if (cw.hook) parts.push(`Hook idea: ${cw.hook}`)
-        if (cw.emoji !== 'Moderate') parts.push(`Emoji usage: ${cw.emoji}`)
-        parts.push(`CTA: ${cw.cta}`)
-        const base = parts.join('. ') + '.'
-        if (cw.brand || cw.audience || cw.goal) {
-          return `${prompt ? prompt + ' ' : ''}${base}`
-        }
-        return prompt
+        if (cw.hook) parts.push(`Hook: ${cw.hook}`)
+        if (cw.cta && cw.cta !== 'Comment') parts.push(`CTA: ${cw.cta}`)
+        if (cw.emoji !== 'Moderate') parts.push(`Emoji: ${cw.emoji}`)
+        if (cw.brand || cw.audience || cw.hook) return parts.join('. ') + '.'
+        return ''
       }
       case 'hashtag': {
-        return hw.niche
-          ? `${hw.niche}${hw.related ? ` related to ${hw.related}` : ''}${hw.reach !== 'Mix' ? `, target reach: ${hw.reach}` : ''}`
-          : prompt
+        if (!hw.niche) return ''
+        return hw.niche + (hw.related ? ` related to ${hw.related}` : '') + (hw.reach !== 'Mix' ? `, target: ${hw.reach}` : '')
       }
       case 'ideas': {
         const parts: string[] = []
@@ -85,25 +81,21 @@ export const AIStudio = () => {
         if (iw.audience) parts.push(`Audience: ${iw.audience}`)
         if (iw.goals.length) parts.push(`Goals: ${iw.goals.join(', ')}`)
         if (iw.formats.length) parts.push(`Formats: ${iw.formats.join(', ')}`)
-        const base = parts.join('. ') + '.'
-        if (iw.brand || iw.audience) {
-          return `${prompt ? prompt + ' ' : ''}${base}`
-        }
-        return prompt
+        if (iw.brand || iw.audience) return parts.join('. ') + '.'
+        return ''
       }
       case 'image': {
+        if (!imw.subject) return ''
         const parts: string[] = []
         if (imw.style) parts.push(`Style: ${imw.style}`)
         if (imw.mood) parts.push(`Mood: ${imw.mood}`)
         if (imw.lighting) parts.push(`Lighting: ${imw.lighting}`)
         if (imw.colors) parts.push(`Colors: ${imw.colors}`)
         const suffix = parts.length ? `, ${parts.join(', ')}` : ''
-        return imw.subject
-          ? `${imw.subject}${suffix}`
-          : prompt
+        return `${imw.subject}${suffix}`
       }
     }
-  }, [activeTool, cw, hw, iw, imw, prompt])
+  }, [activeTool, cw, hw, iw, imw])
 
   useEffect(() => {
     if (!isManuallyEdited) {

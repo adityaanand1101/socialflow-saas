@@ -1,6 +1,6 @@
 import {
   Instagram, Linkedin, Twitter, Youtube, Facebook, Threads, Bluesky,
-  Slack, Pinterest, Mastodon, Reddit, Discord, Telegram, GMB, Tumblr, WordPress, Medium
+  Slack, Pinterest, Mastodon, Reddit, Discord, Telegram, GMB, Tumblr, WordPress
 } from '@/components/icons'
 
 export interface PlatformDef {
@@ -31,5 +31,4 @@ export const ALL_PLATFORMS: PlatformDef[] = [
   { id: 'telegram', label: 'Telegram', icon: Telegram, color: 'text-blue-400', bgHover: 'hover:border-blue-500/50 hover:bg-blue-500/5', description: 'Channels & Groups', authNote: 'Requires Telegram Bot API Token', limit: 4096 },
   { id: 'tumblr', label: 'Tumblr', icon: Tumblr, color: 'text-blue-900', bgHover: 'hover:border-blue-900/50 hover:bg-blue-900/5', description: 'Microblogging & Social', authNote: 'Requires Tumblr Consumer Key', limit: 10000 },
   { id: 'slack', label: 'Slack', icon: Slack, color: 'text-green-500', bgHover: 'hover:border-green-600/50 hover:bg-green-600/5', description: 'Workplace messaging', authNote: 'Requires Slack App/Webhook URL', limit: 12000 },
-  { id: 'medium', label: 'Medium', icon: Medium, color: 'text-white', bgHover: 'hover:border-white/30 hover:bg-white/5', description: 'Blogging & Publishing', authNote: 'Requires Medium Integration Token', limit: 100000 },
 ]

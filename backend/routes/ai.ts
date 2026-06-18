@@ -20,7 +20,7 @@ const AI_MODELS = {
 } as const;
 
 const ALLOWED_TONES = ['Professional', 'Casual', 'Funny', 'Inspirational', 'Urgent', 'Educational'] as const;
-const ALLOWED_PLATFORMS = ['Instagram', 'Twitter', 'LinkedIn', 'Facebook', 'TikTok', 'Threads', 'YouTube'] as const;
+const ALLOWED_PLATFORMS = ['Instagram', 'Twitter', 'LinkedIn', 'Facebook', 'Threads', 'YouTube'] as const;
 
 const PLATFORM_MAP: Record<string, string> = {
   instagram: 'Instagram',
@@ -29,7 +29,6 @@ const PLATFORM_MAP: Record<string, string> = {
   x: 'Twitter',
   linkedin: 'LinkedIn',
   youtube: 'YouTube',
-  tiktok: 'TikTok',
 };
 
 const GEMINI_AI = process.env.GOOGLE_AI_API_KEY

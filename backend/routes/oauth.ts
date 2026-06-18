@@ -461,8 +461,8 @@ router.post('/:platform/manual-connect', requireAuth, async (req: any, res: any)
     return res.status(400).json({ error: 'Missing required credentials' });
   }
 
-  if (platform !== 'bluesky' && platform !== 'medium' && platform !== 'telegram') {
-    return res.status(400).json({ error: 'Manual connect is only supported for Bluesky, Medium, and Telegram' });
+  if (platform !== 'bluesky' && platform !== 'telegram') {
+    return res.status(400).json({ error: 'Manual connect is only supported for Bluesky and Telegram' });
   }
 
   try {

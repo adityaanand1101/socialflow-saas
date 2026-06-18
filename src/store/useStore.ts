@@ -5,7 +5,7 @@ import { cookieStorage } from '@/lib/cookies'
 export type SocialPlatform = 
   | 'instagram' | 'linkedin' | 'x' | 'youtube' | 'gmb' 
   | 'facebook' | 'threads' | 'bluesky' | 'slack' | 'pinterest' 
-  | 'mastodon' | 'reddit' | 'medium' | 'discord' | 'telegram' | 'tumblr'
+  | 'mastodon' | 'reddit' | 'discord' | 'telegram' | 'tumblr'
 
 export interface Post {
   id: string

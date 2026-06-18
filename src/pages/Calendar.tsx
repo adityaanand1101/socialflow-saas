@@ -32,7 +32,7 @@ import {
 } from 'lucide-react'
 import { 
   Instagram, Linkedin, Twitter, Youtube, Facebook, Threads, Bluesky, 
-  Slack, Pinterest, Mastodon, Reddit, Medium, Discord, Telegram, GMB, Tumblr 
+  Slack, Pinterest, Mastodon, Reddit, Discord, Telegram, GMB, Tumblr 
 } from '@/components/icons'
 import { cn } from '@/lib/utils'
 import { useStore } from '@/store/useStore'
@@ -54,7 +54,6 @@ const platformIcons: Record<string, any> = {
   pinterest: Pinterest,
   mastodon: Mastodon,
   reddit: Reddit,
-  medium: Medium,
   discord: Discord,
   telegram: Telegram,
   gmb: GMB,

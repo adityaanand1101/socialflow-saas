@@ -337,6 +337,11 @@ router.get('/:platform/callback', async (req: any, res) => {
        profile.username = profileData.username;
        profile.displayName = profileData.global_name || profileData.username;
        profile.avatarUrl = profileData.avatar ? `https://cdn.discordapp.com/avatars/${profileData.id}/${profileData.avatar}.png` : 'https://github.com/shadcn.png';
+    } else if (platform === 'wordpress') {
+       profile.id = String(profileData.ID);
+       profile.username = profileData.username;
+       profile.displayName = profileData.display_name;
+       profile.avatarUrl = profileData.avatar_URL || 'https://github.com/shadcn.png';
     }
 
     // Find user and their active workspace

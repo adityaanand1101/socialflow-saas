@@ -231,7 +231,7 @@ router.get('/:platform/callback', async (req: any, res) => {
     let refreshToken = null;
     let tokenExpiresIn = 3600;
     
-    let profile = {
+    let profile: { id: string; username: string; displayName: string; avatarUrl: string | null } = {
       id: '',
       username: '',
       displayName: '',
@@ -475,7 +475,7 @@ router.post('/:platform/manual-connect', requireAuth, async (req: any, res: any)
 
     let profileId = identifier;
     let displayName = identifier;
-    let avatarUrl = null;
+    let avatarUrl: string | null = null;
     let tokenExpiresAt = null; // These tokens typically don't expire automatically
 
     // Optional: Add logic here to verify the tokens against the platform APIs

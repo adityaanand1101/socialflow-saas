@@ -51,7 +51,7 @@ export const Team = () => {
                 name: user.name || user.email,
                 email: user.email,
                 role: user.memberships[0].role,
-                avatar: user.avatarUrl || 'https://github.com/shadcn.png'
+                avatar: user.avatarUrl || null
               }
             ]);
           }

@@ -235,7 +235,7 @@ router.get('/:platform/callback', async (req: any, res) => {
       id: '',
       username: '',
       displayName: '',
-      avatarUrl: 'https://github.com/shadcn.png'
+      avatarUrl: null
     };
 
     // Execute the real OAuth code exchange flow
@@ -320,65 +320,65 @@ router.get('/:platform/callback', async (req: any, res) => {
       profile.id = profileData.sub || profileData.id;
       profile.username = profileData.email || profileData.name?.replace(/\s+/g, '').toLowerCase() || 'linkedin_user';
       profile.displayName = profileData.name || `${profileData.given_name || ''} ${profileData.family_name || ''}`.trim();
-      profile.avatarUrl = profileData.picture || 'https://github.com/shadcn.png';
+      profile.avatarUrl = profileData.picture || null;
     } else if (platform === 'x') {
       const userObj = profileData.data || {};
       profile.id = userObj.id;
       profile.username = userObj.username;
       profile.displayName = userObj.name;
-      profile.avatarUrl = userObj.profile_image_url || 'https://github.com/shadcn.png';
+      profile.avatarUrl = userObj.profile_image_url || null;
     } else if (platform === 'youtube') {
       profile.id = profileData.sub || profileData.id;
       profile.username = profileData.email || 'youtube_channel';
       profile.displayName = profileData.name || 'YouTube User';
-      profile.avatarUrl = profileData.picture || 'https://github.com/shadcn.png';
+      profile.avatarUrl = profileData.picture || null;
     } else if (platform === 'instagram' || platform === 'threads') {
       profile.id = profileData.id;
       profile.username = profileData.username;
       profile.displayName = profileData.username;
-      profile.avatarUrl = 'https://github.com/shadcn.png';
+      profile.avatarUrl = null;
     } else if (platform === 'facebook') {
       profile.id = profileData.id;
       profile.username = profileData.name?.replace(/\s+/g, '').toLowerCase();
       profile.displayName = profileData.name;
-      profile.avatarUrl = profileData.picture?.data?.url || 'https://github.com/shadcn.png';
+      profile.avatarUrl = profileData.picture?.data?.url || null;
     } else if (platform === 'gmb') {
        const userObj = profileData.accounts?.[0] || {};
        profile.id = userObj.name;
        profile.username = userObj.accountName?.replace(/\s+/g, '').toLowerCase() || 'gmb_account';
        profile.displayName = userObj.accountName || 'Google Business Profile';
-       profile.avatarUrl = userObj.profilePhotoUrl || 'https://github.com/shadcn.png';
+       profile.avatarUrl = userObj.profilePhotoUrl || null;
     } else if (platform === 'pinterest') {
       profile.id = profileData.username;
       profile.username = profileData.username;
       profile.displayName = profileData.username;
-      profile.avatarUrl = profileData.profile_image || 'https://github.com/shadcn.png';
+      profile.avatarUrl = profileData.profile_image || null;
     } else if (platform === 'reddit') {
       profile.id = profileData.id;
       profile.username = profileData.name;
       profile.displayName = profileData.name;
-      profile.avatarUrl = profileData.icon_img || 'https://github.com/shadcn.png';
+      profile.avatarUrl = profileData.icon_img || null;
     } else if (platform === 'mastodon') {
       profile.id = profileData.id;
       profile.username = profileData.username;
       profile.displayName = profileData.display_name;
-      profile.avatarUrl = profileData.avatar || 'https://github.com/shadcn.png';
+      profile.avatarUrl = profileData.avatar || null;
     } else if (platform === 'tumblr') {
        const userObj = profileData.response?.user || {};
        profile.id = userObj.name;
        profile.username = userObj.name;
        profile.displayName = userObj.name;
-       profile.avatarUrl = 'https://github.com/shadcn.png';
+       profile.avatarUrl = null;
     } else if (platform === 'discord') {
        profile.id = profileData.id;
        profile.username = profileData.username;
        profile.displayName = profileData.global_name || profileData.username;
-       profile.avatarUrl = profileData.avatar ? `https://cdn.discordapp.com/avatars/${profileData.id}/${profileData.avatar}.png` : 'https://github.com/shadcn.png';
+       profile.avatarUrl = profileData.avatar ? `https://cdn.discordapp.com/avatars/${profileData.id}/${profileData.avatar}.png` : null;
     } else if (platform === 'wordpress') {
        profile.id = String(profileData.ID);
        profile.username = profileData.username;
        profile.displayName = profileData.display_name;
-       profile.avatarUrl = profileData.avatar_URL || 'https://github.com/shadcn.png';
+       profile.avatarUrl = profileData.avatar_URL || null;
     }
 
     // Find user and their active workspace
@@ -475,7 +475,7 @@ router.post('/:platform/manual-connect', requireAuth, async (req: any, res: any)
 
     let profileId = identifier;
     let displayName = identifier;
-    let avatarUrl = 'https://github.com/shadcn.png';
+    let avatarUrl = null;
     let tokenExpiresAt = null; // These tokens typically don't expire automatically
 
     // Optional: Add logic here to verify the tokens against the platform APIs

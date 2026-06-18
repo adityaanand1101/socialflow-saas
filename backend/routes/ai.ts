@@ -1,10 +1,8 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
-import OpenAI from 'openai';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
-import fetch from 'node-fetch';
 import { requireAuth } from '../middlewares/auth';
 
 dotenv.config();
@@ -12,65 +10,108 @@ dotenv.config();
 const router = Router();
 const prisma = new PrismaClient();
 
-// Initialize AI Clients
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || 'dummy-key',
-});
+// ---------- Config ----------
 
-const geminiAI = process.env.GOOGLE_AI_API_KEY 
+const AI_MODELS = {
+  caption: process.env.AI_MODEL_CAPTION || 'gemini-1.5-flash-8b',
+  hashtags: process.env.AI_MODEL_HASHTAGS || 'gemini-2.0-flash',
+  ideas: process.env.AI_MODEL_IDEAS || 'gemini-2.0-flash',
+  image: process.env.AI_MODEL_IMAGE || 'gemini-3.1-flash-image',
+} as const;
+
+const ALLOWED_TONES = ['Professional', 'Casual', 'Funny', 'Inspirational', 'Urgent', 'Educational'] as const;
+const ALLOWED_PLATFORMS = ['Instagram', 'Twitter', 'LinkedIn', 'Facebook', 'TikTok', 'Threads', 'YouTube'] as const;
+
+const GEMINI_AI = process.env.GOOGLE_AI_API_KEY
   ? new GoogleGenAI({ apiKey: process.env.GOOGLE_AI_API_KEY })
   : null;
 
-// Utility to log AI usage
-const logAiUsage = async (userId: string, toolUsed: string, prompt: string, tokensUsed?: number, imagesGenerated?: number) => {
+// ---------- Helpers ----------
+
+function extractJsonArray<T>(text: string, key: string, fallback: (text: string) => T[]): T[] {
+  try {
+    const cleaned = text.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(cleaned);
+    return (parsed[key] || Object.values(parsed)[0]) as T[];
+  } catch {
+    return fallback(text);
+  }
+}
+
+function buildPublicUrl(fileName: string): string {
+  if (process.env.S3_PUBLIC_URL) {
+    const base = process.env.S3_PUBLIC_URL.replace(/\/+$/, '');
+    return `${base}/${fileName}`;
+  }
+  return `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.S3_REGION}.amazonaws.com/${fileName}`;
+}
+
+async function checkAiRateLimit(userId: string): Promise<number | null> {
+  try {
+    const recent = await prisma.aiGenerationLog.count({
+      where: {
+        userId,
+        createdAt: { gte: new Date(Date.now() - 3_600_000) },
+      },
+    });
+    const limit = parseInt(process.env.AI_RATE_LIMIT_PER_HOUR || '50', 10);
+    if (recent >= limit) return recent;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function logAiUsage(userId: string, toolUsed: string, prompt: string, tokensUsed?: number, imagesGenerated?: number) {
   try {
     await prisma.aiGenerationLog.create({
       data: {
         userId,
         toolUsed,
-        prompt,
+        prompt: prompt.slice(0, 1000),
         tokensUsed: tokensUsed || 0,
-        imagesGenerated: imagesGenerated || 0
-      }
+        imagesGenerated: imagesGenerated || 0,
+      },
     });
   } catch (error) {
     console.error('Failed to log AI usage:', error);
   }
-};
+}
+
+// ---------- Routes ----------
 
 router.post('/caption', requireAuth, async (req: any, res: any) => {
   const { prompt, tone, platform } = req.body;
   const userId = req.userId;
 
+  if (!prompt || !String(prompt).trim()) {
+    return res.status(400).json({ error: 'prompt is required' });
+  }
+  if (tone && !ALLOWED_TONES.includes(tone)) {
+    return res.status(400).json({ error: `Invalid tone. Allowed: ${ALLOWED_TONES.join(', ')}` });
+  }
+  if (platform && !ALLOWED_PLATFORMS.includes(platform)) {
+    return res.status(400).json({ error: `Invalid platform. Allowed: ${ALLOWED_PLATFORMS.join(', ')}` });
+  }
+  if (!GEMINI_AI) return res.status(503).json({ error: 'AI service unavailable' });
+
+  const hit = await checkAiRateLimit(userId);
+  if (hit !== null) return res.status(429).json({ error: `Rate limit exceeded (${hit + 1} requests this hour)` });
+
   try {
-    let variations: string[] = [];
+    const response = await GEMINI_AI.models.generateContent({
+      model: AI_MODELS.caption,
+      contents: [{ role: 'user', parts: [{ text: `You are an expert social media manager. Generate 3 variations of a caption for ${platform || 'Instagram'} with a ${tone || 'Professional'} tone. Return the response strictly as a JSON object with a "variations" key containing an array of strings.\n\nUser Request: ${prompt.slice(0, 2000)}` }] }],
+    });
 
-    if (geminiAI) {
-      // Use Gemini via the new @google/genai SDK
-      const response = await geminiAI.models.generateContent({
-        model: 'gemini-1.5-flash-8b', // Updated to latest stable flash model
-        contents: [{ role: 'user', parts: [{ text: `You are an expert social media manager. Generate 3 variations of a caption for ${platform} with a ${tone} tone. Return the response strictly as a JSON object with a "variations" key containing an array of strings.\n\nUser Request: ${prompt}` }] }],
-      });
-
-      const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      
-      try {
-        const cleanedText = text.replace(/```json|```/g, '').trim();
-        const parsed = JSON.parse(cleanedText);
-        variations = parsed.variations || parsed.captions || Object.values(parsed)[0];
-      } catch (e) {
-        variations = [text];
-      }
-    } else {
-      return res.status(500).json({ error: 'AI services not configured.' });
-    }
+    const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const variations = extractJsonArray<string>(text, 'variations', (t) => [t]);
 
     await logAiUsage(userId, 'caption', prompt);
     return res.json({ variations: Array.isArray(variations) ? variations : [variations] });
-
   } catch (error: any) {
     console.error('AI Caption Error:', error);
-    res.status(500).json({ error: error.message || 'Failed to generate caption' });
+    return res.status(500).json({ error: 'Failed to generate caption' });
   }
 });
 
@@ -78,34 +119,28 @@ router.post('/hashtags', requireAuth, async (req: any, res: any) => {
   const { niche, keywords } = req.body;
   const userId = req.userId;
 
+  if (!niche || !String(niche).trim()) {
+    return res.status(400).json({ error: 'niche is required' });
+  }
+  if (!GEMINI_AI) return res.status(503).json({ error: 'AI service unavailable' });
+
+  const hit = await checkAiRateLimit(userId);
+  if (hit !== null) return res.status(429).json({ error: `Rate limit exceeded (${hit + 1} requests this hour)` });
+
   try {
-    let hashtags: string[] = [];
+    const response = await GEMINI_AI.models.generateContent({
+      model: AI_MODELS.hashtags,
+      contents: [{ role: 'user', parts: [{ text: `You are an SEO expert. Generate a list of top trending and contextually relevant hashtags for the given niche and keywords. Return strictly as a JSON object with a "hashtags" key containing an array of strings (including the # symbol).\n\nNiche: ${niche.slice(0, 500)}, Keywords: ${(keywords || niche).slice(0, 500)}` }] }],
+    });
 
-    if (geminiAI) {
-      const response = await geminiAI.models.generateContent({
-        model: 'gemini-2.0-flash',
-        contents: [{ role: 'user', parts: [{ text: `You are an SEO expert. Generate a list of top trending and contextually relevant hashtags for the given niche and keywords. Return strictly as a JSON object with a "hashtags" key containing an array of strings (including the # symbol).\n\nNiche: ${niche}, Keywords: ${keywords}` }] }],
-      });
+    const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const hashtags = extractJsonArray<string>(text, 'hashtags', (t) => t.split(' ').filter((w: string) => w.startsWith('#')));
 
-      const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      
-      try {
-        const cleanedText = text.replace(/```json|```/g, '').trim();
-        const parsed = JSON.parse(cleanedText);
-        hashtags = parsed.hashtags || Object.values(parsed)[0];
-      } catch (e) {
-        hashtags = text.split(' ').filter((word: string) => word.startsWith('#'));
-      }
-    } else {
-      return res.status(500).json({ error: 'AI services not configured.' });
-    }
-
-    await logAiUsage(userId, 'hashtags', `${niche} ${keywords}`);
+    await logAiUsage(userId, 'hashtags', `${niche} ${keywords || ''}`);
     return res.json({ hashtags: Array.isArray(hashtags) ? hashtags : [] });
-
   } catch (error: any) {
     console.error('AI Hashtag Error:', error);
-    res.status(500).json({ error: 'Failed to generate hashtags' });
+    return res.status(500).json({ error: 'Failed to generate hashtags' });
   }
 });
 
@@ -113,31 +148,28 @@ router.post('/ideas', requireAuth, async (req: any, res: any) => {
   const { topic, industry } = req.body;
   const userId = req.userId;
 
+  if (!topic || !String(topic).trim()) {
+    return res.status(400).json({ error: 'topic is required' });
+  }
+  if (!GEMINI_AI) return res.status(503).json({ error: 'AI service unavailable' });
+
+  const hit = await checkAiRateLimit(userId);
+  if (hit !== null) return res.status(429).json({ error: `Rate limit exceeded (${hit + 1} requests this hour)` });
+
   try {
-    let ideas = [];
+    const response = await GEMINI_AI.models.generateContent({
+      model: AI_MODELS.ideas,
+      contents: [{ role: 'user', parts: [{ text: `Generate a 30-day social media content plan. Return JSON strictly in this format: { "ideas": [ { "day": 1, "topic": "...", "description": "..." } ] }\n\nTopic: ${topic.slice(0, 500)}, Industry: ${(industry || topic).slice(0, 500)}` }] }],
+    });
 
-    if (geminiAI) {
-      const response = await geminiAI.models.generateContent({
-        model: 'gemini-2.0-flash',
-        contents: [{ role: 'user', parts: [{ text: `Generate a 30-day social media content plan. Return JSON strictly in this format: { "ideas": [ { "day": 1, "topic": "...", "description": "..." } ] }\n\nTopic: ${topic}, Industry: ${industry}` }] }],
-      });
+    const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const ideas = extractJsonArray<{ day: number; topic: string; description: string }>(text, 'ideas', () => []);
 
-      const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      
-      try {
-        const cleanedText = text.replace(/```json|```/g, '').trim();
-        ideas = JSON.parse(cleanedText).ideas || [];
-      } catch (e) {}
-    } else {
-      return res.status(500).json({ error: 'AI services not configured.' });
-    }
-
-    await logAiUsage(userId, 'ideas', `${topic} ${industry}`);
+    await logAiUsage(userId, 'ideas', `${topic} ${industry || ''}`);
     return res.json({ ideas });
-
   } catch (error: any) {
     console.error('AI Ideas Error:', error);
-    res.status(500).json({ error: 'Failed to generate content plan' });
+    return res.status(500).json({ error: 'Failed to generate content plan' });
   }
 });
 
@@ -146,85 +178,77 @@ router.post('/image', requireAuth, async (req: any, res: any) => {
   const userId = req.userId;
   const workspaceId = req.workspaceId;
 
+  if (!imagePrompt || !String(imagePrompt).trim()) {
+    return res.status(400).json({ error: 'imagePrompt is required' });
+  }
   if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+  if (!GEMINI_AI) return res.status(503).json({ error: 'AI service unavailable' });
+
+  const hit = await checkAiRateLimit(userId);
+  if (hit !== null) return res.status(429).json({ error: `Rate limit exceeded (${hit + 1} requests this hour)` });
 
   try {
-    let finalUrl = '';
-    let asset = null;
+    const response = await GEMINI_AI.models.generateContent({
+      model: AI_MODELS.image,
+      contents: [{ role: 'user', parts: [{ text: imagePrompt.slice(0, 1000) }] }],
+      config: {
+        responseModalities: ['IMAGE'] as any,
+        imageConfig: {
+          aspectRatio: aspectRatio || '1:1',
+          imageSize: '1K',
+        } as any,
+      },
+    });
 
-    if (geminiAI) {
-      // --- Use Nano Banana (Gemini 3.1 Flash Image) ---
-      const response = await geminiAI.models.generateContent({
-        model: 'gemini-3.1-flash-image', 
-        contents: [{ role: 'user', parts: [{ text: imagePrompt }] }],
-        config: {
-          responseModalities: ["IMAGE"] as any,
-          imageConfig: {
-            aspectRatio: aspectRatio || "1:1",
-            imageSize: "1K"
-          } as any
-        }
-      });
-
-      // Find the generated image part
-      const imagePart = response.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData);
-      
-      if (!imagePart || !imagePart.inlineData || !imagePart.inlineData.data) {
-        throw new Error('No image was generated by Nano Banana');
-      }
-
-      const buffer = Buffer.from(imagePart.inlineData.data, 'base64');
-      const fileName = `ai-images/${Date.now()}-${Math.random().toString(36).substring(7)}.png`;
-
-      // Upload to Backblaze B2
-      if (process.env.S3_BUCKET_NAME) {
-        const s3Client = new S3Client({
-          region: process.env.S3_REGION || 'us-east-1',
-          endpoint: process.env.S3_ENDPOINT?.startsWith('http') 
-            ? process.env.S3_ENDPOINT 
-            : `https://${process.env.S3_ENDPOINT}`,
-          credentials: {
-            accessKeyId: process.env.S3_ACCESS_KEY_ID || '',
-            secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || '',
-          },
-        });
-
-        await s3Client.send(new PutObjectCommand({
-          Bucket: process.env.S3_BUCKET_NAME,
-          Key: fileName,
-          Body: buffer,
-          ContentType: 'image/png',
-        }));
-
-        finalUrl = process.env.S3_PUBLIC_URL 
-          ? `${process.env.S3_PUBLIC_URL}/${fileName}` 
-          : `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.S3_REGION}.amazonaws.com/${fileName}`;
-
-        // Register in Database
-        asset = await prisma.mediaAsset.create({
-          data: {
-            workspaceId,
-            userId,
-            fileName: `NanoBanana-${Date.now()}.png`,
-            fileUrl: finalUrl,
-            fileType: 'image/png',
-            fileSize: buffer.length,
-            tags: ['nanobanana', 'ai-generated']
-          }
-        });
-
-        await logAiUsage(userId, 'image', imagePrompt, 0, 1);
-        return res.json({ url: finalUrl, asset });
-      } else {
-        throw new Error('Storage (Backblaze) not configured for image saving');
-      }
-    } else {
-      return res.status(500).json({ error: 'Gemini AI not configured.' });
+    const imagePart = response.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData);
+    if (!imagePart?.inlineData?.data) {
+      return res.status(500).json({ error: 'AI did not return an image' });
     }
 
+    const buffer = Buffer.from(imagePart.inlineData.data, 'base64');
+    const fileName = `ai-images/${Date.now()}-${Math.random().toString(36).substring(7)}.png`;
+
+    if (!process.env.S3_BUCKET_NAME) {
+      return res.status(500).json({ error: 'Storage not configured for image saving' });
+    }
+
+    const s3Client = new S3Client({
+      region: process.env.S3_REGION || 'us-east-1',
+      endpoint: process.env.S3_ENDPOINT?.startsWith('http')
+        ? process.env.S3_ENDPOINT
+        : `https://${process.env.S3_ENDPOINT}`,
+      credentials: {
+        accessKeyId: process.env.S3_ACCESS_KEY_ID || '',
+        secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || '',
+      },
+    });
+
+    await s3Client.send(new PutObjectCommand({
+      Bucket: process.env.S3_BUCKET_NAME,
+      Key: fileName,
+      Body: buffer,
+      ContentType: 'image/png',
+    }));
+
+    const finalUrl = buildPublicUrl(fileName);
+
+    const asset = await prisma.mediaAsset.create({
+      data: {
+        workspaceId,
+        userId,
+        fileName: `AI-${Date.now()}.png`,
+        fileUrl: finalUrl,
+        fileType: 'image/png',
+        fileSize: buffer.length,
+        tags: ['ai-generated'],
+      },
+    });
+
+    await logAiUsage(userId, 'image', imagePrompt, 0, 1);
+    return res.json({ url: finalUrl, asset });
   } catch (error: any) {
-    console.error('Nano Banana Error:', error);
-    res.status(500).json({ error: error.message || 'Failed to generate image with Nano Banana' });
+    console.error('AI Image Error:', error);
+    return res.status(500).json({ error: 'Failed to generate image' });
   }
 });
 

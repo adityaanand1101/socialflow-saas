@@ -171,9 +171,13 @@ app.use((req, res, next) => {
 });
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
-console.log(`[Startup] Attempting to start server on port ${PORT} and binding to 0.0.0.0...`);
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`[Startup] Server is successfully running on port ${PORT}`);
-});
+
+// Only start the server when this file is run directly, not when imported for tests
+if (process.env.NODE_ENV !== 'test') {
+  console.log(`[Startup] Attempting to start server on port ${PORT} and binding to 0.0.0.0...`);
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`[Startup] Server is successfully running on port ${PORT}`);
+  });
+}
 
 export default app;

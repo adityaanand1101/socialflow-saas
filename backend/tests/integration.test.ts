@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { app } from '../index';
+import app from '../index';
 import { Webhook } from 'svix';
 
 describe('Integration Tests: JWT & Webhook Verification', () => {

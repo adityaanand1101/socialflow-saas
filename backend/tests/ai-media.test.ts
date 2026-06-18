@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { app } from '../index';
+import app from '../index';
 
 // We mock the Clerk authentication to bypass the requirement during tests
 jest.mock('@clerk/clerk-sdk-node', () => {
@@ -23,7 +23,8 @@ jest.mock('@prisma/client', () => {
       })
     },
     aiGenerationLog: {
-      create: jest.fn().mockResolvedValue({})
+      create: jest.fn().mockResolvedValue({}),
+      count: jest.fn().mockResolvedValue(0)
     },
     mediaAsset: {
       create: jest.fn().mockResolvedValue({ id: 'mocked_asset_id', fileUrl: 'https://mock.com/img.png' }),
@@ -35,25 +36,22 @@ jest.mock('@prisma/client', () => {
   return { PrismaClient: jest.fn(() => mockPrisma) };
 });
 
-// Mock OpenAI
-jest.mock('openai', () => {
-  return jest.fn().mockImplementation(() => {
-    return {
-      chat: {
-        completions: {
-          create: jest.fn().mockResolvedValue({
-            choices: [{ message: { content: JSON.stringify({ variations: ['AI Caption 1', 'AI Caption 2'] }) } }],
-            usage: { total_tokens: 100 }
-          })
-        }
-      },
-      images: {
-        generate: jest.fn().mockResolvedValue({
-          data: [{ url: 'https://mock.openai.com/generated_image.png' }]
-        })
+// Mock Google GenAI
+jest.mock('@google/genai', () => {
+  const mockGenerateContent = jest.fn().mockResolvedValue({
+    candidates: [{
+      content: {
+        parts: [{ text: JSON.stringify({ variations: ['AI Caption 1', 'AI Caption 2'], hashtags: ['#test1', '#test2'], ideas: [{ day: 1, topic: 'Test', description: 'A test idea' }] }) }]
       }
-    };
+    }]
   });
+  return {
+    GoogleGenAI: jest.fn().mockImplementation(() => ({
+      models: {
+        generateContent: mockGenerateContent
+      }
+    }))
+  };
 });
 
 // Mock AWS S3
@@ -71,16 +69,49 @@ jest.mock('@aws-sdk/s3-request-presigner', () => ({
   getSignedUrl: jest.fn().mockResolvedValue('https://mock.s3.com/presigned-url')
 }));
 
+beforeAll(() => {
+  process.env.GOOGLE_AI_API_KEY = 'mock-key-for-tests';
+});
+
 describe('AI Studio API Endpoints', () => {
   it('should generate captions', async () => {
-    process.env.OPENAI_API_KEY = 'real-key-for-test-mock';
     const response = await request(app)
       .post('/api/ai/caption')
-      .send({ prompt: 'Test prompt', tone: 'funny', platform: 'twitter' });
+      .send({ prompt: 'Test prompt', tone: 'funny', platform: 'Instagram' });
     
     expect(response.status).toBe(200);
     expect(response.body.variations).toBeDefined();
     expect(response.body.variations.length).toBeGreaterThan(0);
+  });
+
+  it('should reject empty prompt for captions', async () => {
+    const response = await request(app)
+      .post('/api/ai/caption')
+      .send({ prompt: '' });
+    expect(response.status).toBe(400);
+  });
+
+  it('should reject invalid tone', async () => {
+    const response = await request(app)
+      .post('/api/ai/caption')
+      .send({ prompt: 'Test', tone: 'InvalidTone' });
+    expect(response.status).toBe(400);
+  });
+
+  it('should generate hashtags', async () => {
+    const response = await request(app)
+      .post('/api/ai/hashtags')
+      .send({ niche: 'fashion', keywords: 'sustainable' });
+    expect(response.status).toBe(200);
+    expect(response.body.hashtags).toBeDefined();
+  });
+
+  it('should generate ideas', async () => {
+    const response = await request(app)
+      .post('/api/ai/ideas')
+      .send({ topic: 'fitness coaching', industry: 'health' });
+    expect(response.status).toBe(200);
+    expect(response.body.ideas).toBeDefined();
   });
 });
 

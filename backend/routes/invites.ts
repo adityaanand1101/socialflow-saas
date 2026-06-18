@@ -48,9 +48,9 @@ router.post('/accept', requireAuth, async (req: any, res: any) => {
       return res.status(400).json({ error: 'Invalid or expired invite' });
     }
 
-    // Verify the authenticated user's email matches the invite email
+    // Verify email only if the invite was sent to a specific email
     const user = req.dbUser;
-    if (user.email.toLowerCase() !== invite.email.toLowerCase()) {
+    if (invite.email && user.email.toLowerCase() !== invite.email.toLowerCase()) {
       return res.status(403).json({
         error: 'This invitation was sent to a different email address',
         invitedEmail: invite.email

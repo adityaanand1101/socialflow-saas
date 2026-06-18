@@ -218,7 +218,7 @@ router.post('/:id/invites', requireAuth, requireRole(['OWNER', 'ADMIN']), checkS
     const invite = await prisma.workspaceInvite.create({
       data: {
         workspaceId: id,
-        email,
+        email: email || null,
         role: role || 'MEMBER',
         token,
         expiresAt
@@ -227,9 +227,7 @@ router.post('/:id/invites', requireAuth, requireRole(['OWNER', 'ADMIN']), checkS
 
     const inviteLink = `${process.env.FRONTEND_URL || 'https://socialflow-saas.vercel.app'}/accept-invite?token=${token}`;
 
-    if (!resend) {
-      console.warn('RESEND_API_KEY not set — skipping invite email');
-    } else {
+    if (email && resend) {
       try {
         await resend.emails.send({
           from: 'onboarding@resend.dev',
@@ -241,19 +239,20 @@ router.post('/:id/invites', requireAuth, requireRole(['OWNER', 'ADMIN']), checkS
               <p>You have been invited to join a workspace on SocialFlow with the role of <strong>${role || 'MEMBER'}</strong>.</p>
               <p>Click the button below to accept the invitation:</p>
               <a href="${inviteLink}" style="display: inline-block; padding: 10px 20px; background-color: #6d28d9; color: #fff; text-decoration: none; border-radius: 5px; margin-top: 10px;">Accept Invitation</a>
-              <p style="margin-top: 20px; font-size: 12px; color: #888;">If the button doesn't work, copy and paste this link into your browser: <br>${inviteLink}</p>
+              <p style="margin-top: 20px; font-size: 12px; color: #888;">If the button doesn't work, copy and paste this link into your browser:</p>
+              <p style="font-size: 12px; word-break: break-all;">${inviteLink}</p>
             </div>
           `,
         });
-        console.log(`Invite email successfully sent to ${email} via Resend`);
       } catch (emailError) {
         console.error('Failed to send email via Resend:', emailError);
       }
     }
 
-    await logActivity(prisma, id, req.userId, 'member.invited', `Invited ${email} as ${role || 'MEMBER'}`);
+    const logDetail = email ? `Invited ${email} as ${role || 'MEMBER'}` : 'Generated invite link';
+    await logActivity(prisma, id, req.userId, 'member.invited', logDetail);
 
-    res.status(201).json(invite);
+    res.status(201).json({ ...invite, inviteLink });
   } catch (error) {
     console.error('Error creating invite:', error);
     res.status(500).json({ error: 'Internal server error' });

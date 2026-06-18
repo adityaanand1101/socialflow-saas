@@ -133,7 +133,7 @@ export const AcceptInvite = () => {
                   </span>
                 </div>
                 <p className="text-center text-xs text-muted-foreground mt-2">
-                  Invite sent to {invite.email}
+                  {invite.email ? `Invite sent to ${invite.email}` : 'Anyone with this link can join'}
                 </p>
               </div>
 

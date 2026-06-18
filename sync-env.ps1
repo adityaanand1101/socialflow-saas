@@ -2,7 +2,7 @@
 if (Test-Path "$PSScriptRoot\sync-env-config.ps1") {
     . "$PSScriptRoot\sync-env-config.ps1"
 } else {
-    Write-Error "Missing sync-env-config.ps1 — create it with:`n`$`$API_KEY = 'your_render_api_key'`n`$`$SERVICE_ID = 'your_render_service_id'"
+    Write-Error "Missing sync-env-config.ps1. Create it with: `$API_KEY = 'xxx'; `$SERVICE_ID = 'xxx'"
     exit 1
 }
 

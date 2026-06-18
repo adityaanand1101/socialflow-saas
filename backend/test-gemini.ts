@@ -14,10 +14,10 @@ async function runTests() {
   console.log("--- STARTING AI STUDIO DIAGNOSTICS ---");
 
   // 1. CAPTIONS
-  console.log("\n1. Testing Caption Generation (gemini-2.0-flash)...");
+  console.log("\n1. Testing Caption Generation (gemini-2.5-flash)...");
   try {
     const res1 = await genAI.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.5-flash',
       contents: [{ role: 'user', parts: [{ text: `You are an expert social media manager. Generate 3 variations of a caption for Instagram with a Professional tone. Return the response strictly as a JSON object with a "variations" key containing an array of strings.\n\nUser Request: Launching a new SaaS product` }] }],
     });
     console.log("✅ Success. Raw response snippet:", res1.candidates?.[0]?.content?.parts?.[0]?.text?.substring(0, 100).replace(/\n/g, ' '));
@@ -26,10 +26,10 @@ async function runTests() {
   }
 
   // 2. HASHTAGS
-  console.log("\n2. Testing Hashtag Generation (gemini-2.0-flash)...");
+  console.log("\n2. Testing Hashtag Generation (gemini-2.5-flash)...");
   try {
     const res2 = await genAI.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.5-flash',
       contents: [{ role: 'user', parts: [{ text: `You are an SEO expert. Generate a list of top trending and contextually relevant hashtags for the given niche and keywords. Return strictly as a JSON object with a "hashtags" key containing an array of strings (including the # symbol).\n\nNiche: SaaS, Keywords: startup, tech` }] }],
     });
     console.log("✅ Success. Raw response snippet:", res2.candidates?.[0]?.content?.parts?.[0]?.text?.substring(0, 100).replace(/\n/g, ' '));
@@ -38,10 +38,10 @@ async function runTests() {
   }
 
   // 3. IDEAS
-  console.log("\n3. Testing Idea Generation (gemini-2.0-flash)...");
+  console.log("\n3. Testing Idea Generation (gemini-2.5-flash)...");
   try {
     const res3 = await genAI.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.5-flash',
       contents: [{ role: 'user', parts: [{ text: `Generate a 30-day social media content plan. Return JSON strictly in this format: { "ideas": [ { "day": 1, "topic": "...", "description": "..." } ] }\n\nTopic: SaaS, Industry: Tech` }] }],
     });
     console.log("✅ Success. Raw response snippet:", res3.candidates?.[0]?.content?.parts?.[0]?.text?.substring(0, 100).replace(/\n/g, ' '));

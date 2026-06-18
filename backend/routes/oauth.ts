@@ -14,7 +14,7 @@ const prisma = new PrismaClient();
 // In-memory store for PKCE code_verifiers (keyed by Clerk userId / state param)
 const pkceStore = new Map<string, string>();
 
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || '';
 if (!ENCRYPTION_KEY) {
   console.error('CRITICAL: ENCRYPTION_KEY not set — OAuth token encryption will fail');
 }

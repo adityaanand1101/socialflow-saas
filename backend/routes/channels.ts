@@ -26,10 +26,7 @@ router.get('/', requireAuth, async (req: any, res: any) => {
       name: acc.displayName || acc.username,
       username: acc.username,
       avatar: (acc.avatarUrl && !acc.avatarUrl.includes('shadcn.png') ? acc.avatarUrl : null),
-      followers: 0, // Placeholder: Real stats would require fetching from platform APIs
-      reach: 0,
       status: 'connected',
-      engagementRate: 0,
       lastSynced: acc.updatedAt.toISOString()
     }));
 

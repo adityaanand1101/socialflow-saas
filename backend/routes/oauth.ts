@@ -172,6 +172,10 @@ router.get('/test-redirects', (req: any, res: any) => {
 router.get('/:platform/connect', requireAuth, async (req: any, res: any) => {
   try {
     const { platform } = req.params;
+    const validPlatforms = Object.keys(providers);
+    if (!validPlatforms.includes(platform)) {
+      return res.status(400).json({ error: `Unsupported platform: ${platform}` });
+    }
     const provider = providers[platform as keyof typeof providers];
     
     if (!provider || !provider.clientId) {
@@ -209,7 +213,7 @@ router.get('/:platform/connect', requireAuth, async (req: any, res: any) => {
     res.json({ authUrl: authUrl.toString() });
   } catch (err: any) {
     console.error('Connect Route Error:', err);
-    res.status(500).json({ error: err.message, stack: err.stack });
+    res.status(500).json({ error: err.message });
   }
 });
 

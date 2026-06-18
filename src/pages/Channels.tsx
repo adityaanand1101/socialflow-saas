@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { 
-  MoreVertical, RefreshCw, Unplug, TrendingUp, Users, Eye, Info, X, Loader2, Check
+  MoreVertical, RefreshCw, Unplug, TrendingUp, Users, Eye, Info, X, Loader2, Check, AlertCircle
 } from 'lucide-react'
 import { 
   Instagram, Linkedin, Twitter, Youtube, Facebook, Threads, Bluesky, 
@@ -40,18 +40,48 @@ export const Channels = () => {
   const [syncingId, setSyncingId] = useState<string | null>(null)
   const [showInfoModal, setShowInfoModal] = useState<string | null>(null)
   const [showCustomModal, setShowCustomModal] = useState<string | null>(null)
+  const [showDisconnectModal, setShowDisconnectModal] = useState<string | null>(null)
   const [customCreds, setCustomCreds] = useState({ identifier: '', password: '' })
   const [menuOpen, setMenuOpen] = useState<string | null>(null)
-  const [connectSuccess] = useState<string | null>(null)
-  
-  // Force a fetch when the page loads, especially to catch new OAuth redirects
+  const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [fetchError, setFetchError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
   useEffect(() => {
+    let cancelled = false
     const initFetch = async () => {
-      const token = await getToken()
-      if (token) await fetchChannels(token)
+      try {
+        setLoading(true)
+        setFetchError(null)
+        const token = await getToken()
+        if (token && !cancelled) await fetchChannels(token)
+      } catch (e: any) {
+        if (!cancelled) setFetchError(e.message || 'Failed to load channels')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
     }
     initFetch()
+    return () => { cancelled = true }
   }, [getToken, fetchChannels])
+
+  const closeModals = useCallback(() => {
+    setShowInfoModal(null)
+    setShowCustomModal(null)
+    setShowDisconnectModal(null)
+  }, [])
+
+  useEffect(() => {
+    if (!showInfoModal && !showCustomModal && !showDisconnectModal) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeModals() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [showInfoModal, showCustomModal, showDisconnectModal, closeModals])
+
+  const showNotification = (type: 'success' | 'error', message: string) => {
+    setNotification({ type, message })
+    setTimeout(() => setNotification(null), 5000)
+  }
 
   const handleConnect = async (platform: string) => {
     if (platform === 'bluesky' || platform === 'telegram') {
@@ -65,22 +95,19 @@ export const Channels = () => {
       const res = await apiFetch(`/api/oauth/${platform}/connect`, {
         headers: { Authorization: `Bearer ${token}` }
       })
-      
+
       const data = await res.json()
       if (res.ok && data.authUrl) {
-        // Open the OAuth screen in a new tab
         window.open(data.authUrl, '_blank', 'noopener,noreferrer')
-        
-        // Show the user a message that they need to finish in the new tab
-        alert(`A new tab has opened to connect ${platform}. Once you finish, close that tab and refresh this page.`)
+        showNotification('success', `A new tab has opened to connect ${platform}. After authorizing, come back and refresh.`)
       } else {
-        const errorMsg = data.error || `Server returned ${res.status}: ${res.statusText}`;
-        alert(`Failed to connect ${platform}: ${errorMsg}`);
-        console.error('Connect Error:', data);
+        const errorMsg = data.error || `Server returned ${res.status}: ${res.statusText}`
+        showNotification('error', `Failed to connect ${platform}: ${errorMsg}`)
+        console.error('Connect Error:', data)
       }
     } catch (e: any) {
       console.error('Network Error:', e)
-      alert(`Network error: Could not reach the backend. Check your VITE_API_URL.`);
+      showNotification('error', `Network error: Could not reach the backend. Check your VITE_API_URL.`)
     } finally {
       setConnecting(null)
     }
@@ -88,7 +115,7 @@ export const Channels = () => {
 
   const handleCustomConnect = async () => {
     if (!showCustomModal || !customCreds.identifier || !customCreds.password) return
-    
+
     setConnecting(showCustomModal)
     try {
       const token = await getToken()
@@ -100,18 +127,19 @@ export const Channels = () => {
         },
         body: JSON.stringify(customCreds)
       })
-      
+
       if (res.ok) {
         await fetchChannels(token as string)
         setShowCustomModal(null)
         setCustomCreds({ identifier: '', password: '' })
+        showNotification('success', `Connected ${showCustomModal} successfully!`)
       } else {
         const data = await res.json()
-        alert(data.error || 'Failed to connect')
+        showNotification('error', data.error || 'Failed to connect')
       }
     } catch (e) {
       console.error(e)
-      alert('Connection error')
+      showNotification('error', 'Connection error')
     } finally {
       setConnecting(null)
     }
@@ -122,32 +150,36 @@ export const Channels = () => {
     try {
       const token = await getToken()
       if (token) await fetchChannels(token)
-      await new Promise(r => setTimeout(r, 1000))
+      showNotification('success', 'Channels synced successfully')
+    } catch (e) {
+      showNotification('error', 'Sync failed')
     } finally {
       setSyncingId(null)
     }
   }
 
   const handleDisconnect = async (channelId: string) => {
-    if (!confirm('Are you sure you want to disconnect this account?')) return
+    setShowDisconnectModal(null)
+    setMenuOpen(null)
     try {
       const token = await getToken()
       if (!token) return
-      
+
       const res = await apiFetch(`/api/channels/${channelId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       })
-      
+
       if (res.ok) {
         await fetchChannels(token)
-        setMenuOpen(null)
+        showNotification('success', 'Channel disconnected')
       } else {
         const data = await res.json()
-        alert(data.error || 'Failed to disconnect channel')
+        showNotification('error', data.error || 'Failed to disconnect channel')
       }
     } catch (e) {
       console.error(e)
+      showNotification('error', 'Failed to disconnect')
     }
   }
 
@@ -155,16 +187,80 @@ export const Channels = () => {
 
   return (
     <div className="space-y-8 pb-10">
+      {/* Notification Toast */}
+      {notification && (
+        <div className={cn(
+          "fixed top-6 right-6 z-50 px-5 py-3 rounded-xl border shadow-2xl animate-in slide-in-from-top-2 fade-in duration-200 flex items-center gap-3 max-w-md",
+          notification.type === 'success' ? "bg-green-500/10 border-green-500/30" : "bg-red-500/10 border-red-500/30"
+        )}>
+          {notification.type === 'success' ? (
+            <Check className="w-5 h-5 text-green-400 shrink-0" />
+          ) : (
+            <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
+          )}
+          <p className={cn(
+            "text-sm flex-1",
+            notification.type === 'success' ? "text-green-200" : "text-red-200"
+          )}>{notification.message}</p>
+          <button onClick={() => setNotification(null)} className="p-1 hover:bg-white/5 rounded">
+            <X className="w-3 h-3 text-white/40" />
+          </button>
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white tracking-tight">Social Channels</h1>
           <p className="text-muted-foreground mt-1">Connect and manage your social media identities.</p>
         </div>
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10">
-          <div className="w-2 h-2 rounded-full bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.5)]" />
-          <span className="text-xs font-bold text-white">{channels.length} Connected</span>
-        </div>
+        {!loading && (
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10">
+            <div className="w-2 h-2 rounded-full bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.5)]" />
+            <span className="text-xs font-bold text-white">{channels.length} Connected</span>
+          </div>
+        )}
       </div>
+
+      {/* Error Banner */}
+      {fetchError && (
+        <Card className="border-red-500/30 bg-red-500/5">
+          <CardContent className="p-4 flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
+            <p className="text-sm text-red-300 flex-1">{fetchError}</p>
+            <Button variant="ghost" size="sm" onClick={() => setFetchError(null)}>Dismiss</Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Loading Skeleton */}
+      {loading && (
+        <div>
+          <div className="h-3 bg-white/10 rounded w-28 mb-4 animate-pulse" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3].map(i => (
+              <Card key={i} className="border-white/10 bg-white/5 animate-pulse">
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-full bg-white/10" />
+                    <div className="flex-1">
+                      <div className="h-4 bg-white/10 rounded w-32 mb-2" />
+                      <div className="h-3 bg-white/10 rounded w-20" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 mt-5">
+                    {[1, 2, 3].map(j => (
+                      <div key={j} className="p-2 rounded-lg bg-white/5">
+                        <div className="h-4 bg-white/10 rounded w-10 mx-auto mb-1" />
+                        <div className="h-2 bg-white/10 rounded w-12 mx-auto" />
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Connect Platform Info Modal */}
       {showInfoModal && (
@@ -192,7 +288,7 @@ export const Channels = () => {
                 <X className="w-4 h-4 text-muted-foreground" />
               </button>
             </div>
-            
+
             <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/20 flex items-start gap-3 mb-5">
               <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
               <div>
@@ -209,7 +305,7 @@ export const Channels = () => {
         </div>
       )}
 
-      {/* Custom Connect Modal (Bluesky/Medium) */}
+      {/* Custom Connect Modal */}
       {showCustomModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={(e) => e.target === e.currentTarget && setShowCustomModal(null)}>
           <div className="bg-[#141218] border border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl animate-in fade-in zoom-in-95 duration-200">
@@ -235,7 +331,7 @@ export const Channels = () => {
                 <X className="w-4 h-4 text-muted-foreground" />
               </button>
             </div>
-            
+
             <div className="space-y-4 mb-6">
               <div className="space-y-2">
                 <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
@@ -278,17 +374,38 @@ export const Channels = () => {
         </div>
       )}
 
+      {/* Disconnect Confirmation Modal */}
+      {showDisconnectModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={(e) => e.target === e.currentTarget && setShowDisconnectModal(null)}>
+          <div className="bg-[#141218] border border-white/10 rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-bold text-white">Disconnect Account</h2>
+              <button onClick={() => setShowDisconnectModal(null)} className="p-2 hover:bg-white/5 rounded-lg">
+                <X className="w-4 h-4 text-muted-foreground" />
+              </button>
+            </div>
+            <p className="text-sm text-muted-foreground mb-6">
+              Are you sure you want to disconnect this account? You'll need to re-authorize to connect it again.
+            </p>
+            <div className="flex gap-3">
+              <Button variant="outline" className="flex-1" onClick={() => setShowDisconnectModal(null)}>Cancel</Button>
+              <Button className="flex-1 bg-red-500/20 border-red-500/30 text-red-400 hover:bg-red-500/30" onClick={() => handleDisconnect(showDisconnectModal)}>Disconnect</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Connected Channels */}
-      {channels.length > 0 && (
+      {!loading && channels.length > 0 && (
         <div>
           <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-4">Connected Accounts</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {channels.map((channel: any) => {
               const platform = ALL_PLATFORMS.find(p => p.id === channel.platform)
               const PlatformIcon = platform?.icon || Instagram
+              const hasStats = channel.followers != null || channel.engagementRate != null || channel.reach != null
               return (
                 <Card key={channel.id} className="relative overflow-hidden group hover:border-white/20 transition-all">
-                  {/* Gradient bg */}
                   <div className="absolute top-0 left-0 right-0 h-24 opacity-10 bg-gradient-primary pointer-events-none" />
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <PlatformIcon className="w-10 h-10" />
@@ -298,12 +415,15 @@ export const Channels = () => {
                       </Button>
                       {menuOpen === channel.id && (
                         <div className="absolute right-0 top-9 bg-[#141218] border border-white/10 rounded-xl shadow-2xl z-10 w-36 py-1 animate-in fade-in zoom-in-95 duration-100">
-                          <button className="w-full text-left px-3 py-2 text-sm text-muted-foreground hover:text-white hover:bg-white/5 flex items-center gap-2">
+                          <button
+                            className="w-full text-left px-3 py-2 text-sm text-muted-foreground hover:text-white hover:bg-white/5 flex items-center gap-2"
+                            onClick={() => handleSync(channel.id)}
+                          >
                             <RefreshCw className="w-3 h-3" /> Sync Now
                           </button>
                           <button 
                             className="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2"
-                            onClick={() => handleDisconnect(channel.id)}
+                            onClick={() => { setMenuOpen(null); setShowDisconnectModal(channel.id) }}
                           >
                             <Unplug className="w-3 h-3" /> Disconnect
                           </button>
@@ -325,19 +445,20 @@ export const Channels = () => {
                       </div>
                     </div>
 
-                    {/* Stats row */}
-                    <div className="grid grid-cols-3 gap-2 mt-5">
-                      {[
-                        { icon: Users, label: 'Followers', value: channel.followers >= 1000 ? `${(channel.followers/1000).toFixed(1)}K` : channel.followers },
-                        { icon: TrendingUp, label: 'Engagement', value: `${channel.engagementRate}%` },
-                        { icon: Eye, label: 'Reach', value: channel.reach >= 1000 ? `${(channel.reach/1000).toFixed(1)}K` : channel.reach },
-                      ].map(stat => (
-                        <div key={stat.label} className="p-2 rounded-lg bg-white/5 text-center">
-                          <p className="text-xs font-bold text-white">{stat.value}</p>
-                          <p className="text-[9px] text-muted-foreground uppercase tracking-tight mt-0.5">{stat.label}</p>
-                        </div>
-                      ))}
-                    </div>
+                    {hasStats && (
+                      <div className="grid grid-cols-3 gap-2 mt-5">
+                        {[
+                          { icon: Users, label: 'Followers', value: channel.followers >= 1000 ? `${(channel.followers/1000).toFixed(1)}K` : channel.followers },
+                          { icon: TrendingUp, label: 'Engagement', value: `${channel.engagementRate}%` },
+                          { icon: Eye, label: 'Reach', value: channel.reach >= 1000 ? `${(channel.reach/1000).toFixed(1)}K` : channel.reach },
+                        ].filter(s => s.value != null && s.value !== '0%' && s.value !== '0' && s.value !== '0.0K').map(stat => (
+                          <div key={stat.label} className="p-2 rounded-lg bg-white/5 text-center">
+                            <p className="text-xs font-bold text-white">{stat.value}</p>
+                            <p className="text-[9px] text-muted-foreground uppercase tracking-tight mt-0.5">{stat.label}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
 
                     <div className="mt-5 flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -350,7 +471,7 @@ export const Channels = () => {
                         disabled={syncingId === channel.id}
                       >
                         <RefreshCw className={cn("w-3 h-3", syncingId === channel.id && "animate-spin")} />
-                        Sync
+                        {syncingId === channel.id ? 'Syncing...' : 'Sync'}
                       </Button>
                     </div>
                   </CardContent>
@@ -362,7 +483,7 @@ export const Channels = () => {
       )}
 
       {/* Available Platforms */}
-      {availablePlatforms.length > 0 && (
+      {!loading && availablePlatforms.length > 0 && (
         <div>
           <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-4">
             {channels.length > 0 ? 'Add More Channels' : 'Connect a Channel'}
@@ -371,27 +492,32 @@ export const Channels = () => {
             {availablePlatforms.map((platform) => (
               <Card
                 key={platform.id}
-                className={cn("cursor-pointer transition-all border-dashed border-2 border-white/10 bg-transparent", platform.bgHover)}
-                onClick={() => handleConnect(platform.id)}
+                className={cn("cursor-pointer transition-all border-dashed border-2 border-white/10 bg-transparent group", platform.bgHover)}
               >
                 <CardContent className="flex flex-col items-center justify-center gap-3 py-8 text-center">
-                  {connectSuccess === platform.id ? (
-                    <div className="w-10 h-10 rounded-full bg-green-500/20 border border-green-500/30 flex items-center justify-center">
-                      <Check className="w-5 h-5 text-green-400" />
-                    </div>
-                  ) : connecting === platform.id ? (
+                  <div className="flex items-center gap-2 absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setShowInfoModal(platform.id) }}
+                      className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+                      title={`About ${platform.label}`}
+                    >
+                      <Info className="w-3.5 h-3.5 text-muted-foreground" />
+                    </button>
+                  </div>
+                  {connecting === platform.id ? (
                     <Loader2 className={cn("w-8 h-8 animate-spin", platform.color)} />
                   ) : (
                     <platform.icon className={cn("w-8 h-8", platform.color)} />
                   )}
                   <div>
-                    <p className="font-bold text-white text-sm">{connectSuccess === platform.id ? 'Connected!' : `Connect ${platform.label}`}</p>
+                    <p className="font-bold text-white text-sm">Connect {platform.label}</p>
                     <p className="text-[11px] text-muted-foreground mt-0.5">{platform.description}</p>
                   </div>
-                  <Button 
-                    size="sm" 
-                    variant="outline" 
+                  <Button
+                    size="sm"
+                    variant="outline"
                     className="text-xs mt-1"
+                    onClick={() => handleConnect(platform.id)}
                     disabled={connecting === platform.id}
                   >
                     {connecting === platform.id ? 'Connecting...' : 'Connect'}
@@ -404,7 +530,7 @@ export const Channels = () => {
       )}
 
       {/* Empty state */}
-      {channels.length === 0 && (
+      {!loading && channels.length === 0 && !fetchError && (
         <div className="mt-4 p-6 rounded-xl bg-white/5 border border-white/10 text-center">
           <p className="text-muted-foreground text-sm">Connect a social media channel above to get started. Your accounts will appear here once connected.</p>
         </div>

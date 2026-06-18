@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { 
   MessageSquare, Hash, Lightbulb, ImageIcon,
   RefreshCcw, Loader2, Copy, Check, Wand2, ArrowRight, AlertCircle,
-  ChevronDown
+  ChevronDown, Settings2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@clerk/react'
@@ -17,13 +17,30 @@ const PLATFORM_OPTIONS = ALL_PLATFORMS.map(p => ({ id: p.id, label: p.label }))
 const tools = [
   { id: 'caption', icon: MessageSquare, title: 'Caption Generator', description: 'Create engaging captions from a prompt.', color: 'from-purple-500 to-blue-500' },
   { id: 'hashtag', icon: Hash, title: 'Hashtag Research', description: 'Find trending tags for your niche.', color: 'from-blue-500 to-cyan-500' },
-  { id: 'ideas', icon: Lightbulb, title: 'Content Ideas', description: 'Get 30 days of content planned in seconds.', color: 'from-orange-500 to-yellow-500' },
+  { id: 'ideas', icon: Lightbulb, title: 'Content Ideas', description: 'Get 10 days of content planned in seconds.', color: 'from-orange-500 to-yellow-500' },
   { id: 'image', icon: ImageIcon, title: 'AI Image Generator', description: 'Generate custom visuals for your posts.', color: 'from-pink-500 to-rose-500' },
 ]
+
+type CaptionWizard = { brand: string; audience: string; goal: string; hook: string; cta: string; emoji: string }
+type HashtagWizard = { niche: string; related: string; reach: string }
+type IdeasWizard = { brand: string; audience: string; goals: string[]; formats: string[] }
+type ImageWizard = { subject: string; style: string; mood: string; colors: string; lighting: string }
+
+const GOAL_OPTIONS = ['Awareness', 'Engagement', 'Sales', 'Education', 'Entertainment']
+const FORMAT_OPTIONS = ['Carousel', 'Reel', 'Poll', 'Story', 'Tutorial', 'Behind-scenes', 'Q&A', 'Trend']
+const STYLE_OPTIONS = ['Photorealistic', 'Illustration', '3D Render', 'Oil Painting', 'Digital Art', 'Anime', 'Minimalist']
+const MOOD_OPTIONS = ['Professional', 'Playful', 'Dark', 'Bright', 'Minimal', 'Dramatic', 'Warm', 'Cool']
+const LIGHTING_OPTIONS = ['Natural', 'Studio', 'Golden Hour', 'Dramatic', 'Neon', 'Soft']
+
+const INIT_CAPTION: CaptionWizard = { brand: '', audience: '', goal: 'Engagement', hook: '', cta: 'Comment', emoji: 'Moderate' }
+const INIT_HASHTAG: HashtagWizard = { niche: '', related: '', reach: 'Mix' }
+const INIT_IDEAS: IdeasWizard = { brand: '', audience: '', goals: ['Engagement'], formats: [] }
+const INIT_IMAGE: ImageWizard = { subject: '', style: 'Photorealistic', mood: 'Professional', colors: '', lighting: 'Natural' }
 
 export const AIStudio = () => {
   const [activeTool, setActiveTool] = useState('caption')
   const [prompt, setPrompt] = useState('')
+  const [isManuallyEdited, setIsManuallyEdited] = useState(false)
   const [tone, setTone] = useState('Professional')
   const [platform, setPlatform] = useState('instagram')
   const [aspectRatio, setAspectRatio] = useState('1:1')
@@ -31,9 +48,73 @@ export const AIStudio = () => {
   const [results, setResults] = useState<any>(null)
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [showWizard, setShowWizard] = useState(true)
+
+  const [cw, setCw] = useState<CaptionWizard>(INIT_CAPTION)
+  const [hw, setHw] = useState<HashtagWizard>(INIT_HASHTAG)
+  const [iw, setIw] = useState<IdeasWizard>(INIT_IDEAS)
+  const [imw, setImw] = useState<ImageWizard>(INIT_IMAGE)
 
   const navigate = useNavigate()
   const { getToken } = useAuth()
+
+  const buildPrompt = useCallback(() => {
+    switch (activeTool) {
+      case 'caption': {
+        const parts: string[] = []
+        if (cw.brand) parts.push(`Brand: ${cw.brand}`)
+        if (cw.audience) parts.push(`Target audience: ${cw.audience}`)
+        if (cw.goal) parts.push(`Goal: ${cw.goal}`)
+        if (cw.hook) parts.push(`Hook idea: ${cw.hook}`)
+        if (cw.emoji !== 'Moderate') parts.push(`Emoji usage: ${cw.emoji}`)
+        parts.push(`CTA: ${cw.cta}`)
+        const base = parts.join('. ') + '.'
+        if (cw.brand || cw.audience || cw.goal) {
+          return `${prompt ? prompt + ' ' : ''}${base}`
+        }
+        return prompt
+      }
+      case 'hashtag': {
+        return hw.niche
+          ? `${hw.niche}${hw.related ? ` related to ${hw.related}` : ''}${hw.reach !== 'Mix' ? `, target reach: ${hw.reach}` : ''}`
+          : prompt
+      }
+      case 'ideas': {
+        const parts: string[] = []
+        if (iw.brand) parts.push(`Brand: ${iw.brand}`)
+        if (iw.audience) parts.push(`Audience: ${iw.audience}`)
+        if (iw.goals.length) parts.push(`Goals: ${iw.goals.join(', ')}`)
+        if (iw.formats.length) parts.push(`Formats: ${iw.formats.join(', ')}`)
+        const base = parts.join('. ') + '.'
+        if (iw.brand || iw.audience) {
+          return `${prompt ? prompt + ' ' : ''}${base}`
+        }
+        return prompt
+      }
+      case 'image': {
+        const parts: string[] = []
+        if (imw.style) parts.push(`Style: ${imw.style}`)
+        if (imw.mood) parts.push(`Mood: ${imw.mood}`)
+        if (imw.lighting) parts.push(`Lighting: ${imw.lighting}`)
+        if (imw.colors) parts.push(`Colors: ${imw.colors}`)
+        const suffix = parts.length ? `, ${parts.join(', ')}` : ''
+        return imw.subject
+          ? `${imw.subject}${suffix}`
+          : prompt
+      }
+    }
+  }, [activeTool, cw, hw, iw, imw, prompt])
+
+  useEffect(() => {
+    if (!isManuallyEdited) {
+      const built = buildPrompt()
+      if (built) setPrompt(built)
+    }
+  }, [buildPrompt, isManuallyEdited])
+
+  const handleWizardChange = () => {
+    setIsManuallyEdited(false)
+  }
 
   const copyText = async (text: string, index: number) => {
     await navigator.clipboard.writeText(text)
@@ -273,6 +354,138 @@ export const AIStudio = () => {
     return null
   }
 
+  const selectClass = "appearance-none bg-white/10 border border-white/20 rounded-lg px-3 py-1.5 pr-8 text-xs text-white font-medium cursor-pointer hover:bg-white/20 transition-colors outline-none"
+  const labelClass = "text-[10px] text-muted-foreground uppercase font-bold tracking-wider shrink-0"
+  const fieldClass = "flex items-center gap-2"
+  const chipClass = (active: boolean) => cn(
+    "px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all cursor-pointer",
+    active ? "bg-white/20 border-white/30 text-white" : "bg-white/5 border-white/10 text-muted-foreground hover:border-white/20 hover:text-white"
+  )
+
+  const renderCaptionWizard = () => (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div className={fieldClass}>
+          <span className={labelClass}>Brand</span>
+          <input value={cw.brand} onChange={e => { setCw({...cw, brand: e.target.value}); handleWizardChange() }} placeholder="e.g. BrewLab" className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder:text-white/20 outline-none focus:border-purple-500/50" />
+        </div>
+        <div className={fieldClass}>
+          <span className={labelClass}>Audience</span>
+          <input value={cw.audience} onChange={e => { setCw({...cw, audience: e.target.value}); handleWizardChange() }} placeholder="e.g. Gen Z coffee lovers" className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder:text-white/20 outline-none focus:border-purple-500/50" />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className={fieldClass}>
+          <span className={labelClass}>Goal</span>
+          <select value={cw.goal} onChange={e => { setCw({...cw, goal: e.target.value}); handleWizardChange() }} className={selectClass}>
+            {GOAL_OPTIONS.map(g => <option key={g} value={g} className="bg-gray-900">{g}</option>)}
+          </select>
+        </div>
+        <div className={fieldClass}>
+          <span className={labelClass}>CTA</span>
+          <select value={cw.cta} onChange={e => { setCw({...cw, cta: e.target.value}); handleWizardChange() }} className={selectClass}>
+            {['Link', 'Comment', 'Share', 'Follow', 'Shop', 'DM'].map(c => <option key={c} value={c} className="bg-gray-900">{c}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className={fieldClass}>
+        <span className={labelClass}>Hook</span>
+        <input value={cw.hook} onChange={e => { setCw({...cw, hook: e.target.value}); handleWizardChange() }} placeholder="e.g. 'The coffee hack that changed my mornings'" className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder:text-white/20 outline-none focus:border-purple-500/50" />
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={labelClass}>Emoji</span>
+        {['None', 'Minimal', 'Moderate', 'Heavy'].map(e => (
+          <button key={e} onClick={() => { setCw({...cw, emoji: e}); handleWizardChange() }} className={chipClass(cw.emoji === e)}>{e}</button>
+        ))}
+      </div>
+    </div>
+  )
+
+  const renderHashtagWizard = () => (
+    <div className="space-y-3">
+      <div className={fieldClass}>
+        <span className={labelClass}>Niche</span>
+        <input value={hw.niche} onChange={e => { setHw({...hw, niche: e.target.value}); handleWizardChange() }} placeholder="e.g. sustainable fashion" className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder:text-white/20 outline-none focus:border-purple-500/50" />
+      </div>
+      <div className={fieldClass}>
+        <span className={labelClass}>Related</span>
+        <input value={hw.related} onChange={e => { setHw({...hw, related: e.target.value}); handleWizardChange() }} placeholder="e.g. eco-friendly, thrifting" className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder:text-white/20 outline-none focus:border-purple-500/50" />
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={labelClass}>Reach</span>
+        {['Broad', 'Mix', 'Niche'].map(r => (
+          <button key={r} onClick={() => { setHw({...hw, reach: r}); handleWizardChange() }} className={chipClass(hw.reach === r)}>{r}</button>
+        ))}
+      </div>
+    </div>
+  )
+
+  const renderIdeasWizard = () => (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div className={fieldClass}>
+          <span className={labelClass}>Brand</span>
+          <input value={iw.brand} onChange={e => { setIw({...iw, brand: e.target.value}); handleWizardChange() }} placeholder="e.g. FitHer" className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder:text-white/20 outline-none focus:border-purple-500/50" />
+        </div>
+        <div className={fieldClass}>
+          <span className={labelClass}>Audience</span>
+          <input value={iw.audience} onChange={e => { setIw({...iw, audience: e.target.value}); handleWizardChange() }} placeholder="e.g. women 25–40" className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder:text-white/20 outline-none focus:border-purple-500/50" />
+        </div>
+      </div>
+      <div>
+        <span className={labelClass}>Goals</span>
+        <div className="flex flex-wrap gap-1.5 mt-1.5">
+          {GOAL_OPTIONS.map(g => (
+            <button key={g} onClick={() => { setIw({...iw, goals: iw.goals.includes(g) ? iw.goals.filter(x => x !== g) : [...iw.goals, g]}); handleWizardChange() }} className={chipClass(iw.goals.includes(g))}>{g}</button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <span className={labelClass}>Formats</span>
+        <div className="flex flex-wrap gap-1.5 mt-1.5">
+          {FORMAT_OPTIONS.map(f => (
+            <button key={f} onClick={() => { setIw({...iw, formats: iw.formats.includes(f) ? iw.formats.filter(x => x !== f) : [...iw.formats, f]}); handleWizardChange() }} className={chipClass(iw.formats.includes(f))}>{f}</button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+
+  const renderImageWizard = () => (
+    <div className="space-y-3">
+      <div className={fieldClass}>
+        <span className={labelClass}>Subject</span>
+        <input value={imw.subject} onChange={e => { setImw({...imw, subject: e.target.value}); handleWizardChange() }} placeholder="e.g. a minimalist coffee shop interior" className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder:text-white/20 outline-none focus:border-purple-500/50" />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className={fieldClass}>
+          <span className={labelClass}>Style</span>
+          <select value={imw.style} onChange={e => { setImw({...imw, style: e.target.value}); handleWizardChange() }} className={selectClass}>
+            {STYLE_OPTIONS.map(s => <option key={s} value={s} className="bg-gray-900">{s}</option>)}
+          </select>
+        </div>
+        <div className={fieldClass}>
+          <span className={labelClass}>Mood</span>
+          <select value={imw.mood} onChange={e => { setImw({...imw, mood: e.target.value}); handleWizardChange() }} className={selectClass}>
+            {MOOD_OPTIONS.map(m => <option key={m} value={m} className="bg-gray-900">{m}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className={fieldClass}>
+          <span className={labelClass}>Lighting</span>
+          <select value={imw.lighting} onChange={e => { setImw({...imw, lighting: e.target.value}); handleWizardChange() }} className={selectClass}>
+            {LIGHTING_OPTIONS.map(l => <option key={l} value={l} className="bg-gray-900">{l}</option>)}
+          </select>
+        </div>
+        <div className={fieldClass}>
+          <span className={labelClass}>Colors</span>
+          <input value={imw.colors} onChange={e => { setImw({...imw, colors: e.target.value}); handleWizardChange() }} placeholder="e.g. warm earth tones" className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder:text-white/20 outline-none focus:border-purple-500/50" />
+        </div>
+      </div>
+    </div>
+  )
+
   return (
     <div className="space-y-8 pb-10">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -288,7 +501,7 @@ export const AIStudio = () => {
           {tools.map((tool) => (
             <button
               key={tool.id}
-              onClick={() => { setActiveTool(tool.id); setResults(null); setError(null) }}
+              onClick={() => { setActiveTool(tool.id); setResults(null); setError(null); setIsManuallyEdited(false) }}
               className={cn(
                 "w-full text-left p-4 rounded-xl border transition-all duration-200 group",
                 activeTool === tool.id 
@@ -306,15 +519,51 @@ export const AIStudio = () => {
         {/* Main Work Area */}
         <div className="lg:col-span-3 space-y-6">
           <Card className="min-h-[280px] flex flex-col border-white/10 bg-white/5">
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
                 <CardTitle>{tools.find(t => t.id === activeTool)?.title}</CardTitle>
-              <CardDescription>Enter a prompt to generate content with AI.</CardDescription>
+                <CardDescription>Fine-tune below then generate.</CardDescription>
+              </div>
+              <Button variant="ghost" size="sm" className="gap-1.5 text-xs text-muted-foreground" onClick={() => setShowWizard(!showWizard)}>
+                <Settings2 className="w-3.5 h-3.5" />
+                {showWizard ? 'Hide wizard' : 'Prompt wizard'}
+              </Button>
             </CardHeader>
-            <CardContent className="flex-1 flex flex-col gap-6">
-              <div className="flex-1 bg-black/20 rounded-xl border border-white/10 p-4">
+            <CardContent className="flex-1 flex flex-col gap-5">
+              {/* Wizard Panel */}
+              {showWizard && (
+                <div className="bg-white/5 rounded-xl border border-white/10 p-4 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-purple-400 uppercase font-bold tracking-wider">Prompt Builder</span>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="text-[10px] text-muted-foreground h-6 gap-1"
+                      onClick={() => {
+                        if (activeTool === 'caption') setCw(INIT_CAPTION)
+                        else if (activeTool === 'hashtag') setHw(INIT_HASHTAG)
+                        else if (activeTool === 'ideas') setIw(INIT_IDEAS)
+                        else if (activeTool === 'image') setImw(INIT_IMAGE)
+                        setIsManuallyEdited(false)
+                        setPrompt('')
+                      }}
+                    >
+                      <RefreshCcw className="w-3 h-3" />
+                      Reset
+                    </Button>
+                  </div>
+                  {activeTool === 'caption' && renderCaptionWizard()}
+                  {activeTool === 'hashtag' && renderHashtagWizard()}
+                  {activeTool === 'ideas' && renderIdeasWizard()}
+                  {activeTool === 'image' && renderImageWizard()}
+                </div>
+              )}
+
+              {/* Prompt Area */}
+              <div className="bg-black/20 rounded-xl border border-white/10 p-4">
                 <textarea 
                   value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
+                  onChange={(e) => { setPrompt(e.target.value); setIsManuallyEdited(true) }}
                   onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleGenerate() } }}
                   placeholder={
                     activeTool === 'caption' ? "Describe your post (e.g. 'launching a new coffee brand for Gen Z')..." :
@@ -382,7 +631,7 @@ export const AIStudio = () => {
               </div>
 
               <div className="flex items-center justify-between">
-                <Button variant="ghost" size="sm" className="text-muted-foreground gap-2" onClick={() => { setPrompt(''); setResults(null) }}>
+                <Button variant="ghost" size="sm" className="text-muted-foreground gap-2" onClick={() => { setPrompt(''); setResults(null); setIsManuallyEdited(false) }}>
                   <RefreshCcw className="w-4 h-4" />
                   Reset
                 </Button>

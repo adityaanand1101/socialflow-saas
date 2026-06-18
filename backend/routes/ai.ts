@@ -22,10 +22,15 @@ const AI_MODELS = {
 const ALLOWED_TONES = ['Professional', 'Casual', 'Funny', 'Inspirational', 'Urgent', 'Educational'] as const;
 const ALLOWED_PLATFORMS = ['Instagram', 'Twitter', 'LinkedIn', 'Facebook', 'TikTok', 'Threads', 'YouTube'] as const;
 
-function normalizePlatform(p: string): string {
-  if (!p) return '';
-  return p.charAt(0).toUpperCase() + p.slice(1).toLowerCase();
-}
+const PLATFORM_MAP: Record<string, string> = {
+  instagram: 'Instagram',
+  facebook: 'Facebook',
+  threads: 'Threads',
+  x: 'Twitter',
+  linkedin: 'LinkedIn',
+  youtube: 'YouTube',
+  tiktok: 'TikTok',
+};
 
 const GEMINI_AI = process.env.GOOGLE_AI_API_KEY
   ? new GoogleGenAI({ apiKey: process.env.GOOGLE_AI_API_KEY })
@@ -92,13 +97,12 @@ router.post('/caption', requireAuth, async (req: any, res: any) => {
   if (!prompt || !String(prompt).trim()) {
     return res.status(400).json({ error: 'prompt is required' });
   }
-  platform = normalizePlatform(platform || '');
-  tone = tone ? tone.charAt(0).toUpperCase() + tone.slice(1).toLowerCase() : '';
-  if (tone && !ALLOWED_TONES.includes(tone as any)) {
-    return res.status(400).json({ error: `Invalid tone. Allowed: ${ALLOWED_TONES.join(', ')}` });
-  }
+  platform = PLATFORM_MAP[platform?.toLowerCase()] || '';
   if (platform && !ALLOWED_PLATFORMS.includes(platform as any)) {
     return res.status(400).json({ error: `Invalid platform. Allowed: ${ALLOWED_PLATFORMS.join(', ')}` });
+  }
+  if (tone && !ALLOWED_TONES.includes(tone as any)) {
+    return res.status(400).json({ error: `Invalid tone. Allowed: ${ALLOWED_TONES.join(', ')}` });
   }
   if (!GEMINI_AI) return res.status(503).json({ error: 'AI service unavailable' });
 

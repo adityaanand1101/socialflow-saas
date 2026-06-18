@@ -58,6 +58,16 @@ export const Compose = () => {
     staleTime: 1000 * 60 * 5,
   })
 
+  // Pre-fill caption from AI Studio
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const captionParam = params.get('caption')
+    if (captionParam) {
+      setCaption(captionParam)
+      window.history.replaceState({}, '', '/compose')
+    }
+  }, [])
+
   // --- Fetch Post if editing ---
   useEffect(() => {
     const fetchPost = async () => {

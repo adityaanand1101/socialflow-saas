@@ -16,11 +16,16 @@ const AI_MODELS = {
   caption: process.env.AI_MODEL_CAPTION || 'gemini-1.5-flash-8b',
   hashtags: process.env.AI_MODEL_HASHTAGS || 'gemini-2.0-flash',
   ideas: process.env.AI_MODEL_IDEAS || 'gemini-2.0-flash',
-  image: process.env.AI_MODEL_IMAGE || 'gemini-3.1-flash-image',
+  image: process.env.AI_MODEL_IMAGE || 'gemini-2.0-flash-exp',
 } as const;
 
 const ALLOWED_TONES = ['Professional', 'Casual', 'Funny', 'Inspirational', 'Urgent', 'Educational'] as const;
 const ALLOWED_PLATFORMS = ['Instagram', 'Twitter', 'LinkedIn', 'Facebook', 'TikTok', 'Threads', 'YouTube'] as const;
+
+function normalizePlatform(p: string): string {
+  if (!p) return '';
+  return p.charAt(0).toUpperCase() + p.slice(1).toLowerCase();
+}
 
 const GEMINI_AI = process.env.GOOGLE_AI_API_KEY
   ? new GoogleGenAI({ apiKey: process.env.GOOGLE_AI_API_KEY })
@@ -81,16 +86,18 @@ async function logAiUsage(userId: string, toolUsed: string, prompt: string, toke
 // ---------- Routes ----------
 
 router.post('/caption', requireAuth, async (req: any, res: any) => {
-  const { prompt, tone, platform } = req.body;
+  let { prompt, tone, platform } = req.body;
   const userId = req.userId;
 
   if (!prompt || !String(prompt).trim()) {
     return res.status(400).json({ error: 'prompt is required' });
   }
-  if (tone && !ALLOWED_TONES.includes(tone)) {
+  platform = normalizePlatform(platform || '');
+  tone = tone ? tone.charAt(0).toUpperCase() + tone.slice(1).toLowerCase() : '';
+  if (tone && !ALLOWED_TONES.includes(tone as any)) {
     return res.status(400).json({ error: `Invalid tone. Allowed: ${ALLOWED_TONES.join(', ')}` });
   }
-  if (platform && !ALLOWED_PLATFORMS.includes(platform)) {
+  if (platform && !ALLOWED_PLATFORMS.includes(platform as any)) {
     return res.status(400).json({ error: `Invalid platform. Allowed: ${ALLOWED_PLATFORMS.join(', ')}` });
   }
   if (!GEMINI_AI) return res.status(503).json({ error: 'AI service unavailable' });
@@ -192,11 +199,7 @@ router.post('/image', requireAuth, async (req: any, res: any) => {
       model: AI_MODELS.image,
       contents: [{ role: 'user', parts: [{ text: imagePrompt.slice(0, 1000) }] }],
       config: {
-        responseModalities: ['IMAGE'] as any,
-        imageConfig: {
-          aspectRatio: aspectRatio || '1:1',
-          imageSize: '1K',
-        } as any,
+        responseModalities: ['TEXT', 'IMAGE'],
       },
     });
 

@@ -26,6 +26,7 @@ export const AIStudio = () => {
   const [prompt, setPrompt] = useState('')
   const [tone, setTone] = useState('Professional')
   const [platform, setPlatform] = useState('instagram')
+  const [aspectRatio, setAspectRatio] = useState('1:1')
   const [isGenerating, setIsGenerating] = useState(false)
   const [results, setResults] = useState<any>(null)
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
@@ -127,7 +128,7 @@ export const AIStudio = () => {
             const res = await apiFetch('/api/ai/image', {
               method: 'POST',
               headers,
-              body: JSON.stringify({ imagePrompt: prompt, aspectRatio: '1:1' })
+              body: JSON.stringify({ imagePrompt: prompt, aspectRatio })
             });
             const data = await res.json();
             if (res.ok) {
@@ -163,15 +164,26 @@ export const AIStudio = () => {
                 <p className="text-sm text-white leading-relaxed whitespace-pre-wrap">{v}</p>
                 <div className="flex items-center justify-between mt-4 pt-4 border-t border-white/10">
                   <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Variant {i + 1}</span>
-                  <Button 
-                    size="sm" 
-                    variant="ghost"
-                    className="h-8 gap-2 text-white/60 hover:text-white text-xs"
-                    onClick={() => copyText(v, i)}
-                  >
-                    {copiedIndex === i ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
-                    {copiedIndex === i ? 'Copied!' : 'Copy'}
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 gap-1.5 text-purple-400 hover:text-purple-300 text-xs"
+                      onClick={() => navigate(`/compose?caption=${encodeURIComponent(v)}`)}
+                    >
+                      <Wand2 className="w-3 h-3" />
+                      Compose
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="ghost"
+                      className="h-8 gap-2 text-white/60 hover:text-white text-xs"
+                      onClick={() => copyText(v, i)}
+                    >
+                      {copiedIndex === i ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+                      {copiedIndex === i ? 'Copied!' : 'Copy'}
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -340,6 +352,27 @@ export const AIStudio = () => {
                           {t}
                         </button>
                       ))}
+                    </div>
+                  </div>
+                )}
+                {activeTool === 'image' && (
+                  <div className="mt-3 pt-3 border-t border-white/10">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Aspect Ratio</span>
+                      <div className="relative">
+                        <select
+                          value={aspectRatio}
+                          onChange={(e) => setAspectRatio(e.target.value)}
+                          className="appearance-none bg-white/10 border border-white/20 rounded-lg px-3 py-1.5 pr-8 text-xs text-white font-medium cursor-pointer hover:bg-white/20 transition-colors outline-none"
+                        >
+                          <option value="1:1" className="bg-gray-900">Square (1:1)</option>
+                          <option value="16:9" className="bg-gray-900">Landscape (16:9)</option>
+                          <option value="4:3" className="bg-gray-900">Standard (4:3)</option>
+                          <option value="3:4" className="bg-gray-900">Portrait (3:4)</option>
+                          <option value="9:16" className="bg-gray-900">Story (9:16)</option>
+                        </select>
+                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-white/60 pointer-events-none" />
+                      </div>
                     </div>
                   </div>
                 )}

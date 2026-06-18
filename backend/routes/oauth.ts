@@ -44,7 +44,7 @@ const providers = {
     profileUrl: 'https://graph.instagram.com/me?fields=id,username',
     clientId: process.env.INSTAGRAM_CLIENT_ID || '',
     clientSecret: process.env.INSTAGRAM_CLIENT_SECRET || '',
-    scopes: 'instagram_basic instagram_content_publish pages_show_list pages_read_engagement',
+    scopes: 'user_profile,user_media',
   },
   facebook: {
     authUrl: 'https://www.facebook.com/v18.0/dialog/oauth',

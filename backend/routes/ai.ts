@@ -248,8 +248,8 @@ router.post('/image', requireAuth, async (req: any, res: any) => {
   try {
     const dims = aspectRatio && ASPECT_RATIOS[aspectRatio] ? ASPECT_RATIOS[aspectRatio] : { width: 1024, height: 1024 };
 
-    // Enhance the user's image prompt with professional photography terms for better Pollinations output
-    const enhancedPrompt = `${imagePrompt.slice(0, 800)} — professional photography, soft natural lighting, shallow depth of field, high detail, 8K, sharp focus, vibrant colors, cinematic composition, shot on premium camera`;
+    // Enhance prompt with professional photography terms for better Pollinations output
+    const enhancedPrompt = `${imagePrompt.slice(0, 800)} professional photography, soft natural lighting, shallow depth of field, high detail, 8K, sharp focus, vibrant colors, cinematic composition`;
     const encoded = encodeURIComponent(enhancedPrompt);
     const url = `https://image.pollinations.ai/prompt/${encoded}?width=${dims.width}&height=${dims.height}&model=${AI_IMAGE_MODEL}&nologo=true${AI_PRIVATE_MODE ? '&private=true' : ''}`;
 
@@ -259,8 +259,10 @@ router.post('/image', requireAuth, async (req: any, res: any) => {
       throw new Error(`Pollinations error (${pollRes.status}): ${errText.substring(0, 200)}`);
     }
 
+    const contentType = pollRes.headers.get('content-type') || 'image/png';
+    const ext = contentType.includes('jpeg') || contentType.includes('jpg') ? 'jpg' : contentType.includes('webp') ? 'webp' : 'png';
     const buffer = await pollRes.buffer();
-    const fileName = `ai-images/${Date.now()}-${Math.random().toString(36).substring(7)}.png`;
+    const fileName = `ai-images/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
 
     if (!process.env.S3_BUCKET_NAME) {
       return res.status(500).json({ error: 'Storage not configured for image saving' });
@@ -281,7 +283,7 @@ router.post('/image', requireAuth, async (req: any, res: any) => {
       Bucket: process.env.S3_BUCKET_NAME,
       Key: fileName,
       Body: buffer,
-      ContentType: 'image/png',
+      ContentType: contentType,
     }));
 
     const finalUrl = buildPublicUrl(fileName);
@@ -290,9 +292,9 @@ router.post('/image', requireAuth, async (req: any, res: any) => {
       data: {
         workspaceId,
         userId,
-        fileName: `AI-${Date.now()}.png`,
+        fileName: `AI-${Date.now()}.${ext}`,
         fileUrl: finalUrl,
-        fileType: 'image/png',
+        fileType: contentType,
         fileSize: buffer.length,
         tags: ['ai-generated'],
       },

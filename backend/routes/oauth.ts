@@ -230,7 +230,7 @@ router.get('/:platform/callback', async (req: any, res) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        ...(platform === 'tumblr' && {
+        ...((platform === 'tumblr' || platform === 'slack') && {
           'Authorization': 'Basic ' + Buffer.from(`${provider.clientId}:${provider.clientSecret}`).toString('base64')
         })
       },

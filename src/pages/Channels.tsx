@@ -54,7 +54,7 @@ export const Channels = () => {
   }, [getToken, fetchChannels])
 
   const handleConnect = async (platform: string) => {
-    if (platform === 'bluesky') {
+    if (platform === 'bluesky' || platform === 'telegram') {
       setShowCustomModal(platform)
       return
     }
@@ -240,7 +240,8 @@ export const Channels = () => {
             <div className="space-y-4 mb-6">
               <div className="space-y-2">
                 <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                  {showCustomModal === 'bluesky' ? 'Handle (e.g. user.bsky.social)' : 'Integration Token Name'}
+                  {showCustomModal === 'bluesky' ? 'Handle (e.g. user.bsky.social)' : 
+                   showCustomModal === 'telegram' ? 'Bot Name / Identifier' : 'Integration Token Name'}
                 </label>
                 <input
                   type="text"
@@ -251,7 +252,8 @@ export const Channels = () => {
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                  {showCustomModal === 'bluesky' ? 'App Password' : 'Integration Token Secret'}
+                  {showCustomModal === 'bluesky' ? 'App Password' : 
+                   showCustomModal === 'telegram' ? 'Bot Token' : 'Integration Token Secret'}
                 </label>
                 <input
                   type="password"
@@ -260,7 +262,8 @@ export const Channels = () => {
                   className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500/50"
                 />
                 <p className="text-[10px] text-muted-foreground">
-                  {showCustomModal === 'bluesky' ? "Generate this in your Bluesky Settings > Advanced > App Passwords" : "Generate this in your Medium Settings > Security and apps > Integration tokens"}
+                  {showCustomModal === 'bluesky' ? "Generate this in your Bluesky Settings > Advanced > App Passwords" : 
+                   showCustomModal === 'telegram' ? "Get this from @BotFather on Telegram" : "Generate this in your Medium Settings"}
                 </p>
               </div>
             </div>

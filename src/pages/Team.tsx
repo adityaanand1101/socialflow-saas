@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useAuth } from '@clerk/react'
 import { apiFetch } from '@/lib/api'
+import { useStore } from '@/store/useStore'
 import {
   UserPlus, Check, X, Activity, Mail, Copy, Link,
   Shield, Settings, UserMinus,
@@ -11,7 +12,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-const PERMISSIONS = [
+const DEFAULT_PERMISSIONS = [
   { feature: 'Manage Channels', roles: { OWNER: true, ADMIN: true, MEMBER: false, VIEWER: false } },
   { feature: 'Schedule Posts', roles: { OWNER: true, ADMIN: true, MEMBER: true, VIEWER: false } },
   { feature: 'View Analytics', roles: { OWNER: true, ADMIN: true, MEMBER: true, VIEWER: true } },
@@ -62,12 +63,18 @@ export const Team = () => {
   const [generatedLink, setGeneratedLink] = useState('')
   const [copiedLink, setCopiedLink] = useState(false)
 
+  const [permissions, setPermissions] = useState(
+    DEFAULT_PERMISSIONS.map(p => ({ ...p, roles: { ...p.roles } }))
+  )
+
   const [editingWorkspaceName, setEditingWorkspaceName] = useState(false)
   const [newWorkspaceName, setNewWorkspaceName] = useState('')
   const [savingWorkspace, setSavingWorkspace] = useState(false)
 
   const canManage = currentUserRole === 'OWNER' || currentUserRole === 'ADMIN'
   const canChangeRoles = currentUserRole === 'OWNER'
+  const canEditPermissions = currentUserRole === 'OWNER'
+  const { workspaces, setWorkspaces } = useStore()
 
   const fetchData = useCallback(async () => {
     try {
@@ -203,12 +210,24 @@ export const Team = () => {
         const data = await res.json()
         setWorkspaceName(data.name)
         setEditingWorkspaceName(false)
+        setWorkspaces(workspaces.map((w: any) => w.id === data.id ? { ...w, name: data.name } : w))
       }
     } catch (err) {
       console.error(err)
     } finally {
       setSavingWorkspace(false)
     }
+  }
+
+  const togglePermission = (featureIdx: number, role: string) => {
+    if (!canEditPermissions || role === 'OWNER') return
+    setPermissions(prev => prev.map((p, i) =>
+      i === featureIdx ? { ...p, roles: { ...p.roles, [role]: !p.roles[role as keyof typeof p.roles] } } : p
+    ))
+  }
+
+  const resetPermissions = () => {
+    setPermissions(DEFAULT_PERMISSIONS.map(p => ({ ...p, roles: { ...p.roles } })))
   }
 
   const copyInviteLink = (link: string) => {
@@ -399,49 +418,59 @@ export const Team = () => {
                 {members.length === 0 ? (
                   <p className="text-muted-foreground text-sm text-center py-4">No members found.</p>
                 ) : (
-                  members.map((member) => (
-                    <div key={member.id} className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/5 hover:border-white/10 transition-colors">
-                      <div className="flex items-center gap-4">
-                        <Avatar className="w-10 h-10 border border-white/10">
-                          <AvatarImage src={member.user.avatarUrl || undefined} />
-                          <AvatarFallback>{(member.user.name || member.user.email)[0]}</AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="text-sm font-semibold text-white">{member.user.name || member.user.email}</p>
-                          <p className="text-xs text-muted-foreground">{member.user.email}</p>
+                  (['OWNER', 'ADMIN', 'MEMBER', 'VIEWER'] as const).map(roleGroup => {
+                    const group = members.filter((m: any) => m.role === roleGroup)
+                    if (group.length === 0) return null
+                    return (
+                      <div key={roleGroup}>
+                        <div className="flex items-center gap-2 px-1 py-2">
+                          <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest border", ROLE_BADGES[roleGroup])}>
+                            {roleGroup}
+                          </span>
+                          <span className="text-[11px] text-muted-foreground">({group.length})</span>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        {member.role === 'OWNER' ? (
-                          <div className={cn("px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest border", ROLE_BADGES['OWNER'])}>
-                            OWNER
+                        {group.map((member: any) => (
+                          <div key={member.id} className="flex items-center justify-between p-3 pl-6 rounded-xl bg-white/[0.02] border border-white/5 hover:border-white/10 transition-colors mb-1">
+                            <div className="flex items-center gap-3">
+                              <Avatar className="w-8 h-8 border border-white/10">
+                                <AvatarImage src={member.user.avatarUrl || undefined} />
+                                <AvatarFallback className="text-xs">{(member.user.name || member.user.email)[0]}</AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <p className="text-sm font-semibold text-white">{member.user.name || member.user.email}</p>
+                                <p className="text-xs text-muted-foreground">{member.user.email}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              {member.role === 'OWNER' ? (
+                                <div className={cn("px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest border opacity-60", ROLE_BADGES['OWNER'])}>
+                                  OWNER
+                                </div>
+                              ) : canChangeRoles && roleGroup === member.role ? (
+                                <select
+                                  value={member.role}
+                                  onChange={(e) => handleChangeRole(member.id, e.target.value)}
+                                  className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-purple-500/50 cursor-pointer"
+                                >
+                                  {['ADMIN', 'MEMBER', 'VIEWER'].map(r => (
+                                    <option key={r} value={r}>{r}</option>
+                                  ))}
+                                </select>
+                              ) : null}
+                              {canManage && member.role !== 'OWNER' && (
+                                <button
+                                  onClick={() => handleRemoveMember(member.id, member.user.name || member.user.email)}
+                                  className="p-1.5 hover:bg-red-500/10 rounded-lg transition-colors text-muted-foreground hover:text-red-400"
+                                >
+                                  <UserMinus className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
                           </div>
-                        ) : canChangeRoles ? (
-                          <select
-                            value={member.role}
-                            onChange={(e) => handleChangeRole(member.id, e.target.value)}
-                            className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-purple-500/50 cursor-pointer"
-                          >
-                            {['ADMIN', 'MEMBER', 'VIEWER'].map(r => (
-                              <option key={r} value={r}>{r}</option>
-                            ))}
-                          </select>
-                        ) : (
-                          <div className={cn("px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest border", ROLE_BADGES[member.role] || '')}>
-                            {member.role}
-                          </div>
-                        )}
-                        {canManage && member.role !== 'OWNER' && (
-                          <button
-                            onClick={() => handleRemoveMember(member.id, member.user.name || member.user.email)}
-                            className="p-1.5 hover:bg-red-500/10 rounded-lg transition-colors text-muted-foreground hover:text-red-400"
-                          >
-                            <UserMinus className="w-4 h-4" />
-                          </button>
-                        )}
+                        ))}
                       </div>
-                    </div>
-                  ))
+                    )
+                  })
                 )}
               </div>
             </CardContent>
@@ -508,23 +537,50 @@ export const Team = () => {
                     </tr>
                   </thead>
                   <tbody className="text-sm">
-                    {PERMISSIONS.map(({ feature, roles }) => (
+                    {permissions.map(({ feature, roles }, fi) => (
                       <tr key={feature} className="border-b border-white/5 group">
                         <td className="py-4 pr-4 text-white font-medium whitespace-nowrap">{feature}</td>
-                        {(['OWNER', 'ADMIN', 'MEMBER', 'VIEWER'] as const).map(role => (
-                          <td key={role} className="py-4 text-center">
-                            {roles[role] ? (
-                              <Check className="w-4 h-4 text-green-400 mx-auto" />
-                            ) : (
-                              <X className="w-4 h-4 text-red-400/60 mx-auto" />
-                            )}
-                          </td>
-                        ))}
+                        {(['OWNER', 'ADMIN', 'MEMBER', 'VIEWER'] as const).map(role => {
+                          const enabled = roles[role]
+                          const canToggle = canEditPermissions && role !== 'OWNER'
+                          return (
+                            <td
+                              key={role}
+                              onClick={() => togglePermission(fi, role)}
+                              className={cn(
+                                "py-4 text-center transition-colors",
+                                canToggle ? "cursor-pointer hover:bg-white/5" : "cursor-default"
+                              )}
+                            >
+                              {canToggle ? (
+                                <div className={cn(
+                                  "w-6 h-6 mx-auto rounded-md border transition-all flex items-center justify-center",
+                                  enabled
+                                    ? "bg-green-500/20 border-green-500/50 text-green-400"
+                                    : "bg-white/5 border-white/10 text-red-400/40 hover:border-white/20"
+                                )}>
+                                  {enabled ? <Check className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
+                                </div>
+                              ) : (
+                                enabled
+                                  ? <Check className="w-4 h-4 text-green-400 mx-auto" />
+                                  : <X className="w-4 h-4 text-red-400/60 mx-auto" />
+                              )}
+                            </td>
+                          )
+                        })}
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+              {canEditPermissions && (
+                <div className="mt-4 pt-4 border-t border-white/10 flex justify-end">
+                  <Button variant="ghost" size="sm" onClick={resetPermissions} className="text-xs text-muted-foreground">
+                    Reset to Defaults
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

@@ -309,7 +309,8 @@ router.get('/:platform/callback', async (req: any, res) => {
     });
 
     if (!profileRes.ok) {
-       throw new Error(`Failed to fetch profile from ${platform}`);
+       const errBody = await profileRes.text().catch(() => '(unable to read body)');
+       throw new Error(`Failed to fetch profile from ${platform}: HTTP ${profileRes.status} - ${errBody}`);
     }
 
     const profileData = await profileRes.json() as any;

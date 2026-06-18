@@ -27,6 +27,7 @@ model User {
   mediaAssets      MediaAsset[]
   aiLogs           AiGenerationLog[]
   activityLogs     ActivityLog[]
+  notifications    Notification[]
 }
 
 model Workspace {
@@ -237,6 +238,22 @@ model ActivityLog {
   user        User      @relation(fields: [userId], references: [id])
 
   @@index([workspaceId])
+}
+
+model Notification {
+  id          String    @id @default(uuid())
+  userId      String
+  workspaceId String?
+  type        String
+  title       String
+  body        String?
+  link        String?
+  read        Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
 }
 
 model WorkspaceInvite {

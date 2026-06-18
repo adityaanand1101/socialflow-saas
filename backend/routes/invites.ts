@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth } from '../middlewares/auth';
+import { createNotification } from './notifications';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -88,6 +89,21 @@ router.post('/accept', requireAuth, async (req: any, res: any) => {
         }
       });
     });
+
+    // Notify workspace owners/admins
+    const workspaceName = invite.workspaceId; // We don't have name here, fetch it
+    const admins = await prisma.workspaceMember.findMany({
+      where: { workspaceId: invite.workspaceId, role: { in: ['OWNER', 'ADMIN'] }, userId: { not: user.id } }
+    });
+    for (const admin of admins) {
+      await createNotification(
+        prisma, admin.userId, 'member.joined',
+        `${user.name || user.email} joined your workspace`,
+        `They joined as ${invite.role}`,
+        '/app/team',
+        invite.workspaceId
+      );
+    }
 
     res.json({ success: true, workspaceId: invite.workspaceId });
   } catch (error) {

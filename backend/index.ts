@@ -17,6 +17,7 @@ import razorpayRouter from './routes/razorpay';
 import integrationsRouter from './routes/integrations';
 import externalApiRouter from './routes/externalApi';
 import channelsRouter from './routes/channels';
+import notificationsRouter from './routes/notifications';
 import { requireAuth } from './middlewares/auth';
 
 dotenv.config();
@@ -134,6 +135,7 @@ app.use('/api/razorpay', razorpayRouter);
 app.use('/api/integrations', integrationsRouter);
 app.use('/api/external', externalApiRouter);
 app.use('/api/channels', channelsRouter);
+app.use('/api/notifications', notificationsRouter);
 
 app.get('/api/user/me', requireAuth, async (req: any, res: any) => {
   try {

@@ -4,6 +4,7 @@ import { requireAuth } from '../middlewares/auth';
 import { checkSaaSLimits, requireRole } from '../middlewares/limits';
 import crypto from 'crypto';
 import { Resend } from 'resend';
+import { createNotification } from './notifications';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -164,6 +165,14 @@ router.patch('/:id/members/:memberId/role', requireAuth, requireRole(['OWNER', '
 
     const memberName = updated.user.name || updated.user.email;
     await logActivity(prisma, id, req.userId, 'member.role_changed', `Changed ${memberName}'s role to ${role}`);
+
+    await createNotification(
+      prisma, updated.user.id, 'role_changed',
+      `Your role was changed to ${role}`,
+      `Changed by ${req.dbUser.name || req.dbUser.email}`,
+      '/app/team',
+      id
+    );
 
     res.json(updated);
   } catch (error) {

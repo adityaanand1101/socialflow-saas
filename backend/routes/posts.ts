@@ -82,26 +82,41 @@ router.post('/', requireAuth, async (req: any, res: any) => {
   }
 });
 
-// PATCH /api/posts/:id: Update content or reschedule date/time
+// PATCH /api/posts/:id: Update content, media, target accounts, or reschedule
 router.patch('/:id', requireAuth, async (req: any, res: any) => {
   const { id } = req.params;
-  const { content, scheduledAt, status } = req.body;
+  const { content, mediaUrls, socialAccountIds, scheduledAt, status } = req.body;
 
   try {
-    const post = await prisma.post.findUnique({ where: { id } });
+    const post = await prisma.post.findUnique({ where: { id }, include: { accounts: true } });
     if (!post || post.workspaceId !== req.workspaceId) {
       return res.status(404).json({ error: 'Post not found' });
     }
 
     const postStatus = status || (scheduledAt ? 'SCHEDULED' : post.status);
 
+    const updateData: any = {
+      ...(content !== undefined && { content }),
+      ...(mediaUrls !== undefined && { mediaUrls }),
+      ...(scheduledAt !== undefined && { scheduledAt: new Date(scheduledAt) }),
+      status: postStatus,
+    };
+
+    // If socialAccountIds provided, replace the junction table records
+    if (socialAccountIds !== undefined) {
+      await prisma.socialAccountPost.deleteMany({ where: { postId: id } });
+      updateData.accounts = {
+        create: socialAccountIds.map((accountId: string) => ({
+          socialAccountId: accountId,
+          status: postStatus
+        }))
+      };
+    }
+
     const updatedPost = await prisma.post.update({
       where: { id },
-      data: {
-        ...(content !== undefined && { content }),
-        ...(scheduledAt !== undefined && { scheduledAt: new Date(scheduledAt) }),
-        status: postStatus,
-      }
+      data: updateData,
+      include: { accounts: true }
     });
 
     // Handle rescheduling/queue job updates

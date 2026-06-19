@@ -36,9 +36,14 @@ const ASPECT_CLASSES: Record<string, string> = {
   '*': 'aspect-video',
 }
 
-function guessMediaType(url: string): 'image' | 'video' {
-  const ext = url.split('?')[0].toLowerCase()
-  if (ext.endsWith('.mp4') || ext.endsWith('.webm') || ext.endsWith('.mov') || ext.endsWith('.avi')) return 'video'
+function guessMediaType(url: string, typesMap?: Record<string, string>): 'image' | 'video' {
+  if (typesMap?.[url]) {
+    const t = typesMap[url]
+    if (t.startsWith('video/')) return 'video'
+    if (t.startsWith('image/')) return 'image'
+  }
+  const ext = url.split('?')[0].split('/').pop()?.toLowerCase() || ''
+  if (['mp4', 'webm', 'mov', 'avi', 'mkv', 'm4v'].some(e => ext.endsWith(e) || ext === e)) return 'video'
   return 'image'
 }
 
@@ -66,12 +71,37 @@ export const Compose = () => {
   const [editingPostId] = useState<string | null>(searchParams.get('postId'))
   const [activePreviewPlatform, setActivePreviewPlatform] = useState<string>('instagram')
   const [showWarnings, setShowWarnings] = useState(false)
+  const [mediaTypes, setMediaTypes] = useState<Record<string, string>>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
   
-  const { addPost, updatePost, uploadMedia } = useStore()
+  const { addPost, updatePost, uploadMedia, channels } = useStore()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const { getToken } = useAuth()
+
+  // Fetch connected social accounts for account ID resolution
+  const { data: accountsData } = useQuery({
+    queryKey: ['accounts'],
+    queryFn: async () => {
+      const token = await getToken()
+      const res = await apiFetch('/api/channels', { headers: { Authorization: `Bearer ${token}` } })
+      if (!res.ok) return []
+      return res.json()
+    },
+    staleTime: 1000 * 60 * 2,
+  })
+
+  const connectedAccounts: any[] = accountsData || channels || []
+
+  const platformToAccountIds = useMemo(() => {
+    const map: Record<string, string[]> = {}
+    for (const acc of connectedAccounts) {
+      const pid = (acc.platform || '').toLowerCase()
+      if (!map[pid]) map[pid] = []
+      map[pid].push(acc.id)
+    }
+    return map
+  }, [connectedAccounts])
 
   // --- React Query for Media ---
   const { data: mediaData } = useQuery({
@@ -127,6 +157,7 @@ export const Compose = () => {
       const asset = await uploadMedia(token, file)
       if (asset) {
         setMediaFiles(prev => [...prev, asset.fileUrl])
+        setMediaTypes(prev => ({ ...prev, [asset.fileUrl]: asset.fileType || file.type }))
         queryClient.invalidateQueries({ queryKey: ['media'] })
       }
       return asset
@@ -152,10 +183,13 @@ export const Compose = () => {
     }
   }
 
-  const toggleLibraryMedia = (url: string) => {
+  const toggleLibraryMedia = (url: string, fileType?: string) => {
     setMediaFiles(prev => 
       prev.includes(url) ? prev.filter(u => u !== url) : [...prev, url]
     )
+    if (fileType) {
+      setMediaTypes(prev => ({ ...prev, [url]: fileType }))
+    }
   }
 
   const togglePlatform = (id: SocialPlatform) => {
@@ -183,11 +217,13 @@ export const Compose = () => {
   }
 
   const removeMedia = (index: number) => {
+    const removed = mediaFiles[index]
     setMediaFiles(prev => prev.filter((_, i) => i !== index))
+    if (removed) setMediaTypes(prev => { const n = { ...prev }; delete n[removed]; return n })
   }
 
   // Per-platform warnings
-  const mediaInfo = useMemo(() => mediaFiles.map(url => ({ url, type: guessMediaType(url) })), [mediaFiles])
+  const mediaInfo = useMemo(() => mediaFiles.map(url => ({ url, type: guessMediaType(url, mediaTypes) })), [mediaFiles, mediaTypes])
 
   const allWarnings = useMemo(() => {
     if (selectedPlatforms.length === 0) return {}
@@ -215,8 +251,8 @@ export const Compose = () => {
     return min === Infinity ? 999999 : min
   }, [selectedPlatforms])
 
-  const handlePost = async (status: 'published' | 'draft' | 'scheduled') => {
-    if (status !== 'draft' && hasWarnings && !showWarnings) {
+  const handlePost = async (status: 'published' | 'draft' | 'scheduled', force = false) => {
+    if (status !== 'draft' && hasWarnings && !showWarnings && !force) {
       setShowWarnings(true)
       return
     }
@@ -227,12 +263,20 @@ export const Compose = () => {
       const token = await getToken()
       if (!token) return
       const time = status === 'scheduled' ? new Date(scheduledDate).toISOString() : new Date().toISOString()
-      
+
+      // Resolve platform IDs to connected social account IDs
+      const accountIds: string[] = []
+      for (const pid of selectedPlatforms) {
+        const ids = platformToAccountIds[pid] || []
+        accountIds.push(...ids)
+      }
+
       if (editingPostId) {
         await updatePost(token, editingPostId, {
           platforms: selectedPlatforms,
           caption,
           media: mediaFiles,
+          socialAccountIds: accountIds,
           scheduledTime: time,
           status
         })
@@ -241,14 +285,15 @@ export const Compose = () => {
           platforms: selectedPlatforms,
           caption,
           media: mediaFiles,
+          socialAccountIds: accountIds,
           scheduledTime: time,
           status,
           tags: []
         })
       }
-      
+
       queryClient.invalidateQueries({ queryKey: ['posts'] })
-      navigate('/app/calendar')
+      navigate('/calendar')
     } catch (error) {
       console.error('Failed to save post:', error)
     } finally {
@@ -273,7 +318,7 @@ export const Compose = () => {
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-white tracking-tight">Compose Post</h1>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" className="text-muted-foreground hover:text-white" onClick={() => { setCaption(''); setSelectedPlatforms(['instagram']); setMediaFiles([]); setActivePreviewPlatform('instagram'); setShowWarnings(false) }}>
+            <Button variant="ghost" className="text-muted-foreground hover:text-white" onClick={() => { setCaption(''); setSelectedPlatforms(['instagram']); setMediaFiles([]); setMediaTypes({}); setActivePreviewPlatform('instagram'); setShowWarnings(false) }}>
               Clear
             </Button>
             <Button variant="outline" className="gap-2" onClick={() => handlePost('draft')} disabled={isSubmitting}>
@@ -398,7 +443,7 @@ export const Compose = () => {
               <div className="flex gap-2 flex-wrap">
                 {mediaFiles.map((url, i) => (
                   <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden group">
-                    {guessMediaType(url) === 'video' ? (
+                    {guessMediaType(url, mediaTypes) === 'video' ? (
                       <video src={url} className="w-full h-full object-cover" muted />
                     ) : (
                       <img src={url} alt="" className="w-full h-full object-cover" />
@@ -407,7 +452,7 @@ export const Compose = () => {
                       <X className="w-4 h-4 text-white" />
                     </button>
                     <div className="absolute top-0.5 right-0.5 px-1 py-0.5 rounded bg-black/60 text-[8px] font-bold text-white uppercase">
-                      {guessMediaType(url)}
+                      {guessMediaType(url, mediaTypes)}
                     </div>
                   </div>
                 ))}
@@ -487,7 +532,7 @@ export const Compose = () => {
                           {libraryMedia.map((item: any) => (
                             <button
                               key={item.id}
-                              onClick={() => toggleLibraryMedia(item.fileUrl)}
+                              onClick={() => toggleLibraryMedia(item.fileUrl, item.fileType)}
                               className={cn(
                                 "relative aspect-square rounded-lg overflow-hidden border-2 transition-all",
                                 mediaFiles.includes(item.fileUrl) ? "border-purple-500 ring-2 ring-purple-500/20" : "border-transparent hover:border-white/20"
@@ -555,7 +600,7 @@ export const Compose = () => {
                   </div>
                   <div className="flex gap-3 pt-2">
                     <Button variant="outline" className="flex-1" onClick={() => setShowWarnings(false)}>Review</Button>
-                    <Button className="flex-1 bg-amber-500 hover:bg-amber-600 text-white" onClick={() => { setShowWarnings(false); handlePost('published') }}>
+                    <Button className="flex-1 bg-amber-500 hover:bg-amber-600 text-white" onClick={() => { setShowWarnings(false); handlePost('published', true) }}>
                       Post Anyway
                     </Button>
                   </div>
@@ -758,20 +803,31 @@ export const Compose = () => {
                 <tbody>
                   {selectedPlatforms.map(pid => {
                     const c = getPlatformConstraint(pid)
+                    let imageIdx = 0
+                    let videoIdx = 0
                     return (
                       <tr key={pid} className="border-b border-white/5 last:border-none">
                         <td className="p-2 text-white font-medium">{pid}</td>
                         {mediaFiles.map((url, i) => {
-                          const type = guessMediaType(url)
+                          const type = guessMediaType(url, mediaTypes)
                           let ok = true
-                          if (type === 'image' && c.maxImages <= i) ok = false
-                          if (type === 'image' && c.mediaType === 'video') ok = false
-                          if (type === 'video' && c.maxVideos === 0) ok = false
-                          if (type === 'video' && c.mediaType === 'image') ok = false
+                          let ratio = ''
+                          if (type === 'image') {
+                            if (c.mediaType === 'video') ok = false
+                            else if (imageIdx >= c.maxImages) ok = false
+                            else ratio = c.imageRatios[0] === '*' ? 'Any' : c.imageRatios[0]
+                            imageIdx++
+                          } else {
+                            if (c.mediaType === 'image') ok = false
+                            else if (c.maxVideos === 0) ok = false
+                            else if (videoIdx >= c.maxVideos) ok = false
+                            else ratio = c.videoRatios[0] === '*' ? 'Any' : c.videoRatios[0]
+                            videoIdx++
+                          }
                           return (
                             <td key={i} className="p-2 text-center">
                               <span className={cn("text-[10px] font-bold uppercase", ok ? "text-green-400" : "text-red-400")}>
-                                {ok ? (type === 'image' ? `✓ ${c.imageRatios[0] === '*' ? 'Any' : c.imageRatios[0]}` : `✓ ${c.videoRatios[0] === '*' ? 'Any' : c.videoRatios[0]}`) : '✗'}
+                                {ok ? `✓ ${ratio}` : '✗'}
                               </span>
                             </td>
                           )

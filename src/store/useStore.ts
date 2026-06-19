@@ -16,6 +16,7 @@ export interface Post {
   scheduledAt?: string
   status: 'scheduled' | 'draft' | 'failed' | 'published'
   tags: string[]
+  socialAccountIds?: string[]
 }
 
 export interface Channel {
@@ -129,7 +130,7 @@ export const useStore = create<SocialFlowStore>((set) => ({
         body: JSON.stringify({
           content: postData.caption,
           mediaUrls: postData.media,
-          socialAccountIds: [], 
+          socialAccountIds: postData.socialAccountIds || [],
           scheduledAt: postData.scheduledTime,
           status: postData.status?.toUpperCase()
         })
@@ -161,8 +162,11 @@ export const useStore = create<SocialFlowStore>((set) => ({
   updatePost: async (token: string, id: string, updates) => {
     try {
       const payload: any = {}
-      if (updates.scheduledTime) payload.scheduledAt = updates.scheduledTime;
-      if (updates.caption) payload.content = updates.caption;
+      if (updates.scheduledTime !== undefined) payload.scheduledAt = updates.scheduledTime;
+      if (updates.caption !== undefined) payload.content = updates.caption;
+      if (updates.media !== undefined) payload.mediaUrls = updates.media;
+      if (updates.socialAccountIds !== undefined) payload.socialAccountIds = updates.socialAccountIds;
+      if (updates.status !== undefined) payload.status = updates.status.toUpperCase();
       
       const res = await apiFetch(`/api/posts/${id}`, {
         method: 'PATCH',
@@ -173,8 +177,9 @@ export const useStore = create<SocialFlowStore>((set) => ({
         body: JSON.stringify(payload)
       })
       if (res.ok) {
+        const data = await res.json()
         set((state) => ({
-          posts: state.posts.map((p) => p.id === id ? { ...p, ...updates } : p)
+          posts: state.posts.map((p) => p.id === id ? { ...p, ...updates, id: data.id } : p)
         }))
       }
     } catch (e) {

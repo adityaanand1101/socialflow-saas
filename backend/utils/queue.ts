@@ -130,8 +130,11 @@ async function refreshSocialAccountToken(account: any) {
 }
 
 async function publishToPlatform(platform: string, decryptedToken: string, content: string, mediaUrls: string[]) {
-  // Real platform logic required here. For now, we throw a specific error.
-  throw new Error(`Publishing logic for ${platform} is not yet implemented. Please connect a production-ready publishing module.`);
+  // The account's platform-specific ID (e.g., IG user ID, Facebook page ID, etc.)
+  // is stored in the junction table; we include it from the calling code.
+  // This function is maintained for backward compatibility — the real dispatch
+  // is handled by the publishers module, which receives platformAccountId separately.
+  throw new Error(`Publishing logic for ${platform} is not yet implemented.`);
 }
 
 try {
@@ -175,13 +178,17 @@ try {
         const account = accountPost.socialAccount;
         try {
           const decryptedToken = await refreshSocialAccountToken(account);
-          
-          const result = await publishToPlatform(
-            account.platform,
+
+          // Import is hoisted — call the real publisher from the publishers module
+          const { publishToPlatform: realPublish } = await import('./publishers');
+
+          const result = await realPublish(
+            account.platform.toLowerCase(),
             decryptedToken,
             post.content || '',
-            post.mediaUrls
-          ) as any;
+            post.mediaUrls,
+            account.platformAccountId
+          );
 
           await prisma.socialAccountPost.update({
             where: {
@@ -192,7 +199,7 @@ try {
             },
             data: {
               status: 'PUBLISHED',
-              publishedUrl: result.url,
+              publishedUrl: result.url || null,
               publishedAt: new Date()
             }
           });

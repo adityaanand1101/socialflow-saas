@@ -7,7 +7,7 @@ import { apiFetch } from '@/lib/api'
 import { 
   Image as ImageIcon, Smile, Hash, Send, Calendar,
   Save, Sparkles, Smartphone, Monitor, Loader2, X, Clock, User, Upload,
-  AlertTriangle
+  AlertTriangle, Trash2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useStore } from '@/store/useStore'
@@ -66,13 +66,57 @@ export const Compose = () => {
   const [selectedTone, setSelectedTone] = useState('Professional')
   const [mediaFiles, setMediaFiles] = useState<string[]>([])
   const [isUploadingMedia, setIsUploadingMedia] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<number>(0)
   const [showMediaLibrary, setShowMediaLibrary] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [editingPostId] = useState<string | null>(searchParams.get('postId'))
   const [activePreviewPlatform, setActivePreviewPlatform] = useState<string>('instagram')
   const [showWarnings, setShowWarnings] = useState(false)
   const [mediaTypes, setMediaTypes] = useState<Record<string, string>>({})
+  const [showDraftRestore, setShowDraftRestore] = useState(false)
+  const [showTemplateModal, setShowTemplateModal] = useState(false)
+  const [templates, setTemplates] = useState<any[]>([])
+  const [newTemplateName, setNewTemplateName] = useState('')
+  const [platformCaptions, setPlatformCaptions] = useState<Record<string, string>>({})
+  const [activeEditorPlatform, setActiveEditorPlatform] = useState<string>('master')
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const DRAFT_KEY = 'socialflow_draft'
+  const TEMPLATES_KEY = 'socialflow_templates'
+
+  const loadTemplates = () => {
+    const raw = localStorage.getItem(TEMPLATES_KEY)
+    if (raw) {
+      try { setTemplates(JSON.parse(raw)) } catch { setTemplates([]) }
+    } else {
+      setTemplates([])
+    }
+  }
+
+  const saveTemplate = (name: string) => {
+    const entry = { id: Date.now().toString(), name, caption, platforms: selectedPlatforms, mediaFiles, mediaTypes, platformCaptions, createdAt: new Date().toISOString() }
+    const raw = localStorage.getItem(TEMPLATES_KEY)
+    const list = raw ? JSON.parse(raw) : []
+    list.unshift(entry)
+    localStorage.setItem(TEMPLATES_KEY, JSON.stringify(list))
+    setTemplates(list)
+    setNewTemplateName('')
+  }
+
+  const deleteTemplate = (id: string) => {
+    const list = templates.filter(t => t.id !== id)
+    localStorage.setItem(TEMPLATES_KEY, JSON.stringify(list))
+    setTemplates(list)
+  }
+
+  const applyTemplate = (t: any) => {
+    if (t.caption) setCaption(t.caption)
+    if (t.platforms) setSelectedPlatforms(t.platforms)
+    if (t.mediaFiles) setMediaFiles(t.mediaFiles)
+    if (t.mediaTypes) setMediaTypes(t.mediaTypes)
+    if (t.platformCaptions) setPlatformCaptions(t.platformCaptions)
+    setShowTemplateModal(false)
+  }
   
   const { addPost, updatePost, uploadMedia, channels } = useStore()
   const queryClient = useQueryClient()
@@ -147,13 +191,66 @@ export const Compose = () => {
     fetchPost()
   }, [editingPostId])
 
+  // --- Draft auto-save ---
+  useEffect(() => {
+    if (editingPostId) return
+    if (!caption && mediaFiles.length === 0) return
+    const draft = { caption, platforms: selectedPlatforms, mediaFiles, mediaTypes, platformCaptions, scheduledDate, showScheduler }
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)) } catch {}
+  }, [caption, selectedPlatforms, mediaFiles, mediaTypes, platformCaptions, scheduledDate, showScheduler, editingPostId])
+
+  // --- Check for saved draft on mount ---
+  useEffect(() => {
+    if (editingPostId) return
+    const raw = localStorage.getItem(DRAFT_KEY)
+    if (raw) {
+      try {
+        const saved = JSON.parse(raw)
+        if (saved.caption || saved.mediaFiles?.length > 0) {
+          setShowDraftRestore(true)
+        }
+      } catch {}
+    }
+  }, [editingPostId])
+
+  const restoreDraft = () => {
+    const raw = localStorage.getItem(DRAFT_KEY)
+    if (!raw) return
+    try {
+      const saved = JSON.parse(raw)
+      if (saved.caption) setCaption(saved.caption)
+      if (saved.platforms) setSelectedPlatforms(saved.platforms)
+      if (saved.mediaFiles) setMediaFiles(saved.mediaFiles)
+      if (saved.mediaTypes) setMediaTypes(saved.mediaTypes)
+      if (saved.platformCaptions) setPlatformCaptions(saved.platformCaptions)
+      if (saved.scheduledDate) setScheduledDate(saved.scheduledDate)
+      if (saved.showScheduler) setShowScheduler(saved.showScheduler)
+    } catch {}
+    setShowDraftRestore(false)
+  }
+
+  const clearDraft = () => {
+    localStorage.removeItem(DRAFT_KEY)
+    setShowDraftRestore(false)
+  }
+
+  const getCaptionForPlatform = (pid: string) => platformCaptions[pid] || caption
+
+  const setCaptionForPlatform = (pid: string, text: string) => {
+    if (pid === 'master') {
+      setCaption(text)
+    } else {
+      setPlatformCaptions(prev => ({ ...prev, [pid]: text }))
+    }
+  }
+
   const libraryMedia = mediaData?.assets || []
 
-  const handleMediaUpload = async (file: File) => {
+  const handleMediaUpload = async (file: File): Promise<any> => {
     setIsUploadingMedia(true)
     try {
       const token = await getToken()
-      if (!token) return
+      if (!token) return null
       const asset = await uploadMedia(token, file)
       if (asset) {
         setMediaFiles(prev => [...prev, asset.fileUrl])
@@ -163,23 +260,52 @@ export const Compose = () => {
       return asset
     } catch (error) {
       console.error('Upload failed:', error)
-    } finally {
-      setIsUploadingMedia(false)
+      return null
     }
   }
 
+  const handleMediaUploads = async (files: File[]) => {
+    setIsUploadingMedia(true)
+    setUploadProgress(0)
+    let done = 0
+    const results = await Promise.allSettled(files.map(async (file) => {
+      const asset = await handleMediaUpload(file)
+      done++
+      setUploadProgress(Math.round((done / files.length) * 100))
+      return asset
+    }))
+    const successes = results.filter(r => r.status === 'fulfilled' && r.value)
+    if (successes.length > 0) setShowMediaLibrary(false)
+    setIsUploadingMedia(false)
+    setUploadProgress(100)
+  }
+
   const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) await handleMediaUpload(file)
+    const files = e.target.files
+    if (files && files.length > 0) {
+      const fileArray = Array.from(files)
+      if (fileArray.length === 1) {
+        const asset = await handleMediaUpload(fileArray[0])
+        if (asset) setShowMediaLibrary(false)
+      } else {
+        await handleMediaUploads(fileArray)
+      }
+    }
+    e.target.value = ''
   }
 
   const onDrop = async (e: React.DragEvent) => {
     e.preventDefault()
     setIsDragging(false)
-    const file = e.dataTransfer.files?.[0]
-    if (file) {
-      const asset = await handleMediaUpload(file)
-      if (asset) setShowMediaLibrary(false)
+    const files = e.dataTransfer.files
+    if (files && files.length > 0) {
+      const fileArray = Array.from(files)
+      if (fileArray.length === 1) {
+        const asset = await handleMediaUpload(fileArray[0])
+        if (asset) setShowMediaLibrary(false)
+      } else {
+        await handleMediaUploads(fileArray)
+      }
     }
   }
 
@@ -204,11 +330,12 @@ export const Compose = () => {
   }
 
   const handleRewrite = async () => {
-    if (!caption) return
+    const targetText = currentEditorCaption
+    if (!targetText) return
     setIsRewriting(true)
     try {
-      const newCaption = await rewriteCaption(caption, selectedTone)
-      setCaption(newCaption)
+      const newCaption = await rewriteCaption(targetText, selectedTone)
+      setCaptionForPlatform(activeEditorPlatform, newCaption)
     } catch (error) {
       console.error('AI Rewrite failed:', error)
     } finally {
@@ -229,11 +356,12 @@ export const Compose = () => {
     if (selectedPlatforms.length === 0) return {}
     const result: Record<string, string[]> = {}
     for (const pid of selectedPlatforms) {
-      const w = getPlatformWarnings(pid, caption, mediaInfo)
+      const content = getCaptionForPlatform(pid)
+      const w = getPlatformWarnings(pid, content, mediaInfo)
       if (w.length > 0) result[pid] = w
     }
     return result
-  }, [selectedPlatforms, caption, mediaInfo])
+  }, [selectedPlatforms, caption, platformCaptions, mediaInfo])
 
   const hasWarnings = Object.keys(allWarnings).length > 0
 
@@ -250,6 +378,8 @@ export const Compose = () => {
     }
     return min === Infinity ? 999999 : min
   }, [selectedPlatforms])
+
+  const currentEditorCaption = activeEditorPlatform === 'master' ? caption : getCaptionForPlatform(activeEditorPlatform)
 
   const handlePost = async (status: 'published' | 'draft' | 'scheduled', force = false) => {
     if (status !== 'draft' && hasWarnings && !showWarnings && !force) {
@@ -294,6 +424,7 @@ export const Compose = () => {
 
       queryClient.invalidateQueries({ queryKey: ['posts'] })
       navigate('/calendar')
+      clearDraft()
     } catch (error) {
       console.error('Failed to save post:', error)
     } finally {
@@ -318,7 +449,7 @@ export const Compose = () => {
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-white tracking-tight">Compose Post</h1>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" className="text-muted-foreground hover:text-white" onClick={() => { setCaption(''); setSelectedPlatforms(['instagram']); setMediaFiles([]); setMediaTypes({}); setActivePreviewPlatform('instagram'); setShowWarnings(false) }}>
+            <Button variant="ghost" className="text-muted-foreground hover:text-white" onClick={() => { setCaption(''); setSelectedPlatforms(['instagram']); setMediaFiles([]); setMediaTypes({}); setPlatformCaptions({}); setActivePreviewPlatform('instagram'); setActiveEditorPlatform('master'); setShowWarnings(false); clearDraft() }}>
               Clear
             </Button>
             <Button variant="outline" className="gap-2" onClick={() => handlePost('draft')} disabled={isSubmitting}>
@@ -327,6 +458,20 @@ export const Compose = () => {
             </Button>
           </div>
         </div>
+
+        {/* Draft restore banner */}
+        {showDraftRestore && (
+          <div className="flex items-center justify-between p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-sm">
+            <div className="flex items-center gap-2">
+              <Save className="w-4 h-4 text-purple-400" />
+              <span className="text-purple-200">You have an unsaved draft.</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" className="text-xs" onClick={clearDraft}>Discard</Button>
+              <Button size="sm" className="text-xs" onClick={restoreDraft}>Restore</Button>
+            </div>
+          </div>
+        )}
 
         {/* Platform Selector */}
         <Card>
@@ -350,6 +495,11 @@ export const Compose = () => {
                         : "bg-white/5 border-white/10 text-muted-foreground hover:border-white/20"
                     )}
                   >
+                    {selected && p.id in platformCaptions && (
+                      <div className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-purple-400 border-2 border-[#0F1117] flex items-center justify-center">
+                        <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                      </div>
+                    )}
                     <div className="flex items-center gap-2">
                       <p.icon className={cn("w-4 h-4", !selected && p.color)} />
                       <span className="text-sm font-medium whitespace-nowrap">{p.label}</span>
@@ -396,33 +546,67 @@ export const Compose = () => {
                 variant="ghost" size="sm" 
                 className="text-purple-400 gap-2 hover:bg-purple-500/10"
                 onClick={handleRewrite}
-                disabled={isRewriting || !caption}
+                disabled={isRewriting || !currentEditorCaption}
               >
                 {isRewriting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                 AI Rewrite
               </Button>
             </div>
           </CardHeader>
-          <CardContent className="flex-1 flex flex-col space-y-4">
-            <div className="relative flex-1">
-              <textarea
-                value={caption}
-                onChange={(e) => setCaption(e.target.value)}
-                placeholder="What's on your mind? Type your post here..."
-                className="w-full h-full min-h-[180px] bg-transparent border-none focus:ring-0 outline-none text-white placeholder:text-white/20 resize-none text-base leading-relaxed"
-              />
-              <div className="absolute bottom-2 right-2 text-xs text-muted-foreground">
-                {caption.length} / <span className={cn(caption.length > lowestLimit && "text-red-400 font-bold")}>{lowestLimit}</span>
+            <CardContent className="flex-1 flex flex-col space-y-4">
+              {/* Per-platform editor tabs */}
+              <div className="flex gap-1 p-0.5 bg-white/5 rounded-lg border border-white/10 overflow-x-auto">
+                <button
+                  onClick={() => setActiveEditorPlatform('master')}
+                  className={cn(
+                    "px-3 py-1.5 rounded-md text-xs font-bold whitespace-nowrap transition-all",
+                    activeEditorPlatform === 'master' ? "bg-purple-500/20 text-white" : "text-muted-foreground hover:text-white"
+                  )}
+                >
+                  Master
+                </button>
+                {selectedPlatforms.map(pid => {
+                  const p = ALL_PLATFORMS.find(x => x.id === pid)
+                  if (!p) return null
+                  const hasCustom = pid in platformCaptions
+                  const Icon = p.icon
+                  return (
+                    <button
+                      key={pid}
+                      onClick={() => setActiveEditorPlatform(pid)}
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold whitespace-nowrap transition-all",
+                        activeEditorPlatform === pid ? "bg-purple-500/20 text-white" : "text-muted-foreground hover:text-white"
+                      )}
+                    >
+                      <Icon className="w-3 h-3" />
+                      {p.label}
+                      {hasCustom && <div className="w-1.5 h-1.5 rounded-full bg-purple-400" />}
+                    </button>
+                  )
+                })}
               </div>
-            </div>
+
+              <div className="relative flex-1">
+                <textarea
+                  value={currentEditorCaption}
+                  onChange={(e) => setCaptionForPlatform(activeEditorPlatform, e.target.value)}
+                  placeholder={activeEditorPlatform === 'master' ? "What's on your mind? Type your post here..." : `Custom caption for ${activeEditorPlatform}...`}
+                  className="w-full h-full min-h-[180px] bg-transparent border-none focus:ring-0 outline-none text-white placeholder:text-white/20 resize-none text-base leading-relaxed"
+                />
+                <div className="absolute bottom-2 right-2 text-xs text-muted-foreground">
+                  {currentEditorCaption.length} / <span className={cn(currentEditorCaption.length > lowestLimit && "text-red-400 font-bold")}>{lowestLimit}</span>
+                </div>
+              </div>
 
             {/* Per-platform character bars */}
             {selectedPlatforms.length > 1 && (
               <div className="space-y-1">
                 {selectedPlatforms.map(pid => {
                   const c = getPlatformConstraint(pid)
-                  const pct = Math.min((caption.length / c.maxChars) * 100, 100)
-                  const over = caption.length > c.maxChars
+                  const content = getCaptionForPlatform(pid)
+                  const pct = Math.min((content.length / c.maxChars) * 100, 100)
+                  const over = content.length > c.maxChars
                   return (
                     <div key={pid} className="flex items-center gap-2">
                       <span className="text-[10px] font-bold text-muted-foreground uppercase w-16 truncate shrink-0">{pid}</span>
@@ -430,7 +614,7 @@ export const Compose = () => {
                         <div className={cn("h-full rounded-full transition-all", over ? "bg-red-500" : "bg-purple-500/60")} style={{ width: `${pct}%` }} />
                       </div>
                       <span className={cn("text-[10px] w-12 text-right shrink-0", over ? "text-red-400 font-bold" : "text-muted-foreground")}>
-                        {caption.length}/{c.maxChars < 10000 ? c.maxChars : '∞'}
+                        {content.length}/{c.maxChars < 10000 ? c.maxChars : '∞'}
                       </span>
                     </div>
                   )
@@ -476,14 +660,15 @@ export const Compose = () => {
 
             <div className="flex items-center justify-between pt-4 border-t border-white/10">
               <div className="flex items-center gap-1">
-                <input type="file" className="hidden" ref={fileInputRef} accept="image/*,video/*" onChange={onFileChange} />
+                <input type="file" className="hidden" ref={fileInputRef} accept="*/*" multiple onChange={onFileChange} />
                 <Button 
                   variant="ghost" size="icon" 
                   className={cn("text-muted-foreground hover:text-white", isUploadingMedia && "animate-pulse")}
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isUploadingMedia}
+                  title="Upload media files"
                 >
-                  {isUploadingMedia ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
+                  {isUploadingMedia ? <span className="text-[10px] font-bold text-purple-400">{uploadProgress}%</span> : <Upload className="w-5 h-5" />}
                 </Button>
                 <Button 
                   variant="ghost" size="icon" 
@@ -497,6 +682,15 @@ export const Compose = () => {
                 </Button>
                 <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-white">
                   <Hash className="w-5 h-5" />
+                </Button>
+                <div className="w-px h-6 bg-white/10" />
+                <Button
+                  variant="ghost" size="sm"
+                  className="text-muted-foreground hover:text-white text-xs gap-1"
+                  onClick={() => { loadTemplates(); setShowTemplateModal(true) }}
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  Templates
                 </Button>
               </div>
 
@@ -553,6 +747,52 @@ export const Compose = () => {
                     </div>
                     <div className="p-4 border-t border-white/10 bg-white/5 flex justify-end">
                       <Button onClick={() => setShowMediaLibrary(false)}>Done</Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Template Modal */}
+              {showTemplateModal && (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[300] flex items-center justify-center p-4" onClick={() => setShowTemplateModal(false)}>
+                  <div className="bg-[#141218] border border-white/10 rounded-2xl w-full max-w-lg max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                    <div className="p-4 border-b border-white/10 flex items-center justify-between">
+                      <h3 className="font-bold text-white">Post Templates</h3>
+                      <button onClick={() => setShowTemplateModal(false)} className="text-muted-foreground hover:text-white">
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="p-4 border-b border-white/10 flex items-center gap-2">
+                      <input
+                        value={newTemplateName}
+                        onChange={e => setNewTemplateName(e.target.value)}
+                        placeholder="Template name..."
+                        className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50"
+                        onKeyDown={e => { if (e.key === 'Enter' && newTemplateName.trim()) { saveTemplate(newTemplateName.trim()) } }}
+                      />
+                      <Button size="sm" disabled={!newTemplateName.trim() || !caption} onClick={() => { if (newTemplateName.trim()) saveTemplate(newTemplateName.trim()) }}>
+                        Save Current
+                      </Button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+                      {templates.length === 0 ? (
+                        <p className="text-sm text-muted-foreground text-center py-8">No saved templates yet.</p>
+                      ) : templates.map(t => (
+                        <div key={t.id} className="flex items-center gap-3 p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-white truncate">{t.name}</p>
+                            <p className="text-[11px] text-muted-foreground truncate">
+                              {t.caption?.slice(0, 80) || 'No caption'} · {t.platforms?.length || 0} platforms
+                            </p>
+                          </div>
+                          <button onClick={() => applyTemplate(t)} className="text-xs text-purple-400 hover:text-purple-300 shrink-0 px-2 py-1 rounded hover:bg-purple-500/10">
+                            Load
+                          </button>
+                          <button onClick={() => deleteTemplate(t.id)} className="text-xs text-red-400 hover:text-red-300 shrink-0 px-2 py-1 rounded hover:bg-red-500/10">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -747,7 +987,7 @@ export const Compose = () => {
                   <div className="text-[10px] font-bold">0 likes</div>
                   <div className="text-[10px] leading-tight">
                     <span className="font-bold mr-1">your_account</span>
-                    {caption || <span className="text-gray-400">Your caption will appear here...</span>}
+                    {getCaptionForPlatform(activePlatform) || <span className="text-gray-400">Your caption will appear here...</span>}
                   </div>
                   <div className="text-[8px] text-gray-400 uppercase">Just now</div>
                 </div>
@@ -768,7 +1008,7 @@ export const Compose = () => {
                 <Button variant="ghost" size="sm" className="text-blue-600 text-xs">+ Follow</Button>
               </div>
               <div className="p-3 text-xs whitespace-pre-wrap leading-relaxed">
-                {caption || <span className="text-gray-400">Your post content preview...</span>}
+                {getCaptionForPlatform(activePlatform) || <span className="text-gray-400">Your post content preview...</span>}
               </div>
               {mediaFiles[0] && (
                 previewIsVideo ? (

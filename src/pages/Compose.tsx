@@ -6,13 +6,13 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 import { 
   Image as ImageIcon, Smile, Hash, Send, Calendar,
-  Save, Sparkles, Smartphone, Monitor, Loader2, X, Clock, User, Upload,
+  Save, Sparkles, Smartphone, Monitor, Loader2, X, Clock, Upload,
   AlertTriangle, Trash2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useStore } from '@/store/useStore'
 import type { SocialPlatform } from '@/store/useStore'
-import { rewriteCaption } from '@/lib/gemini'
+import { getPlatformPreview } from '@/components/PlatformPreviews'
 import { useAuth } from '@clerk/react'
 import { format, addDays, isValid, parseISO } from 'date-fns'
 import { ALL_PLATFORMS } from '@/lib/platforms'
@@ -84,6 +84,7 @@ export const Compose = () => {
   const [hashtagNiche, setHashtagNiche] = useState('')
   const [hashtagLoading, setHashtagLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
 
   const DRAFT_KEY = 'socialflow_draft'
   const TEMPLATES_KEY = 'socialflow_templates'
@@ -367,13 +368,29 @@ export const Compose = () => {
     if (!targetText) return
     setIsRewriting(true)
     try {
-      const newCaption = await rewriteCaption(targetText, selectedTone)
-      setCaptionForPlatform(activeEditorPlatform, newCaption)
+      const token = await getToken()
+      const res = await apiFetch('/api/ai/rewrite', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ caption: targetText, tone: selectedTone, platform: activeEditorPlatform }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setCaptionForPlatform(activeEditorPlatform, data.rewritten)
+      }
     } catch (error) {
       console.error('AI Rewrite failed:', error)
     } finally {
       setIsRewriting(false)
     }
+  }
+
+  const COMMON_EMOJIS = ['😀','😁','😂','🤣','😅','😊','😍','🥰','😘','🤗','😎','🤩','😢','😭','😤','😡','👍','👎','👏','🙌','💪','🤝','🔥','⭐','💯','❤️','💜','💙','✨','🎉','🎊','🎯','🚀','✅','❌','💡','📢','💬','🗣️','💎','🌟','🫶','🏆','⚡']
+
+  const insertEmoji = (emoji: string) => {
+    const target = activeEditorPlatform === 'master' ? caption : platformCaptions[activeEditorPlatform] || caption
+    setCaptionForPlatform(activeEditorPlatform, `${target}${emoji}`)
+    setShowEmojiPicker(false)
   }
 
   const removeMedia = (index: number) => {
@@ -737,8 +754,19 @@ export const Compose = () => {
                 >
                   <ImageIcon className="w-5 h-5" />
                 </Button>
-                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-white">
+                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-white relative" onClick={() => setShowEmojiPicker(!showEmojiPicker)}>
                   <Smile className="w-5 h-5" />
+                  {showEmojiPicker && (
+                    <div className="absolute bottom-full left-0 mb-2 p-2 bg-[#1a1a2e] border border-white/10 rounded-xl shadow-2xl w-[280px] z-50" onMouseDown={e => e.preventDefault()}>
+                      <div className="grid grid-cols-8 gap-1">
+                        {COMMON_EMOJIS.map((emoji, i) => (
+                          <button key={i} onClick={() => insertEmoji(emoji)} className="p-1 hover:bg-white/10 rounded text-lg leading-none transition-colors">
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </Button>
                 <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-white relative" onClick={() => { setHashtagNiche(''); setHashtagSuggestions([]); setShowHashtagModal(true) }} title="Hashtag suggestions">
                   <Hash className="w-5 h-5" />
@@ -1077,68 +1105,19 @@ export const Compose = () => {
             <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-pink-500 blur-[120px] rounded-full" />
           </div>
 
-          {previewDevice === 'mobile' ? (
-            <div className="w-[300px] h-[560px] border-[8px] border-navy-900 rounded-[40px] bg-black shadow-2xl relative overflow-hidden flex flex-col z-10">
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-28 h-5 bg-navy-900 rounded-b-2xl z-20" />
-              <div className="flex-1 bg-white text-black pt-6 overflow-y-auto">
-                <div className="px-3 py-2 border-b flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-full bg-white border border-gray-200 overflow-hidden flex items-center justify-center">
-                    <User className="w-4 h-4 text-gray-400" />
-                  </div>
-                  <span className="text-[11px] font-bold">your_account</span>
-                  <span className="ml-auto text-[10px] text-blue-500 font-bold">Follow</span>
-                </div>
-                {mediaFiles[0] ? (
-                  previewIsVideo ? (
-                    <video src={mediaFiles[0]} className={`w-full ${previewRatioClass} object-cover`} muted controls />
-                  ) : (
-                    <img src={mediaFiles[0]} alt="" className={`w-full ${previewRatioClass} object-cover`} />
-                  )
-                ) : (
-                  <div className="w-full aspect-square bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center">
-                    <ImageIcon className="w-10 h-10 text-gray-300" />
-                  </div>
-                )}
-                <div className="p-3 space-y-1.5">
-                  <div className="flex gap-3 text-sm">❤️ 💬 📤</div>
-                  <div className="text-[10px] font-bold">0 likes</div>
-                  <div className="text-[10px] leading-tight">
-                    <span className="font-bold mr-1">your_account</span>
-                    {getCaptionForPlatform(activePlatform) || <span className="text-gray-400">Your caption will appear here...</span>}
-                  </div>
-                  <div className="text-[8px] text-gray-400 uppercase">Just now</div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="w-[85%] bg-white text-black overflow-hidden border-none shadow-2xl rounded-xl z-10">
-              <div className="p-3 border-b flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-gray-400 text-xs font-bold">
-                    <User className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold">Your Organization</p>
-                    <p className="text-[10px] text-gray-500">0 followers • Just now</p>
-                  </div>
-                </div>
-                <Button variant="ghost" size="sm" className="text-blue-600 text-xs">+ Follow</Button>
-              </div>
-              <div className="p-3 text-xs whitespace-pre-wrap leading-relaxed">
-                {getCaptionForPlatform(activePlatform) || <span className="text-gray-400">Your post content preview...</span>}
-              </div>
-              {mediaFiles[0] && (
-                previewIsVideo ? (
-                  <video src={mediaFiles[0]} className={`w-full ${previewRatioClass} object-cover`} muted controls />
-                ) : (
-                  <img src={mediaFiles[0]} alt="" className={`w-full ${previewRatioClass} object-cover`} />
-                )
-              )}
-              <div className="p-2 border-t flex justify-around text-[10px] font-semibold text-gray-500">
-                {['👍 Like', '💬 Comment', '🔁 Repost', '📤 Send'].map(a => <span key={a}>{a}</span>)}
-              </div>
-            </div>
-          )}
+          <div className={cn("z-10 w-full", previewDevice === 'mobile' ? 'max-w-[330px]' : 'max-w-[500px]')}>
+            {(() => {
+              const PreviewComponent = getPlatformPreview(activePlatform)
+              return <PreviewComponent
+                caption={getCaptionForPlatform(activePlatform)}
+                mediaUrls={mediaFiles}
+                mediaTypes={mediaTypes}
+                mediaInfo={mediaInfo}
+                isMobile={previewDevice === 'mobile'}
+                getRatioClass={() => previewRatioClass}
+              />
+            })()}
+          </div>
         </div>
 
         {/* Media compatibility table */}

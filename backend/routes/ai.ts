@@ -185,6 +185,35 @@ Niche: ${niche.slice(0, 500)}, Keywords: ${(keywords || niche).slice(0, 500)}` }
   }
 });
 
+router.post('/rewrite', requireAuth, async (req: any, res: any) => {
+  let { caption, tone, platform } = req.body;
+  const userId = req.userId;
+
+  if (!caption || !String(caption).trim()) {
+    return res.status(400).json({ error: 'caption is required' });
+  }
+  platform = PLATFORM_MAP[platform?.toLowerCase()] || 'Instagram';
+  if (!GEMINI_AI) return res.status(503).json({ error: 'AI service unavailable' });
+
+  const hit = await checkAiRateLimit(userId);
+  if (hit !== null) return res.status(429).json({ error: `Rate limit exceeded (${hit + 1} requests this hour)` });
+
+  try {
+    const response = await GEMINI_AI.models.generateContent({
+      model: AI_MODELS.caption,
+      contents: [{ role: 'user', parts: [{ text: `Rewrite this social media caption for ${platform} to be more ${tone || 'professional'}. Keep it concise and platform-appropriate. Include 2-3 relevant hashtags. Return ONLY the rewritten caption text, no explanations.\n\nCaption: ${caption.slice(0, 2000)}` }] }],
+    });
+
+    const text = response.candidates?.[0]?.content?.parts?.[0]?.text || caption;
+
+    await logAiUsage(userId, 'rewrite', `${tone || 'professional'} ${caption.slice(0, 200)}`);
+    return res.json({ rewritten: text.trim() });
+  } catch (error: any) {
+    console.error('AI Rewrite Error:', error);
+    return res.status(500).json({ error: 'Failed to rewrite caption' });
+  }
+});
+
 router.post('/ideas', requireAuth, async (req: any, res: any) => {
   const { topic, industry } = req.body;
   const userId = req.userId;

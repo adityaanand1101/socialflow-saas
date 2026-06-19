@@ -16,7 +16,7 @@ async function sendFile(
   const payload: Record<string, any> = {
     chat_id: chatId,
     caption: caption.slice(0, 1024),
-    parse_mode: parseMode,
+    ...(parseMode ? { parse_mode: parseMode } : {}),
   };
 
   if (method === 'sendPhoto') payload.photo = fileUrl;
@@ -43,7 +43,7 @@ async function sendFile(
   const form = new FormData();
   form.append('chat_id', chatId);
   form.append('caption', caption.slice(0, 1024));
-  form.append('parse_mode', parseMode);
+  if (parseMode) form.append('parse_mode', parseMode);
 
   const fieldMap: Record<string, string> = {
     sendPhoto: 'photo',
@@ -82,7 +82,7 @@ export async function publishToTelegram(
   const botToken = token;
   const chatId = platformAccountId;
   const text = sc.text || content || '';
-  const parseMode = 'Markdown';
+  const parseMode = sc.parse_mode || '';
 
   if (ct === 'media_group') {
     if (mediaUrls.length < 2) throw new Error('Telegram media group requires at least 2 media items');
@@ -94,7 +94,10 @@ export async function publishToTelegram(
           type: isVideo ? 'video' : 'photo',
           media: url,
         };
-        if (i === 0 && text) item.caption = text.slice(0, 1024);
+        if (i === 0 && text) {
+          item.caption = text.slice(0, 1024);
+          if (parseMode) item.parse_mode = parseMode;
+        }
         return item;
       }),
     );
@@ -109,6 +112,35 @@ export async function publishToTelegram(
       throw new Error(`Telegram media group failed: ${err.slice(0, 200)}`);
     }
     return { id: 'tg-media-group' };
+  }
+
+  if (ct === 'poll') {
+    const question = sc.question || content || '';
+    const optionsList = (sc.poll_options || '').split('\n').filter(Boolean);
+    const isAnonymous = sc.is_anonymous !== 'false';
+    const allowsMultiple = sc.allows_multiple_answers === 'true';
+    if (optionsList.length < 2) throw new Error('Telegram poll requires at least 2 options');
+    if (optionsList.length > 10) throw new Error('Telegram poll supports max 10 options');
+
+    const pollBody: Record<string, any> = {
+      chat_id: chatId,
+      question: question.slice(0, 300),
+      options: JSON.stringify(optionsList),
+      is_anonymous: isAnonymous,
+      allows_multiple_answers: allowsMultiple,
+    };
+
+    const res = await fetch(`${API_BASE}/bot${botToken}/sendPoll`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(pollBody),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Telegram poll failed: ${err.slice(0, 200)}`);
+    }
+    const result = await res.json() as any;
+    return { id: String(result?.result?.message_id || 'tg-poll') };
   }
 
   if (mediaUrls.length === 1) {
@@ -148,7 +180,7 @@ export async function publishToTelegram(
     body: JSON.stringify({
       chat_id: chatId,
       text: text.slice(0, 4096),
-      parse_mode: parseMode,
+      ...(parseMode ? { parse_mode: parseMode } : {}),
     }),
   });
   if (!res.ok) {

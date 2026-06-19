@@ -14,7 +14,10 @@ export async function publishToDiscord(
   const ct = postTypes?.[pid] || 'message';
 
   // platformAccountId is the webhook URL
-  const webhookUrl = platformAccountId;
+  let webhookUrl = platformAccountId;
+  if (sc.thread_name) {
+    webhookUrl += (webhookUrl.includes('?') ? '&' : '?') + `thread_name=${encodeURIComponent(sc.thread_name)}`;
+  }
 
   if (ct === 'embed') {
     const embed: Record<string, any> = {};
@@ -32,6 +35,8 @@ export async function publishToDiscord(
       content: sc.content || content || '',
       embeds: [embed],
     };
+    if (sc.webhook_username) payload.username = sc.webhook_username;
+    if (sc.webhook_avatar) payload.avatar_url = sc.webhook_avatar;
 
     // Attach files if any
     const files: any[] = [];
@@ -76,6 +81,8 @@ export async function publishToDiscord(
   const payload: Record<string, any> = {
     content: (sc.content || content || '').slice(0, 2000),
   };
+  if (sc.webhook_username) payload.username = sc.webhook_username;
+  if (sc.webhook_avatar) payload.avatar_url = sc.webhook_avatar;
 
   const files: any[] = [];
   for (const url of mediaUrls.slice(0, 10)) {

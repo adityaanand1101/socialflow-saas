@@ -2,7 +2,7 @@ import fetch from 'node-fetch';
 import FormData from 'form-data';
 import type { PublishResult } from './common';
 
-async function uploadMedia(instanceUrl: string, token: string, mediaUrl: string): Promise<string | null> {
+async function uploadMedia(instanceUrl: string, token: string, mediaUrl: string, description?: string): Promise<string | null> {
   try {
     const fileRes = await fetch(mediaUrl);
     if (!fileRes.ok) return null;
@@ -12,6 +12,7 @@ async function uploadMedia(instanceUrl: string, token: string, mediaUrl: string)
 
     const form = new FormData();
     form.append('file', buffer, { filename, contentType });
+    if (description) form.append('description', description);
 
     const res = await fetch(`${instanceUrl}/api/v1/media`, {
       method: 'POST',
@@ -48,9 +49,45 @@ export async function publishToMastodon(
 
   // Upload media
   const mediaIds: string[] = [];
+  const ct = postTypes?.[pid] || 'text';
+  const altText = sc.alt_text || '';
   for (const url of mediaUrls.slice(0, 4)) {
-    const id = await uploadMedia(instanceUrl, token, url);
+    const id = await uploadMedia(instanceUrl, token, url, altText || undefined);
     if (id) mediaIds.push(id);
+  }
+
+  if (ct === 'poll') {
+    const options = (sc.poll_options || '').split('\n').filter(Boolean).slice(0, 4);
+    const expiresIn = Math.min(Math.max(parseInt(sc.poll_expires_in) || 86400, 300), 604800);
+    if (options.length < 2) throw new Error('Mastodon poll requires at least 2 options');
+
+    const payload: Record<string, any> = {
+      status: text.slice(0, 500),
+      visibility,
+      poll: {
+        options,
+        expires_in: expiresIn,
+      },
+    };
+    if (spoiler) payload.spoiler_text = spoiler;
+
+    const res = await fetch(`${instanceUrl}/api/v1/statuses`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Mastodon poll post failed: ${err.slice(0, 300)}`);
+    }
+    const result = await res.json() as any;
+    return {
+      id: result.id,
+      url: result.url || result.uri,
+    };
   }
 
   const payload: Record<string, any> = {

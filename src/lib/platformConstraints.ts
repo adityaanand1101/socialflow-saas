@@ -243,14 +243,19 @@ export function getPlatformConstraint(id: string): PlatformConstraints {
 
 // ───── Content Types ─────
 
+export interface SelectOption {
+  value: string
+  label: string
+}
+
 export interface ContentField {
   key: string
   label: string
-  type: 'text' | 'textarea' | 'url' | 'number' | 'date' | 'multiline-list'
+  type: 'text' | 'textarea' | 'url' | 'number' | 'date' | 'multiline-list' | 'select'
   maxLength?: number
   required: boolean
   placeholder: string
-  options?: string[]
+  options?: string[] | SelectOption[]
   fieldNote?: string
 }
 
@@ -289,10 +294,10 @@ const f = (key: string, label: string, type: ContentField['type'] = 'textarea', 
 
 export const PLATFORM_CONTENT_TYPES: Record<string, ContentTypeDef[]> = {
   instagram: [
-    ct('feed', 'Feed Post', [f('caption', 'Caption', 'textarea', { maxLength: 2200, placeholder: 'Write a caption...' })], {
+    ct('feed', 'Feed Post', [f('caption', 'Caption', 'textarea', { maxLength: 2200, placeholder: 'Write a caption...' }), f('location_id', 'Location ID', 'text', { required: false, placeholder: 'Facebook location page ID...' }), f('user_tags', 'User Tags (comma-separated usernames)', 'text', { required: false, placeholder: '@user1, @user2' })], {
       imageRatios: ['1:1', '4:5', '1.91:1'], videoRatios: ['1:1', '4:5', '16:9', '9:16'], maxImages: 1, maxVideos: 1, maxChars: 2200,
     }),
-    ct('reel', 'Reel', [f('caption', 'Caption', 'textarea', { maxLength: 2200, placeholder: 'Write a caption...' })], {
+    ct('reel', 'Reel', [f('caption', 'Caption', 'textarea', { maxLength: 2200, placeholder: 'Write a caption...' }), f('audio_name', 'Audio/Music', 'text', { required: false, placeholder: 'Audio track name (Instagram Music)...' })], {
       imageRatios: [], videoRatios: ['9:16'], maxImages: 0, maxVideos: 1, maxChars: 2200, mediaType: 'video',
     }),
     ct('carousel', 'Carousel', [f('caption', 'Caption', 'textarea', { maxLength: 2200, placeholder: 'Write a caption...' })], {
@@ -301,10 +306,10 @@ export const PLATFORM_CONTENT_TYPES: Record<string, ContentTypeDef[]> = {
     ct('story', 'Story', [], { imageRatios: ['9:16'], videoRatios: ['9:16'], maxImages: 1, maxVideos: 1, mediaType: 'mixed' }),
   ],
   facebook: [
-    ct('feed', 'Feed Post', [f('message', 'Message', 'textarea', { maxLength: 63206, placeholder: "What's on your mind?" })], {
+    ct('feed', 'Feed Post', [f('message', 'Message', 'textarea', { maxLength: 63206, placeholder: "What's on your mind?" }), f('scheduled_publish_time', 'Schedule (Unix timestamp)', 'number', { required: false, placeholder: '1718000000', fieldNote: 'Leave empty for immediate publish' })], {
       imageRatios: ['4:5', '1:1', '1.91:1'], videoRatios: ['4:5', '9:16'], maxImages: 30, maxVideos: 1, maxChars: 63206,
     }),
-    ct('reels', 'Reel', [f('message', 'Message', 'textarea', { maxLength: 63206, placeholder: 'Add a description...' })], {
+    ct('reels', 'Reel', [f('message', 'Message', 'textarea', { maxLength: 63206, placeholder: 'Add a description...' }), f('scheduled_publish_time', 'Schedule (Unix timestamp)', 'number', { required: false, placeholder: '1718000000', fieldNote: 'Leave empty for immediate publish' })], {
       imageRatios: ['9:16'], videoRatios: ['9:16'], maxImages: 0, maxVideos: 1, maxChars: 2200, mediaType: 'video',
     }),
     ct('link', 'Link Share', [f('message', 'Message', 'textarea', { placeholder: 'Say something about this link...' }), f('url', 'URL', 'url', { required: true, placeholder: 'https://...' })], {
@@ -350,6 +355,9 @@ export const PLATFORM_CONTENT_TYPES: Record<string, ContentTypeDef[]> = {
     ct('multi_image', 'Multi-Image', [f('commentary', 'Commentary', 'textarea', { maxLength: 3000, placeholder: 'Add a description...' })], {
       imageRatios: ['1:1', '16:9', '4:3'], maxImages: 20, maxChars: 3000, allowCarousel: true,
     }),
+    ct('document', 'Document Post', [f('commentary', 'Commentary', 'textarea', { maxLength: 3000, placeholder: 'Add a description...' }), f('document_url', 'Document URL', 'url', { required: true, placeholder: 'https://example.com/doc.pdf', fieldNote: 'PDF, DOC, or PPT up to 100MB' })], {
+      maxChars: 3000,
+    }),
   ],
   threads: [
     ct('text', 'Text Post', [f('text', 'Text', 'textarea', { maxLength: 500, placeholder: "What's on your mind?" })], {
@@ -389,6 +397,9 @@ export const PLATFORM_CONTENT_TYPES: Record<string, ContentTypeDef[]> = {
     ct('video_pin', 'Video Pin', [f('title', 'Title', 'text', { maxLength: 100, placeholder: 'Pin title...' }), f('description', 'Description', 'textarea', { maxLength: 500, placeholder: 'Pin description...' }), f('link', 'Destination Link', 'url', { placeholder: 'https://...' })], {
       videoRatios: ['2:3', '9:16'], maxVideos: 1, maxChars: 500,
     }),
+    ct('carousel_pin', 'Carousel Pin', [f('title', 'Title', 'text', { maxLength: 100, placeholder: 'Pin title...' }), f('description', 'Description', 'textarea', { maxLength: 500, placeholder: 'Pin description...' }), f('link', 'Destination Link', 'url', { placeholder: 'https://...' })], {
+      imageRatios: ['2:3', '1:1'], maxImages: 5, maxChars: 500,
+    }),
   ],
   reddit: [
     ct('text', 'Text Post', [
@@ -416,12 +427,12 @@ export const PLATFORM_CONTENT_TYPES: Record<string, ContentTypeDef[]> = {
     }),
   ],
   wordpress: [
-    ct('post', 'Post', [f('title', 'Title', 'text', { placeholder: 'Post title...' }), f('body', 'Body', 'textarea', { placeholder: 'Write your post...' })], {
+    ct('post', 'Post', [f('title', 'Title', 'text', { placeholder: 'Post title...' }), f('body', 'Body', 'textarea', { placeholder: 'Write your post...' }), f('excerpt', 'Excerpt', 'textarea', { maxLength: 500, required: false, placeholder: 'Post excerpt (optional)...' }), f('categories', 'Categories (IDs, comma-separated)', 'text', { required: false, placeholder: 'e.g. 1, 2, 3' }), f('tags', 'Tags (IDs, comma-separated)', 'text', { required: false, placeholder: 'e.g. 4, 5, 6' }), f('slug', 'Slug', 'text', { required: false, placeholder: 'custom-url-slug' })], {
       maxChars: 100000, maxImages: 999, maxVideos: 999,
     }),
   ],
   discord: [
-    ct('message', 'Simple Message', [f('content', 'Content', 'textarea', { maxLength: 2000, placeholder: 'Type your message...' })], {
+    ct('message', 'Simple Message', [f('content', 'Content', 'textarea', { maxLength: 2000, placeholder: 'Type your message...' }), f('thread_name', 'Thread Name', 'text', { required: false, placeholder: 'Start a thread with this name...' }), f('webhook_username', 'Bot Name', 'text', { required: false, placeholder: 'Custom username (override)' }), f('webhook_avatar', 'Bot Avatar URL', 'url', { required: false, placeholder: 'https://...' })], {
       maxChars: 2000, maxImages: 10, maxVideos: 1,
     }),
     ct('embed', 'Rich Embed', [
@@ -432,31 +443,38 @@ export const PLATFORM_CONTENT_TYPES: Record<string, ContentTypeDef[]> = {
       f('embed_url', 'Embed URL', 'url', { required: false, placeholder: 'https://...' }),
       f('embed_image', 'Image URL', 'url', { required: false, placeholder: 'https://...' }),
       f('embed_thumbnail', 'Thumbnail URL', 'url', { required: false, placeholder: 'https://...' }),
+      f('thread_name', 'Thread Name', 'text', { required: false, placeholder: 'Start a thread with this name...' }),
+      f('webhook_username', 'Bot Name', 'text', { required: false, placeholder: 'Custom username (override)' }),
+      f('webhook_avatar', 'Bot Avatar URL', 'url', { required: false, placeholder: 'https://...' }),
     ], {
       maxChars: 2000, maxImages: 10, maxVideos: 1, mediaType: 'both',
     }),
   ],
   telegram: [
-    ct('text', 'Text Message', [f('text', 'Text', 'textarea', { maxLength: 4096, placeholder: 'Type your message...' })], {
+    ct('text', 'Text Message', [f('text', 'Text', 'textarea', { maxLength: 4096, placeholder: 'Type your message...' }), f('parse_mode', 'Parse Mode', 'select', { options: [{ value: '', label: 'None (plain text)' }, { value: 'HTML', label: 'HTML' }, { value: 'MarkdownV2', label: 'MarkdownV2' }], required: false })], {
       maxChars: 4096, maxImages: 0, maxVideos: 0,
     }),
-    ct('photo', 'Photo', [f('caption', 'Caption', 'textarea', { maxLength: 1024, placeholder: 'Photo caption...' })], {
+    ct('photo', 'Photo', [f('caption', 'Caption', 'textarea', { maxLength: 1024, placeholder: 'Photo caption...' }), f('parse_mode', 'Parse Mode', 'select', { options: [{ value: '', label: 'None (plain text)' }, { value: 'HTML', label: 'HTML' }, { value: 'MarkdownV2', label: 'MarkdownV2' }], required: false })], {
       maxImages: 1, maxChars: 1024,
     }),
-    ct('video', 'Video', [f('caption', 'Caption', 'textarea', { maxLength: 1024, placeholder: 'Video caption...' })], {
+    ct('video', 'Video', [f('caption', 'Caption', 'textarea', { maxLength: 1024, placeholder: 'Video caption...' }), f('parse_mode', 'Parse Mode', 'select', { options: [{ value: '', label: 'None (plain text)' }, { value: 'HTML', label: 'HTML' }, { value: 'MarkdownV2', label: 'MarkdownV2' }], required: false })], {
       maxVideos: 1, maxChars: 1024, mediaType: 'video',
     }),
-    ct('media_group', 'Album', [f('text', 'Caption', 'textarea', { maxLength: 1024, placeholder: 'Album caption...' })], {
+    ct('media_group', 'Album', [f('text', 'Caption', 'textarea', { maxLength: 1024, placeholder: 'Album caption...' }), f('parse_mode', 'Parse Mode', 'select', { options: [{ value: '', label: 'None (plain text)' }, { value: 'HTML', label: 'HTML' }, { value: 'MarkdownV2', label: 'MarkdownV2' }], required: false })], {
       maxImages: 10, maxVideos: 10, maxChars: 1024,
+    }),
+    ct('poll', 'Poll', [f('question', 'Question', 'text', { maxLength: 300, placeholder: 'Ask a question...' }), f('poll_options', 'Options', 'multiline-list', { placeholder: 'One option per line' }), f('is_anonymous', 'Anonymous', 'select', { options: [{ value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }], required: false }), f('allows_multiple_answers', 'Allow Multiple Answers', 'select', { options: [{ value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }], required: false })], {
+      maxChars: 300, maxImages: 0, maxVideos: 0, mediaType: 'none',
     }),
   ],
   slack: [
-    ct('message', 'Simple Message', [f('text', 'Text', 'textarea', { maxLength: 4000, placeholder: 'Type your message...' })], {
+    ct('message', 'Simple Message', [f('text', 'Text', 'textarea', { maxLength: 4000, placeholder: 'Type your message...' }), f('thread_ts', 'Thread Reply (timestamp)', 'text', { required: false, placeholder: 'Thread parent timestamp e.g. 1718000000.123456' })], {
       maxChars: 4000, maxImages: 5, maxVideos: 1,
     }),
     ct('blocks', 'Rich Blocks', [
       f('text', 'Notification Text', 'textarea', { maxLength: 4000, required: false, placeholder: 'Fallback text for notifications...' }),
       f('blocks_json', 'Blocks JSON', 'textarea', { required: false, placeholder: 'Paste Slack Block Kit JSON here...', fieldNote: 'Use app.slack.com/block-kit-builder to create blocks' }),
+      f('thread_ts', 'Thread Reply (timestamp)', 'text', { required: false, placeholder: 'Thread parent timestamp e.g. 1718000000.123456' }),
     ], {
       maxChars: 4000, maxImages: 5, maxVideos: 1,
     }),
@@ -479,7 +497,10 @@ export const PLATFORM_CONTENT_TYPES: Record<string, ContentTypeDef[]> = {
     ct('text', 'Text Post', [f('text', 'Status', 'textarea', { maxLength: 500, placeholder: "What's on your mind?" }), f('content_warning', 'Content Warning', 'text', { required: false, placeholder: 'CW (optional)...' })], {
       maxChars: 500, maxImages: 0, maxVideos: 0,
     }),
-    ct('media', 'Media Post', [f('text', 'Status', 'textarea', { maxLength: 500, placeholder: 'Add a description...' }), f('content_warning', 'Content Warning', 'text', { required: false, placeholder: 'CW (optional)...' })], {
+    ct('poll', 'Poll', [f('text', 'Question', 'textarea', { maxLength: 500, placeholder: 'Ask a question...' }), f('content_warning', 'Content Warning', 'text', { required: false, placeholder: 'CW (optional)...' }), f('poll_options', 'Poll Options', 'multiline-list', { placeholder: 'One option per line\nMax 4 options', fieldNote: 'Enter each option on a new line (max 4)' }), f('poll_expires_in', 'Duration (seconds)', 'number', { placeholder: '86400', fieldNote: 'How many seconds should the poll run? (min 300)' })], {
+      maxChars: 500, maxImages: 0, maxVideos: 0, mediaType: 'none',
+    }),
+    ct('media', 'Media Post', [f('text', 'Status', 'textarea', { maxLength: 500, placeholder: 'Add a description...' }), f('content_warning', 'Content Warning', 'text', { required: false, placeholder: 'CW (optional)...' }), f('alt_text', 'Alt Text', 'text', { maxLength: 1000, required: false, placeholder: 'Image description for accessibility (applied to all media)...' })], {
       maxImages: 4, maxVideos: 1, maxChars: 500,
     }),
   ],

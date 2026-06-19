@@ -29,6 +29,34 @@ export async function publishToBluesky(
   const text = sc.text || content || '';
   const altText = sc.alt_text || '';
 
+  // Build facets for links and hashtags
+  const facets: Record<string, any>[] = [];
+  const urlRegex = /(https?:\/\/[^\s<]+[^\s<.,;:!?)}\]'"])/gi;
+  const tagRegex = /#([\w\u00C0-\u024F]+)/g;
+
+  // URL facets
+  let match: RegExpExecArray | null;
+  while ((match = urlRegex.exec(text)) !== null) {
+    const url = match[0];
+    const utf8Prefix = new TextEncoder().encode(text.slice(0, match.index));
+    const utf8Url = new TextEncoder().encode(url);
+    facets.push({
+      index: { byteStart: utf8Prefix.length, byteEnd: utf8Prefix.length + utf8Url.length },
+      features: [{ $type: 'app.bsky.richtext.facet#link', uri: url.startsWith('http') ? url : `https://${url}` }],
+    });
+  }
+
+  // Hashtag facets
+  while ((match = tagRegex.exec(text)) !== null) {
+    const tag = match[1];
+    const utf8Prefix = new TextEncoder().encode(text.slice(0, match.index));
+    const utf8Match = new TextEncoder().encode(match[0]);
+    facets.push({
+      index: { byteStart: utf8Prefix.length, byteEnd: utf8Prefix.length + utf8Match.length },
+      features: [{ $type: 'app.bsky.richtext.facet#tag', tag: tag.toLowerCase() }],
+    });
+  }
+
   // token is the app password, platformAccountId is the handle (e.g., handle.bsky.social)
   const session = await createSession(platformAccountId, token);
   const { accessJwt, did } = session;
@@ -75,6 +103,7 @@ export async function publishToBluesky(
   };
 
   if (embed) record.embed = embed;
+  if (facets.length > 0) record.facets = facets;
 
   const res = await fetch(`${BS_BASE}/com.atproto.repo.createRecord`, {
     method: 'POST',

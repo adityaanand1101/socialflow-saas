@@ -55,6 +55,14 @@ export async function publishToWordPress(
   };
 
   if (featuredMediaId) postBody.featured_media = featuredMediaId;
+  if (sc.excerpt) postBody.excerpt = sc.excerpt;
+  if (sc.slug) postBody.slug = sc.slug;
+  if (sc.categories) {
+    postBody.categories = sc.categories.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+  }
+  if (sc.tags) {
+    postBody.tags = sc.tags.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+  }
 
   const res = await fetch(`${apiBase}/posts`, {
     method: 'POST',

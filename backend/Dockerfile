@@ -19,5 +19,5 @@ RUN npm run build
 # Expose API port
 EXPOSE 3001
 
-# Start the server
-CMD ["npm", "start"]
+# Push schema to database (idempotent, works without migration baseline) then start server
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && npm start"]

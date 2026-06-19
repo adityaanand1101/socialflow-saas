@@ -727,6 +727,20 @@ export const Compose = () => {
                               placeholder={field.placeholder}
                               className="w-full min-h-[100px] bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-white/20 resize-none text-sm focus:outline-none focus:border-purple-500/50 font-mono"
                             />
+                          ) : field.type === 'select' ? (
+                            <select
+                              value={getFieldValue(activeEditorPlatform, field.key)}
+                              onChange={e => setFieldValue(activeEditorPlatform, field.key, e.target.value)}
+                              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500/50"
+                            >
+                              {(Array.isArray(field.options) ? field.options : []).map((opt, oi) => {
+                                const val = typeof opt === 'string' ? opt : opt.value
+                                const lbl = typeof opt === 'string' ? opt : opt.label
+                                return (
+                                  <option key={oi} value={val} className="bg-gray-800 text-white">{lbl}</option>
+                                )
+                              })}
+                            </select>
                           ) : field.type === 'number' || field.type === 'date' ? (
                             <input
                               type={field.type}

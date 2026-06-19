@@ -192,6 +192,71 @@ export async function publishToLinkedIn(
       return { id: result.id };
     }
 
+    case 'document': {
+      const docUrl = sc.document_url || '';
+      if (!docUrl) throw new Error('LinkedIn document post requires a document URL');
+
+      async function registerDocument(documentUrl: string): Promise<string | null> {
+        try {
+          const initRes = await fetch(`${API_BASE}/rest/documents?action=initializeUpload`, {
+            method: 'POST',
+            headers: headers(token),
+            body: JSON.stringify({
+              initializeUploadRequest: {
+                owner: authorUrn,
+              },
+            }),
+          });
+          if (!initRes.ok) return null;
+          const initData = await initRes.json() as any;
+          const uploadUrl = initData.value?.uploadUrl;
+          const docUrn = initData.value?.document;
+          if (!uploadUrl || !docUrn) return null;
+
+          const fileRes = await fetch(documentUrl);
+          if (!fileRes.ok) return null;
+          const buffer = await fileRes.buffer();
+
+          await fetch(uploadUrl, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/octet-stream' },
+            body: buffer,
+          });
+
+          return docUrn;
+        } catch { return null; }
+      }
+
+      const docUrn = await registerDocument(docUrl);
+      if (!docUrn) throw new Error('LinkedIn document upload failed');
+
+      const body = {
+        author: authorUrn,
+        commentary: sc.commentary || content || '',
+        visibility: 'PUBLIC',
+        content: {
+          document: {
+            id: docUrn,
+          },
+        },
+        distribution: { feedDistribution: 'MAIN_FEED', targetEntities: [], thirdPartyDistributionChannels: [] },
+        lifecycleState: 'PUBLISHED',
+        isReshareDisabledByAuthor: false,
+      };
+
+      const res = await fetch(`${API_BASE}/rest/posts`, {
+        method: 'POST',
+        headers: headers(token),
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(`LinkedIn document post failed: ${err.slice(0, 300)}`);
+      }
+      const result = await res.json() as any;
+      return { id: result.id };
+    }
+
     // text, image, video — use the basic Posts API flow
     default: {
       const mediaAttachments: { urn: string; type: 'IMAGE' | 'VIDEO' }[] = [];

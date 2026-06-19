@@ -1,73 +1,29 @@
-# SocialFlow Session State
+# Session Plan — Complete All 15 Remaining Items
 
-> Created 2026-06-19 — tracks progress across chat compaction / new windows
+## Strategy
+- Phase 1: All content type field + preview changes in shared files first (platformConstraints.ts, PlatformPreviews.tsx)
+- Phase 2: Spawn parallel agents for independent publisher implementations
+- Phase 3: Infrastructure (prisma, tests, deploy hook)
+- Phase 4: Build verify + deploy
 
-## What's Done
+## Items
+### High (Phase 1 — will fail or missing core features)
+1. Instagram Reel: add polling before publish (currently publishes without waiting)
+2. Mastodon: add native polls + alt text on media uploads
+3. Telegram: add native polls + inline keyboards + MarkdownV2
+4. Pinterest: add carousel pins (multiple_image_urls)
+5. Bluesky: add facets (@mentions, #hashtags, link previews)
+6. WordPress: add categories/tags/excerpt support
 
-### Phase 1 — Content Type Editor (Frontend) COMPLETE
-- [x] `ContentField.type` expanded: `'number' | 'date' | 'multiline-list'` added
-- [x] `ContentField.fieldNote` helper text support
-- [x] Platform constraints fixed:
-  - X Poll: `poll_options` + `poll_duration_minutes`
-  - LinkedIn: Poll + Multi-Image types; Article got `article_thumbnail_url`
-  - Reddit: `subreddit` (required) + `flair_id` on all 3 types
-  - Discord: `embed` content type (title, description, color, URL, image, thumbnail)
-  - Slack: `blocks_json` content type
-  - GMB: `event` content type (start/end dates/times); Offer expanded (`coupon_code`, `redeem_url`, `terms_conditions`)
-  - YouTube: `community_poll` content type
-  - Bluesky: `alt_text` on Image Post
-- [x] `Compose.tsx` field renderer handles all new field types + `fieldNote`
-- [x] All 16 `PlatformPreviews.tsx` render structured fields
+### Medium (Phase 1b — nice-to-haves)
+7. Instagram Reel audio/music, location tagging, user tagging
+8. LinkedIn document uploads and document carousel
+9. Facebook scheduled publishing (scheduled_publish_time)
+10. Discord thread/forum support, custom webhook name/avatar
+11. Slack thread replies
+12. Instagram Story media_type fix (no-op ternary)
 
-### Phase 2 — Publisher Refactors COMPLETE
-- [x] `Publisher` type accepts `structuredContent` + `postTypes`
-- [x] `publishToPlatform()` passes them through
-- [x] Prisma schema: `Post.structuredContent` (Json) + `Post.postTypes` (Json)
-- [x] `POST /api/posts` accepts & stores `structuredContent`/`postTypes`
-- [x] `PATCH /api/posts/:id` accepts & stores `structuredContent`/`postTypes`
-- [x] `queue.ts` passes structuredContent/postTypes when calling publishers
-- [x] **LinkedIn**: Migrated from deprecated UGC Posts API + Assets API to new Posts API (202603) + Images API. Supports Article, Poll, Multi-Image, text, image, video content types
-- [x] **Facebook**: Added Link share type (with `url` field), Reels type (`/video_reels` endpoint), structured `message`/`url` support
-- [x] **Instagram**: Added Reel type (`REELS` media type), Story type support, video processing polling (instead of 5s hardcoded delay), structured `caption` support
-- [x] **Twitter**: Added Poll support (`poll.options`, `poll.duration_minutes`), video/GIF processing polling via `STATUS` command, `tweet_gif` media category
-
-### Phase 3-5 — New Publishers (TODO)
-- [ ] Threads publisher
-- [ ] YouTube publisher
-- [ ] Reddit publisher
-- [ ] Pinterest publisher
-- [ ] WordPress publisher
-- [ ] Discord publisher
-- [ ] Telegram publisher
-- [ ] Tumblr publisher
-- [ ] Bluesky publisher
-- [ ] Mastodon publisher
-- [ ] Slack publisher
-- [ ] GMB publisher
-
-## Key Files
-
-### Frontend
-- `src/lib/platformConstraints.ts` — Content type definitions, constraints, helpers
-- `src/pages/Compose.tsx` — Compose page with dynamic field editor
-- `src/components/PlatformPreviews.tsx` — All 16 platform previews
-
-### Backend
-- `backend/prisma/schema.prisma` — Post model now has structuredContent + postTypes
-- `backend/routes/posts.ts` — POST/PATCH accept structuredContent + postTypes
-- `backend/utils/queue.ts` — Passes structured data to publishers
-- `backend/utils/publishers/index.ts` — Updated Publisher type signature
-- `backend/utils/publishers/{platform}.ts` — Per-platform publisher modules
-
-## Next Commands
-
-### Prisma migration (run once before testing backend):
-```bash
-cd backend && npx prisma migrate dev --name add-structured-content
-```
-
-### Build check:
-```bash
-cd frontend && npx tsc --noEmit && npx vite build
-cd backend && npx tsc --noEmit
-```
+### Low (Phase 2)
+13. Run prisma migrate deploy on Render
+14. Tests for publishers
+15. Create Deploy Hook URL in Render dashboard

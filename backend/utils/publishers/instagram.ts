@@ -23,14 +23,17 @@ export async function publishToInstagram(
     if (mediaUrls.length === 0) throw new Error('Instagram Reel requires at least one video');
     const url = mediaUrls[0];
 
+    const reelBody: Record<string, any> = {
+      media_type: 'REELS',
+      video_url: url,
+      caption,
+    };
+    if (sc.audio_name) reelBody.audio_name = sc.audio_name;
+
     const createRes = await fetch(`${GRAPH_API}/${igUserId}/media`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        media_type: 'REELS',
-        video_url: url,
-        caption,
-      }),
+      body: JSON.stringify(reelBody),
     });
     if (!createRes.ok) {
       const err = await createRes.text();
@@ -73,7 +76,7 @@ export async function publishToInstagram(
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        media_type: isVideo ? 'STORIES' : 'STORIES',
+        media_type: 'STORIES',
         [isVideo ? 'video_url' : 'image_url']: url,
       }),
     });
@@ -120,10 +123,12 @@ export async function publishToInstagram(
     const isVideo = /\.(mp4|webm|mov|avi|mkv|m4v)(\?|$)/i.test(url);
 
     if (isVideo) {
+      const feedVideoBody: Record<string, any> = { media_type: 'VIDEO', video_url: url, caption };
+      if (sc.location_id) feedVideoBody.location_id = sc.location_id;
       const createRes = await fetch(`${GRAPH_API}/${igUserId}/media`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ media_type: 'VIDEO', video_url: url, caption }),
+        body: JSON.stringify(feedVideoBody),
       });
       if (!createRes.ok) {
         const err = await createRes.text();
@@ -155,10 +160,16 @@ export async function publishToInstagram(
       const result = await publishRes.json() as any;
       return { id: result.id, url: `https://www.instagram.com/p/${result.id}/` };
     } else {
+      const imageBody: Record<string, any> = { image_url: url, caption };
+      if (sc.location_id) imageBody.location_id = sc.location_id;
+      if (sc.user_tags) {
+        const tags = sc.user_tags.split(',').map(t => t.trim()).filter(Boolean);
+        if (tags.length > 0) imageBody.user_tags = tags;
+      }
       const createRes = await fetch(`${GRAPH_API}/${igUserId}/media`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image_url: url, caption }),
+        body: JSON.stringify(imageBody),
       });
       if (!createRes.ok) {
         const err = await createRes.text();
@@ -217,14 +228,17 @@ export async function publishToInstagram(
     );
   }
 
+  const carouselBody: Record<string, any> = {
+    media_type: 'CAROUSEL',
+    children: childrenIds,
+    caption,
+  };
+  if (sc.location_id) carouselBody.location_id = sc.location_id;
+
   const carouselRes = await fetch(`${GRAPH_API}/${igUserId}/media`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      media_type: 'CAROUSEL',
-      children: childrenIds,
-      caption,
-    }),
+    body: JSON.stringify(carouselBody),
   });
   if (!carouselRes.ok) {
     const err = await carouselRes.text();

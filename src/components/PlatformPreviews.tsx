@@ -222,12 +222,13 @@ function LinkedInPreview({ caption, mediaUrls, mediaInfo, isMobile, getRatioClas
   const isArticle = ct === 'article'
   const isPoll = ct === 'poll'
   const isMultiImage = ct === 'multi_image'
+  const isDocument = ct === 'document'
   const title = isArticle ? (structuredContent?.title || '') : ''
   const description = isArticle ? (structuredContent?.description || '') : ''
 
   return (
     <div className="rounded-xl overflow-hidden shadow-xl">
-      <PlatformBadge label={isPoll ? "LinkedIn Poll" : isArticle ? "LinkedIn Article" : "LinkedIn"} color="bg-blue-600 text-white" />
+      <PlatformBadge label={isPoll ? "LinkedIn Poll" : isArticle ? "LinkedIn Article" : isDocument ? "LinkedIn Document" : "LinkedIn"} color="bg-blue-600 text-white" />
       <div className="bg-white text-black">
         <div className="p-3 flex items-center gap-2">
           <Avatar size="md" />
@@ -253,6 +254,17 @@ function LinkedInPreview({ caption, mediaUrls, mediaInfo, isMobile, getRatioClas
               ))}
             </div>
             <p className="text-[9px] text-gray-400 mt-1">0 votes · {(structuredContent?.poll_duration_minutes || '7')} days left</p>
+          </div>
+        ) : isDocument ? (
+          <div className="px-3 pb-2">
+            <p className="text-xs leading-relaxed whitespace-pre-wrap text-black mb-2">{caption || 'Check out this document'}</p>
+            <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 flex items-center gap-3">
+              <div className="w-10 h-12 bg-blue-100 rounded flex items-center justify-center text-blue-600 text-[9px] font-bold">PDF</div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-bold text-black truncate">{structuredContent?.document_url?.split('/').pop() || 'document.pdf'}</p>
+                <p className="text-[9px] text-gray-400">Added a document</p>
+              </div>
+            </div>
           </div>
         ) : (
           <div className={cn("px-3", isMobile ? "text-[11px]" : "text-xs")}>
@@ -567,11 +579,25 @@ function PinterestPreview({ caption, mediaUrls, mediaInfo, structuredContent, co
   const title = structuredContent?.title || caption?.slice(0, 60) || ''
   const link = structuredContent?.link || ''
   const isVideo = contentTypeId === 'video_pin'
+  const isCarousel = contentTypeId === 'carousel_pin'
   return (
     <div className="rounded-xl overflow-hidden shadow-xl mx-auto" style={{ maxWidth: 236 }}>
-      <PlatformBadge label={isVideo ? "Pinterest Video Pin" : "Pinterest"} color="bg-red-600 text-white" />
+      <PlatformBadge label={isVideo ? "Pinterest Video Pin" : isCarousel ? "Pinterest Carousel" : "Pinterest"} color="bg-red-600 text-white" />
       <div className="bg-white">
-        {isVideo && mediaUrls[0] ? (
+        {isCarousel && mediaUrls.length > 0 ? (
+          <div className="relative">
+            <div className="flex gap-0.5 overflow-x-auto scrollbar-hide">
+              {mediaUrls.slice(0, 5).map((url, i) => (
+                <div key={i} className="min-w-[80px] aspect-[2/3] flex-shrink-0 bg-gray-100">
+                  <img src={url} alt="" className="w-full h-full object-cover" />
+                </div>
+              ))}
+            </div>
+            <div className="absolute bottom-1 right-1 bg-black/60 text-white text-[8px] px-1.5 py-0.5 rounded">
+              {mediaUrls.length > 5 ? `1/5+` : `1/${mediaUrls.length}`}
+            </div>
+          </div>
+        ) : isVideo && mediaUrls[0] ? (
           <div className="aspect-[2/3] bg-black flex items-center justify-center relative">
             {mediaInfo[0]?.type === 'video' ? (
               <video src={mediaUrls[0]} className="w-full h-full object-cover" muted controls />
@@ -660,20 +686,37 @@ function DiscordPreview({ caption, mediaUrls, mediaInfo, getRatioClass, structur
 }
 
 // ───── Telegram ─────
-function TelegramPreview({ caption, mediaUrls, mediaInfo, getRatioClass, structuredContent }: PreviewProps) {
+function TelegramPreview({ caption, mediaUrls, mediaInfo, getRatioClass, structuredContent, contentTypeId }: PreviewProps) {
   const text = structuredContent?.text || structuredContent?.caption || caption || ''
+  const isPoll = contentTypeId === 'poll'
+  const pollOptions = (structuredContent?.poll_options || '').split('\n').filter(Boolean)
+  const pollQuestion = structuredContent?.question || ''
   return (
     <div className="rounded-xl overflow-hidden shadow-xl">
-      <PlatformBadge label="Telegram" color="bg-blue-500 text-white" />
+      <PlatformBadge label={isPoll ? "Telegram Poll" : "Telegram"} color="bg-blue-500 text-white" />
       <div className="bg-[#17212b] p-3">
         <div className="flex items-center gap-2 mb-1">
           <Avatar size="sm" />
           <span className="text-xs font-bold text-[#2b9ce5]">Your Name</span>
           <span className="text-[9px] text-gray-500 ml-auto">12:00</span>
         </div>
-        <p className="text-xs leading-relaxed whitespace-pre-wrap text-white">{text || <span className="text-gray-500">Write a message...</span>}</p>
-        <MediaBlock mediaUrls={mediaUrls} mediaInfo={mediaInfo} getRatioClass={getRatioClass} />
-        {!mediaUrls[0] && null}
+        {isPoll ? (
+          <div>
+            <p className="text-xs font-bold text-white mb-2">{pollQuestion || 'Poll Question'}</p>
+            <div className="space-y-1">
+              {pollOptions.map((opt, i) => (
+                <div key={i} className="border border-[#2b5278] rounded px-2 py-1.5 text-[11px] text-gray-300">{opt}</div>
+              ))}
+            </div>
+            <p className="text-[9px] text-gray-500 mt-1">Anonymous poll · {pollOptions.length} options</p>
+          </div>
+        ) : (
+          <>
+            <p className="text-xs leading-relaxed whitespace-pre-wrap text-white">{text || <span className="text-gray-500">Write a message...</span>}</p>
+            <MediaBlock mediaUrls={mediaUrls} mediaInfo={mediaInfo} getRatioClass={getRatioClass} />
+            {!mediaUrls[0] && null}
+          </>
+        )}
       </div>
     </div>
   )
@@ -736,12 +779,14 @@ function BlueskyPreview({ caption, mediaUrls, mediaInfo, getRatioClass, structur
 }
 
 // ───── Mastodon ─────
-function MastodonPreview({ caption, mediaUrls, mediaInfo, getRatioClass, structuredContent }: PreviewProps) {
+function MastodonPreview({ caption, mediaUrls, mediaInfo, getRatioClass, structuredContent, contentTypeId }: PreviewProps) {
   const status = structuredContent?.text || caption || ''
   const spoilerText = structuredContent?.content_warning || ''
+  const isPoll = contentTypeId === 'poll'
+  const pollOptions = (structuredContent?.poll_options || '').split('\n').filter(Boolean).slice(0, 4)
   return (
     <div className="rounded-xl overflow-hidden shadow-xl">
-      <PlatformBadge label="Mastodon" color="bg-purple-600 text-white" />
+      <PlatformBadge label={isPoll ? "Mastodon Poll" : "Mastodon"} color="bg-purple-600 text-white" />
       <div className="bg-[#191b22] p-3">
         <div className="flex items-center gap-2 mb-1.5">
           <Avatar size="md" />
@@ -756,8 +801,17 @@ function MastodonPreview({ caption, mediaUrls, mediaInfo, getRatioClass, structu
           </div>
         )}
         <p className={cn("text-xs leading-relaxed whitespace-pre-wrap mb-2 text-white", spoilerText ? "blur-sm" : "")}>{status || <span className="text-gray-500">Write a post...</span>}</p>
-        <MediaBlock mediaUrls={mediaUrls} mediaInfo={mediaInfo} getRatioClass={getRatioClass} />
-        {!mediaUrls[0] && null}
+        {isPoll && pollOptions.length > 0 ? (
+          <div className="space-y-1 mb-2">
+            {pollOptions.map((opt, i) => (
+              <div key={i} className="border border-gray-600 rounded px-2 py-1.5 text-[11px] text-gray-300">{opt}</div>
+            ))}
+            <p className="text-[9px] text-gray-500 mt-0.5">{pollOptions.length} options</p>
+          </div>
+        ) : (
+          <MediaBlock mediaUrls={mediaUrls} mediaInfo={mediaInfo} getRatioClass={getRatioClass} />
+        )}
+        {!mediaUrls[0] && !isPoll && null}
         <div className="flex items-center gap-4 mt-2 text-[11px] text-gray-400">
           <span className="flex items-center gap-1"><MessageCircle className="w-3.5 h-3.5" />0</span>
           <span className="flex items-center gap-1"><Repeat2 className="w-3.5 h-3.5" />0</span>

@@ -55,6 +55,7 @@ export async function publishToSlack(
       text: text.slice(0, 4000),
     };
     if (blocks.length > 0) payload.blocks = blocks;
+    if (sc.thread_ts) payload.thread_ts = sc.thread_ts;
 
     const res = await fetch(`${SLACK_API}/chat.postMessage`, {
       method: 'POST',
@@ -84,6 +85,7 @@ export async function publishToSlack(
       channel,
       text: text.slice(0, 4000),
       mrkdwn: true,
+      ...(sc.thread_ts ? { thread_ts: sc.thread_ts } : {}),
     }),
   });
   if (!msgRes.ok) {

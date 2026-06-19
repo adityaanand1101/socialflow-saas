@@ -85,6 +85,38 @@ export async function publishToPinterest(
     return { id: pinResult.id, url: `https://pinterest.com/pin/${pinResult.id}` };
   }
 
+  // ── Carousel Pin ──
+  if (ct === 'carousel_pin') {
+    if (mediaUrls.length < 2) throw new Error('Pinterest carousel requires at least 2 images');
+    const imageUrls = mediaUrls.slice(0, 5);
+
+    const body: Record<string, any> = {
+      title: title.slice(0, 100),
+      description: description.slice(0, 800),
+      board_id: boardId,
+      media_source: {
+        source_type: 'multiple_image_urls',
+        items: imageUrls.map(url => ({ url })),
+      },
+    };
+    if (link) body.link = link;
+
+    const res = await fetch(`${API_BASE}/pins`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Pinterest carousel pin creation failed: ${err.slice(0, 300)}`);
+    }
+    const result = await res.json() as any;
+    return { id: result.id, url: `https://pinterest.com/pin/${result.id}` };
+  }
+
   // ── Standard / Image Pin ──
   const body: Record<string, any> = {
     title: title.slice(0, 100),

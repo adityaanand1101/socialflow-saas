@@ -21,6 +21,7 @@ export async function publishToFacebook(
     const linkUrl = sc.url || '';
     const message = sc.message || content || '';
 
+    const scheduledTime = parseInt(sc.scheduled_publish_time) || 0;
     const body: Record<string, any> = { message, link: linkUrl };
     if (mediaUrls.length > 0) {
       const attachedMedia: string[] = [];
@@ -79,12 +80,15 @@ export async function publishToFacebook(
 
   // ── Feed Post (text, image, video, multi-photo) ──
   const message = sc.message || content || '';
+  const scheduledTime = parseInt(sc.scheduled_publish_time) || 0;
 
   if (mediaUrls.length === 0) {
+    const feedBody: Record<string, any> = { message };
+    if (scheduledTime > 0) feedBody.scheduled_publish_time = scheduledTime;
     const res = await fetch(`${GRAPH_API}/${pageId}/feed`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message }),
+      body: JSON.stringify(feedBody),
     });
     if (!res.ok) {
       const err = await res.text();
@@ -99,10 +103,12 @@ export async function publishToFacebook(
     const isVideo = /\.(mp4|webm|mov|avi|mkv|m4v)(\?|$)/i.test(url);
 
     if (isVideo) {
+      const videoBody: Record<string, any> = { file_url: url, description: message };
+      if (scheduledTime > 0) videoBody.scheduled_publish_time = scheduledTime;
       const res = await fetch(`${GRAPH_API}/${pageId}/videos`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ file_url: url, description: message }),
+        body: JSON.stringify(videoBody),
       });
       if (!res.ok) {
         const err = await res.text();
@@ -111,10 +117,12 @@ export async function publishToFacebook(
       const result = await res.json() as any;
       return { id: result.id };
     } else {
+      const photoBody: Record<string, any> = { url, message };
+      if (scheduledTime > 0) photoBody.scheduled_publish_time = scheduledTime;
       const res = await fetch(`${GRAPH_API}/${pageId}/photos`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, message }),
+        body: JSON.stringify(photoBody),
       });
       if (!res.ok) {
         const err = await res.text();
@@ -143,13 +151,15 @@ export async function publishToFacebook(
 
   if (attachedMedia.length === 0) throw new Error('Facebook: failed to attach any media');
 
+  const multiBody: Record<string, any> = {
+    message,
+    attached_media: attachedMedia.map(id => ({ media_fbid: id })),
+  };
+  if (scheduledTime > 0) multiBody.scheduled_publish_time = scheduledTime;
   const feedRes = await fetch(`${GRAPH_API}/${pageId}/feed`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      message,
-      attached_media: attachedMedia.map(id => ({ media_fbid: id })),
-    }),
+    body: JSON.stringify(multiBody),
   });
   if (!feedRes.ok) {
     const err = await feedRes.text();

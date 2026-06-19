@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -6,7 +6,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 import { 
   Image as ImageIcon, Smile, Hash, Send, Calendar,
-  Save, Sparkles, Smartphone, Monitor, Loader2, X, Clock, User, Upload
+  Save, Sparkles, Smartphone, Monitor, Loader2, X, Clock, User, Upload,
+  AlertTriangle
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useStore } from '@/store/useStore'
@@ -15,8 +16,31 @@ import { rewriteCaption } from '@/lib/gemini'
 import { useAuth } from '@clerk/react'
 import { format, addDays, isValid, parseISO } from 'date-fns'
 import { ALL_PLATFORMS } from '@/lib/platforms'
+import { getPlatformConstraint, PLATFORM_CONSTRAINTS, getPlatformWarnings } from '@/lib/platformConstraints'
 
 const toneOptions = ['Professional', 'Casual', 'Funny', 'Inspirational', 'Urgent']
+
+const PLATFORM_ORDER = ['instagram', 'facebook', 'x', 'linkedin', 'threads', 'youtube', 'pinterest', 'bluesky', 'mastodon', 'reddit', 'wordpress', 'discord', 'telegram', 'tumblr', 'slack', 'gmb']
+
+const SORTED_PLATFORMS = [...ALL_PLATFORMS].sort((a, b) => PLATFORM_ORDER.indexOf(a.id) - PLATFORM_ORDER.indexOf(b.id))
+
+const ASPECT_CLASSES: Record<string, string> = {
+  '1:1': 'aspect-square',
+  '4:5': 'aspect-[4/5]',
+  '16:9': 'aspect-video',
+  '9:16': 'aspect-[9/16]',
+  '4:3': 'aspect-[4/3]',
+  '2:3': 'aspect-[2/3]',
+  '3:2': 'aspect-[3/2]',
+  '1:3.5': 'aspect-[1/3.5]',
+  '*': 'aspect-video',
+}
+
+function guessMediaType(url: string): 'image' | 'video' {
+  const ext = url.split('?')[0].toLowerCase()
+  if (ext.endsWith('.mp4') || ext.endsWith('.webm') || ext.endsWith('.mov') || ext.endsWith('.avi')) return 'video'
+  return 'image'
+}
 
 export const Compose = () => {
   const [searchParams] = useSearchParams()
@@ -40,6 +64,8 @@ export const Compose = () => {
   const [showMediaLibrary, setShowMediaLibrary] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [editingPostId] = useState<string | null>(searchParams.get('postId'))
+  const [activePreviewPlatform, setActivePreviewPlatform] = useState<string>('instagram')
+  const [showWarnings, setShowWarnings] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   
   const { addPost, updatePost, uploadMedia } = useStore()
@@ -77,7 +103,9 @@ export const Compose = () => {
         if (res.ok) {
           const post = await res.json()
           setCaption(post.content || post.caption || '')
-          setSelectedPlatforms(post.platforms || ['instagram'])
+          const platforms = post.platforms || ['instagram']
+          setSelectedPlatforms(platforms)
+          setActivePreviewPlatform(platforms[0])
           setMediaFiles(post.mediaUrls || post.media || [])
           if (post.scheduledAt || post.scheduledTime) {
             setScheduledDate(format(new Date(post.scheduledAt || post.scheduledTime), "yyyy-MM-dd'T'HH:mm"))
@@ -131,12 +159,15 @@ export const Compose = () => {
   }
 
   const togglePlatform = (id: SocialPlatform) => {
-    setSelectedPlatforms(prev => 
-      prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
-    )
+    setSelectedPlatforms(prev => {
+      const next = prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
+      if (next.length > 0 && !next.includes(activePreviewPlatform as SocialPlatform)) {
+        setActivePreviewPlatform(next[0])
+      }
+      if (next.length === 0) return prev
+      return next
+    })
   }
-
-  const activeLimit = ALL_PLATFORMS.find(p => p.id === selectedPlatforms[0])?.limit || 2200
 
   const handleRewrite = async () => {
     if (!caption) return
@@ -155,7 +186,40 @@ export const Compose = () => {
     setMediaFiles(prev => prev.filter((_, i) => i !== index))
   }
 
+  // Per-platform warnings
+  const mediaInfo = useMemo(() => mediaFiles.map(url => ({ url, type: guessMediaType(url) })), [mediaFiles])
+
+  const allWarnings = useMemo(() => {
+    if (selectedPlatforms.length === 0) return {}
+    const result: Record<string, string[]> = {}
+    for (const pid of selectedPlatforms) {
+      const w = getPlatformWarnings(pid, caption, mediaInfo)
+      if (w.length > 0) result[pid] = w
+    }
+    return result
+  }, [selectedPlatforms, caption, mediaInfo])
+
+  const hasWarnings = Object.keys(allWarnings).length > 0
+
+  const activePlatform = activePreviewPlatform && selectedPlatforms.includes(activePreviewPlatform as SocialPlatform)
+    ? activePreviewPlatform
+    : selectedPlatforms[0] || 'instagram'
+
+  const activeConstraints = getPlatformConstraint(activePlatform)
+
+  const lowestLimit = useMemo(() => {
+    let min = Infinity
+    for (const pid of selectedPlatforms) {
+      min = Math.min(min, getPlatformConstraint(pid).maxChars)
+    }
+    return min === Infinity ? 999999 : min
+  }, [selectedPlatforms])
+
   const handlePost = async (status: 'published' | 'draft' | 'scheduled') => {
+    if (status !== 'draft' && hasWarnings && !showWarnings) {
+      setShowWarnings(true)
+      return
+    }
     if (!caption && status !== 'draft') return
     
     setIsSubmitting(true)
@@ -184,13 +248,23 @@ export const Compose = () => {
       }
       
       queryClient.invalidateQueries({ queryKey: ['posts'] })
-      navigate('/app/calendar') // Go back to calendar after scheduling
+      navigate('/app/calendar')
     } catch (error) {
       console.error('Failed to save post:', error)
     } finally {
       setIsSubmitting(false)
+      setShowWarnings(false)
     }
   }
+
+  const previewRatio = activeConstraints.imageRatios.includes('*')
+    ? 'aspect-video'
+    : ASPECT_CLASSES[activeConstraints.imageRatios[0]] || 'aspect-square'
+
+  const previewIsVideo = mediaInfo.length > 0 && mediaInfo[0].type === 'video'
+  const previewRatioClass = previewIsVideo && activeConstraints.videoRatios.length > 0 && activeConstraints.videoRatios[0] !== '*'
+    ? ASPECT_CLASSES[activeConstraints.videoRatios[0]] || 'aspect-video'
+    : previewRatio
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 pb-10">
@@ -199,7 +273,7 @@ export const Compose = () => {
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-white tracking-tight">Compose Post</h1>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" className="text-muted-foreground hover:text-white" onClick={() => { setCaption(''); setSelectedPlatforms(['instagram']); setMediaFiles([]) }}>
+            <Button variant="ghost" className="text-muted-foreground hover:text-white" onClick={() => { setCaption(''); setSelectedPlatforms(['instagram']); setMediaFiles([]); setActivePreviewPlatform('instagram'); setShowWarnings(false) }}>
               Clear
             </Button>
             <Button variant="outline" className="gap-2" onClick={() => handlePost('draft')} disabled={isSubmitting}>
@@ -216,22 +290,47 @@ export const Compose = () => {
             <CardDescription>Choose where you want to publish this post.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-wrap gap-3">
-              {ALL_PLATFORMS.map((p: any) => (
-                <button
-                  key={p.id}
-                  onClick={() => togglePlatform(p.id)}
-                  className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-lg border transition-all",
-                    selectedPlatforms.includes(p.id)
-                      ? "bg-gradient-primary border-transparent text-white shadow-glow"
-                      : "bg-white/5 border-white/10 text-muted-foreground hover:border-white/20"
-                  )}
-                >
-                  <p.icon className={cn("w-4 h-4", !selectedPlatforms.includes(p.id) && p.color)} />
-                  <span className="text-sm font-medium">{p.label}</span>
-                </button>
-              ))}
+            <div className="flex flex-wrap gap-2">
+              {SORTED_PLATFORMS.map((p: any) => {
+                const c = PLATFORM_CONSTRAINTS[p.id]
+                const selected = selectedPlatforms.includes(p.id)
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => togglePlatform(p.id)}
+                    className={cn(
+                      "group relative flex flex-col items-start px-3 py-2 rounded-lg border transition-all text-left",
+                      selected
+                        ? "bg-gradient-primary border-transparent text-white shadow-glow"
+                        : "bg-white/5 border-white/10 text-muted-foreground hover:border-white/20"
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <p.icon className={cn("w-4 h-4", !selected && p.color)} />
+                      <span className="text-sm font-medium whitespace-nowrap">{p.label}</span>
+                    </div>
+                    {c && (
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <span className={cn("text-[9px] uppercase font-bold tracking-wider", selected ? "text-white/70" : "text-muted-foreground/60")}>
+                          {c.maxChars < 10000 ? `${c.maxChars}c` : '∞'}
+                        </span>
+                        <span className={cn("text-[9px]", selected ? "text-white/50" : "text-muted-foreground/40")}>·</span>
+                        <span className={cn("text-[9px] uppercase font-bold tracking-wider", selected ? "text-white/70" : "text-muted-foreground/60")}>
+                          {c.mediaType === 'none' ? 'No media' : c.mediaType === 'video' ? 'Video only' : c.mediaType === 'image' ? 'Image' : 'Media'}
+                        </span>
+                        {c.allowCarousel && (
+                          <>
+                            <span className={cn("text-[9px]", selected ? "text-white/50" : "text-muted-foreground/40")}>·</span>
+                            <span className={cn("text-[9px] uppercase font-bold tracking-wider", selected ? "text-white/70" : "text-muted-foreground/60")}>
+                              Carousel
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </button>
+                )
+              })}
             </div>
           </CardContent>
         </Card>
@@ -267,22 +366,66 @@ export const Compose = () => {
                 placeholder="What's on your mind? Type your post here..."
                 className="w-full h-full min-h-[180px] bg-transparent border-none focus:ring-0 outline-none text-white placeholder:text-white/20 resize-none text-base leading-relaxed"
               />
-              <div className={cn("absolute bottom-2 right-2 text-xs", caption.length > activeLimit ? "text-red-400" : "text-muted-foreground")}>
-                {caption.length} / {activeLimit}
+              <div className="absolute bottom-2 right-2 text-xs text-muted-foreground">
+                {caption.length} / <span className={cn(caption.length > lowestLimit && "text-red-400 font-bold")}>{lowestLimit}</span>
               </div>
             </div>
+
+            {/* Per-platform character bars */}
+            {selectedPlatforms.length > 1 && (
+              <div className="space-y-1">
+                {selectedPlatforms.map(pid => {
+                  const c = getPlatformConstraint(pid)
+                  const pct = Math.min((caption.length / c.maxChars) * 100, 100)
+                  const over = caption.length > c.maxChars
+                  return (
+                    <div key={pid} className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase w-16 truncate shrink-0">{pid}</span>
+                      <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
+                        <div className={cn("h-full rounded-full transition-all", over ? "bg-red-500" : "bg-purple-500/60")} style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className={cn("text-[10px] w-12 text-right shrink-0", over ? "text-red-400 font-bold" : "text-muted-foreground")}>
+                        {caption.length}/{c.maxChars < 10000 ? c.maxChars : '∞'}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
 
             {/* Media Previews */}
             {mediaFiles.length > 0 && (
               <div className="flex gap-2 flex-wrap">
                 {mediaFiles.map((url, i) => (
                   <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden group">
-                    <img src={url} alt="" className="w-full h-full object-cover" />
+                    {guessMediaType(url) === 'video' ? (
+                      <video src={url} className="w-full h-full object-cover" muted />
+                    ) : (
+                      <img src={url} alt="" className="w-full h-full object-cover" />
+                    )}
                     <button onClick={() => removeMedia(i)} className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                       <X className="w-4 h-4 text-white" />
                     </button>
+                    <div className="absolute top-0.5 right-0.5 px-1 py-0.5 rounded bg-black/60 text-[8px] font-bold text-white uppercase">
+                      {guessMediaType(url)}
+                    </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Warnings */}
+            {hasWarnings && (
+              <div className="space-y-1.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                <div className="flex items-center gap-2 text-amber-400 text-xs font-bold">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  Platform warnings
+                </div>
+                {Object.entries(allWarnings).map(([pid, warnings]) =>
+                  warnings.map((w, i) => (
+                    <p key={`${pid}-${i}`} className="text-[11px] text-amber-300/80 ml-5">{pid}: {w}</p>
+                  ))
+                )}
               </div>
             )}
 
@@ -382,13 +525,43 @@ export const Compose = () => {
                 <Button 
                   className="gap-2 px-6"
                   onClick={() => handlePost('published')}
-                  disabled={isSubmitting || !caption}
+                  disabled={isSubmitting || !caption || selectedPlatforms.length === 0}
                 >
                   {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                   Post Now
                 </Button>
               </div>
             </div>
+
+            {/* Warning Confirm Modal */}
+            {showWarnings && hasWarnings && (
+              <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4" onClick={() => setShowWarnings(false)}>
+                <div className="bg-[#141218] border border-white/10 rounded-2xl w-full max-w-md p-6 space-y-4" onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
+                      <AlertTriangle className="w-5 h-5 text-amber-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-white">Post with warnings?</h3>
+                      <p className="text-sm text-muted-foreground">Some platforms may not display your content correctly.</p>
+                    </div>
+                  </div>
+                  <div className="space-y-1 max-h-40 overflow-y-auto">
+                    {Object.entries(allWarnings).map(([pid, warnings]) =>
+                      warnings.map((w, i) => (
+                        <p key={`${pid}-${i}`} className="text-xs text-amber-300/80 ml-1">{pid}: {w}</p>
+                      ))
+                    )}
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <Button variant="outline" className="flex-1" onClick={() => setShowWarnings(false)}>Review</Button>
+                    <Button className="flex-1 bg-amber-500 hover:bg-amber-600 text-white" onClick={() => { setShowWarnings(false); handlePost('published') }}>
+                      Post Anyway
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Scheduler Panel */}
             {showScheduler && (
@@ -427,20 +600,73 @@ export const Compose = () => {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold text-white">Live Preview</h2>
-          <div className="flex p-1 bg-white/5 rounded-lg border border-white/10">
-            <button
-              onClick={() => setPreviewDevice('mobile')}
-              className={cn("p-1.5 rounded-md transition-all", previewDevice === 'mobile' ? "bg-white/10 text-white" : "text-muted-foreground hover:text-white")}
-            >
-              <Smartphone className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setPreviewDevice('desktop')}
-              className={cn("p-1.5 rounded-md transition-all", previewDevice === 'desktop' ? "bg-white/10 text-white" : "text-muted-foreground hover:text-white")}
-            >
-              <Monitor className="w-4 h-4" />
-            </button>
+          <div className="flex items-center gap-2">
+            {/* Per-platform preview tabs */}
+            {selectedPlatforms.length > 1 && (
+              <div className="flex p-0.5 bg-white/5 rounded-lg border border-white/10">
+                {selectedPlatforms.slice(0, 5).map(pid => {
+                  const p = ALL_PLATFORMS.find(x => x.id === pid)
+                  if (!p) return null
+                  const Icon = p.icon
+                  return (
+                    <button
+                      key={pid}
+                      onClick={() => setActivePreviewPlatform(pid)}
+                      className={cn(
+                        "p-1.5 rounded-md transition-all",
+                        activePreviewPlatform === pid ? "bg-white/10 text-white" : "text-muted-foreground hover:text-white"
+                      )}
+                      title={p.label}
+                    >
+                      <Icon className="w-4 h-4" />
+                    </button>
+                  )
+                })}
+                {selectedPlatforms.length > 5 && (
+                  <span className="px-1.5 flex items-center text-[10px] text-muted-foreground">+{selectedPlatforms.length - 5}</span>
+                )}
+              </div>
+            )}
+            <div className="flex p-1 bg-white/5 rounded-lg border border-white/10">
+              <button
+                onClick={() => setPreviewDevice('mobile')}
+                className={cn("p-1.5 rounded-md transition-all", previewDevice === 'mobile' ? "bg-white/10 text-white" : "text-muted-foreground hover:text-white")}
+              >
+                <Smartphone className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setPreviewDevice('desktop')}
+                className={cn("p-1.5 rounded-md transition-all", previewDevice === 'desktop' ? "bg-white/10 text-white" : "text-muted-foreground hover:text-white")}
+              >
+                <Monitor className="w-4 h-4" />
+              </button>
+            </div>
           </div>
+        </div>
+
+        {/* Platform info bar */}
+        <div className="flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg border border-white/10">
+          {(() => {
+            const p = ALL_PLATFORMS.find(x => x.id === activePlatform)
+            if (!p) return null
+            const Icon = p.icon
+            const c = activeConstraints
+            return (
+              <>
+                <Icon className={cn("w-4 h-4", p.color)} />
+                <span className="text-sm font-bold text-white">{p.label}</span>
+                <span className="text-xs text-muted-foreground">·</span>
+                <span className="text-[11px] text-muted-foreground">{c.maxChars < 10000 ? `${c.maxChars} char limit` : 'Unlimited chars'}</span>
+                <span className="text-xs text-muted-foreground">·</span>
+                <span className="text-[11px] text-muted-foreground">
+                  {c.mediaType === 'none' ? 'No media' :
+                   c.mediaType === 'video' ? 'Video only' :
+                   c.mediaType === 'image' ? 'Image only' :
+                   `Up to ${c.maxImages} images, ${c.maxVideos} video`}
+                </span>
+              </>
+            )
+          })()}
         </div>
 
         <div className="flex justify-center items-start pt-8 bg-navy-800/50 rounded-2xl border border-white/5 min-h-[580px] overflow-hidden relative">
@@ -461,7 +687,11 @@ export const Compose = () => {
                   <span className="ml-auto text-[10px] text-blue-500 font-bold">Follow</span>
                 </div>
                 {mediaFiles[0] ? (
-                  <img src={mediaFiles[0]} alt="" className="w-full aspect-square object-cover" />
+                  previewIsVideo ? (
+                    <video src={mediaFiles[0]} className={`w-full ${previewRatioClass} object-cover`} muted controls />
+                  ) : (
+                    <img src={mediaFiles[0]} alt="" className={`w-full ${previewRatioClass} object-cover`} />
+                  )
                 ) : (
                   <div className="w-full aspect-square bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center">
                     <ImageIcon className="w-10 h-10 text-gray-300" />
@@ -496,7 +726,11 @@ export const Compose = () => {
                 {caption || <span className="text-gray-400">Your post content preview...</span>}
               </div>
               {mediaFiles[0] && (
-                <img src={mediaFiles[0]} alt="" className="w-full aspect-video object-cover" />
+                previewIsVideo ? (
+                  <video src={mediaFiles[0]} className={`w-full ${previewRatioClass} object-cover`} muted controls />
+                ) : (
+                  <img src={mediaFiles[0]} alt="" className={`w-full ${previewRatioClass} object-cover`} />
+                )
               )}
               <div className="p-2 border-t flex justify-around text-[10px] font-semibold text-gray-500">
                 {['👍 Like', '💬 Comment', '🔁 Repost', '📤 Send'].map(a => <span key={a}>{a}</span>)}
@@ -504,6 +738,52 @@ export const Compose = () => {
             </div>
           )}
         </div>
+
+        {/* Media compatibility table */}
+        {mediaFiles.length > 0 && selectedPlatforms.length > 1 && (
+          <div className="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+            <div className="px-4 py-2 border-b border-white/10 bg-white/5">
+              <p className="text-xs font-bold text-white uppercase tracking-wider">Media compatibility</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[11px]">
+                <thead>
+                  <tr className="border-b border-white/10">
+                    <th className="p-2 text-left text-muted-foreground font-bold uppercase tracking-wider">Platform</th>
+                    {mediaFiles.map((_, i) => (
+                      <th key={i} className="p-2 text-center text-muted-foreground font-bold uppercase tracking-wider">#{i + 1}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedPlatforms.map(pid => {
+                    const c = getPlatformConstraint(pid)
+                    return (
+                      <tr key={pid} className="border-b border-white/5 last:border-none">
+                        <td className="p-2 text-white font-medium">{pid}</td>
+                        {mediaFiles.map((url, i) => {
+                          const type = guessMediaType(url)
+                          let ok = true
+                          if (type === 'image' && c.maxImages <= i) ok = false
+                          if (type === 'image' && c.mediaType === 'video') ok = false
+                          if (type === 'video' && c.maxVideos === 0) ok = false
+                          if (type === 'video' && c.mediaType === 'image') ok = false
+                          return (
+                            <td key={i} className="p-2 text-center">
+                              <span className={cn("text-[10px] font-bold uppercase", ok ? "text-green-400" : "text-red-400")}>
+                                {ok ? (type === 'image' ? `✓ ${c.imageRatios[0] === '*' ? 'Any' : c.imageRatios[0]}` : `✓ ${c.videoRatios[0] === '*' ? 'Any' : c.videoRatios[0]}`) : '✗'}
+                              </span>
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

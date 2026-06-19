@@ -4,6 +4,7 @@ import { PrismaClient } from '@prisma/client';
 import { decryptToken, encryptToken } from './crypto';
 import fetch from 'node-fetch';
 import { triggerWebhooks } from './webhooks';
+import { checkRateLimit } from './publishers/common';
 
 const redisUrl = process.env.REDIS_URL;
 const connection = redisUrl ? new IORedis(redisUrl, { maxRetriesPerRequest: null }) : new IORedis({
@@ -142,7 +143,12 @@ try {
     connection: connection as any,
     defaultJobOptions: {
       removeOnComplete: true,
+      removeOnFail: 20,
       attempts: 3,
+      backoff: {
+        type: 'exponential',
+        delay: 5000,
+      },
     }
   });
 
@@ -176,18 +182,24 @@ try {
 
       for (const accountPost of post.accounts) {
         const account = accountPost.socialAccount;
+        const platform = account.platform.toLowerCase();
         try {
+          // Apply per-platform rate limiting
+          await checkRateLimit(platform);
+
           const decryptedToken = await refreshSocialAccountToken(account);
 
           // Import is hoisted — call the real publisher from the publishers module
           const { publishToPlatform: realPublish } = await import('./publishers');
 
           const result = await realPublish(
-            account.platform.toLowerCase(),
+            platform,
             decryptedToken,
             post.content || '',
             post.mediaUrls,
-            account.platformAccountId
+            account.platformAccountId,
+            (post.structuredContent as Record<string, Record<string, string>> | undefined),
+            (post.postTypes as Record<string, string> | undefined),
           );
 
           await prisma.socialAccountPost.update({

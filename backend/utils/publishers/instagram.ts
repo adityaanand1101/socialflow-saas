@@ -1,5 +1,6 @@
 import fetch from 'node-fetch';
 import type { PublishResult } from './common';
+import { pollMediaStatus, checkRateLimit } from './common';
 
 const GRAPH_API = 'https://graph.facebook.com/v18.0';
 
@@ -7,42 +8,141 @@ export async function publishToInstagram(
   token: string,
   content: string,
   mediaUrls: string[],
-  platformAccountId: string
+  platformAccountId: string,
+  structuredContent?: Record<string, Record<string, string>>,
+  postTypes?: Record<string, string>,
 ): Promise<PublishResult> {
+  const igUserId = platformAccountId;
+  const pid = platformAccountId.toLowerCase();
+  const sc = structuredContent?.[pid] || {};
+  const ct = postTypes?.[pid] || 'feed';
+  const caption = sc.caption || content || '';
+
+  // ── Reel ──
+  if (ct === 'reel') {
+    if (mediaUrls.length === 0) throw new Error('Instagram Reel requires at least one video');
+    const url = mediaUrls[0];
+
+    const createRes = await fetch(`${GRAPH_API}/${igUserId}/media`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        media_type: 'REELS',
+        video_url: url,
+        caption,
+      }),
+    });
+    if (!createRes.ok) {
+      const err = await createRes.text();
+      throw new Error(`Instagram Reel container creation failed: ${err.slice(0, 300)}`);
+    }
+    const { id: creationId } = await createRes.json() as any;
+
+    await checkRateLimit('instagram');
+    await pollMediaStatus(() =>
+      fetch(`${GRAPH_API}/${igUserId}/media?fields=status_code,status&ids=${creationId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }).then(async r => {
+        if (!r.ok) return { status: '' };
+        const d = await r.json() as any;
+        return { status: d?.status_code || d?.status || '' };
+      }),
+      { label: 'Instagram Reel' },
+    );
+
+    const publishRes = await fetch(`${GRAPH_API}/${igUserId}/media_publish`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ creation_id: creationId }),
+    });
+    if (!publishRes.ok) {
+      const err = await publishRes.text();
+      throw new Error(`Instagram Reel publish failed: ${err.slice(0, 300)}`);
+    }
+    const result = await publishRes.json() as any;
+    return { id: result.id, url: `https://www.instagram.com/reel/${result.id}/` };
+  }
+
+  // ── Story ──
+  if (ct === 'story') {
+    if (mediaUrls.length === 0) throw new Error('Instagram Story requires at least one media');
+    const url = mediaUrls[0];
+    const isVideo = /\.(mp4|webm|mov|avi|mkv|m4v)(\?|$)/i.test(url);
+
+    const createRes = await fetch(`${GRAPH_API}/${igUserId}/media`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        media_type: isVideo ? 'STORIES' : 'STORIES',
+        [isVideo ? 'video_url' : 'image_url']: url,
+      }),
+    });
+    if (!createRes.ok) {
+      const err = await createRes.text();
+      throw new Error(`Instagram Story container creation failed: ${err.slice(0, 300)}`);
+    }
+    const { id: creationId } = await createRes.json() as any;
+
+    if (isVideo) {
+      await checkRateLimit('instagram');
+      await pollMediaStatus(() =>
+        fetch(`${GRAPH_API}/${igUserId}/media?fields=status_code,status&ids=${creationId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }).then(async r => {
+          if (!r.ok) return { status: '' };
+          const d = await r.json() as any;
+          return { status: d?.status_code || d?.status || '' };
+        }),
+        { label: 'Instagram Story' },
+      );
+    }
+
+    const publishRes = await fetch(`${GRAPH_API}/${igUserId}/media_publish`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ creation_id: creationId }),
+    });
+    if (!publishRes.ok) {
+      const err = await publishRes.text();
+      throw new Error(`Instagram Story publish failed: ${err.slice(0, 300)}`);
+    }
+    const result = await publishRes.json() as any;
+    return { id: result.id };
+  }
+
+  // ── Feed / Carousel ──
   if (mediaUrls.length === 0) {
-    // Simple text-only post — Instagram doesn't really support this, but we try
-    // via a basic media container with a solid color or skip
     throw new Error('Instagram requires at least one media attachment');
   }
 
-  const igUserId = platformAccountId;
-
   if (mediaUrls.length === 1) {
-    // Single image or video
     const url = mediaUrls[0];
     const isVideo = /\.(mp4|webm|mov|avi|mkv|m4v)(\?|$)/i.test(url);
 
     if (isVideo) {
-      // Step 1: Create media container
       const createRes = await fetch(`${GRAPH_API}/${igUserId}/media`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          media_type: 'VIDEO',
-          video_url: url,
-          caption: content || '',
-        }),
+        body: JSON.stringify({ media_type: 'VIDEO', video_url: url, caption }),
       });
       if (!createRes.ok) {
         const err = await createRes.text();
-        throw new Error(`Instagram video container creation failed: ${err.slice(0, 300)}`);
+        throw new Error(`Instagram video container failed: ${err.slice(0, 300)}`);
       }
       const { id: creationId } = await createRes.json() as any;
 
-      // Step 2: Wait for the video to process (Instagram needs this)
-      await new Promise(r => setTimeout(r, 5000));
+      await checkRateLimit('instagram');
+      await pollMediaStatus(() =>
+        fetch(`${GRAPH_API}/${igUserId}/media?fields=status_code,status&ids=${creationId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }).then(async r => {
+          if (!r.ok) return { status: '' };
+          const d = await r.json() as any;
+          return { status: d?.status_code || d?.status || '' };
+        }),
+        { label: 'Instagram video' },
+      );
 
-      // Step 3: Publish
       const publishRes = await fetch(`${GRAPH_API}/${igUserId}/media_publish`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -55,18 +155,14 @@ export async function publishToInstagram(
       const result = await publishRes.json() as any;
       return { id: result.id, url: `https://www.instagram.com/p/${result.id}/` };
     } else {
-      // Single image
       const createRes = await fetch(`${GRAPH_API}/${igUserId}/media`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          image_url: url,
-          caption: content || '',
-        }),
+        body: JSON.stringify({ image_url: url, caption }),
       });
       if (!createRes.ok) {
         const err = await createRes.text();
-        throw new Error(`Instagram image container creation failed: ${err.slice(0, 300)}`);
+        throw new Error(`Instagram image container failed: ${err.slice(0, 300)}`);
       }
       const { id: creationId } = await createRes.json() as any;
 
@@ -84,7 +180,7 @@ export async function publishToInstagram(
     }
   }
 
-  // Carousel (multiple images/videos)
+  // Carousel
   const childrenIds: string[] = [];
   for (const url of mediaUrls) {
     const isVideo = /\.(mp4|webm|mov|avi|mkv|m4v)(\?|$)/i.test(url);
@@ -98,7 +194,7 @@ export async function publishToInstagram(
     });
     if (!containerRes.ok) {
       const err = await containerRes.text();
-      throw new Error(`Instagram carousel item creation failed: ${err.slice(0, 300)}`);
+      throw new Error(`Instagram carousel item failed: ${err.slice(0, 300)}`);
     }
     const { id } = await containerRes.json() as any;
     childrenIds.push(id);
@@ -106,13 +202,28 @@ export async function publishToInstagram(
 
   if (childrenIds.length > 10) childrenIds.splice(10);
 
+  // Wait for any video items to process
+  for (const cid of childrenIds) {
+    await checkRateLimit('instagram');
+    await pollMediaStatus(() =>
+      fetch(`${GRAPH_API}/${igUserId}/media?fields=status_code,status&ids=${cid}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }).then(async r => {
+        if (!r.ok) return { status: '' };
+        const d = await r.json() as any;
+        return { status: d?.status_code || d?.status || '' };
+      }),
+      { label: `Instagram carousel item ${cid}` },
+    );
+  }
+
   const carouselRes = await fetch(`${GRAPH_API}/${igUserId}/media`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       media_type: 'CAROUSEL',
       children: childrenIds,
-      caption: content || '',
+      caption,
     }),
   });
   if (!carouselRes.ok) {
@@ -120,8 +231,6 @@ export async function publishToInstagram(
     throw new Error(`Instagram carousel creation failed: ${err.slice(0, 300)}`);
   }
   const { id: creationId } = await carouselRes.json() as any;
-
-  await new Promise(r => setTimeout(r, 5000));
 
   const publishRes = await fetch(`${GRAPH_API}/${igUserId}/media_publish`, {
     method: 'POST',

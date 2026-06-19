@@ -16,7 +16,7 @@ import { getPlatformPreview } from '@/components/PlatformPreviews'
 import { useAuth } from '@clerk/react'
 import { format, addDays, isValid, parseISO } from 'date-fns'
 import { ALL_PLATFORMS } from '@/lib/platforms'
-import { getPlatformConstraint, PLATFORM_CONSTRAINTS, getPlatformWarnings } from '@/lib/platformConstraints'
+import { getPlatformConstraint, PLATFORM_CONSTRAINTS, getPlatformWarnings, getContentTypes, getContentType, getDefaultContentType } from '@/lib/platformConstraints'
 
 const toneOptions = ['Professional', 'Casual', 'Funny', 'Inspirational', 'Urgent']
 
@@ -85,6 +85,8 @@ export const Compose = () => {
   const [hashtagLoading, setHashtagLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+  const [postTypes, setPostTypes] = useState<Record<string, string>>({})
+  const [structuredContent, setStructuredContent] = useState<Record<string, Record<string, string>>>({})
 
   const DRAFT_KEY = 'socialflow_draft'
   const TEMPLATES_KEY = 'socialflow_templates'
@@ -99,7 +101,7 @@ export const Compose = () => {
   }
 
   const saveTemplate = (name: string) => {
-    const entry = { id: Date.now().toString(), name, caption, platforms: selectedPlatforms, mediaFiles, mediaTypes, platformCaptions, createdAt: new Date().toISOString() }
+    const entry = { id: Date.now().toString(), name, caption, platforms: selectedPlatforms, mediaFiles, mediaTypes, platformCaptions, postTypes, structuredContent, createdAt: new Date().toISOString() }
     const raw = localStorage.getItem(TEMPLATES_KEY)
     const list = raw ? JSON.parse(raw) : []
     list.unshift(entry)
@@ -120,6 +122,8 @@ export const Compose = () => {
     if (t.mediaFiles) setMediaFiles(t.mediaFiles)
     if (t.mediaTypes) setMediaTypes(t.mediaTypes)
     if (t.platformCaptions) setPlatformCaptions(t.platformCaptions)
+    if (t.postTypes) setPostTypes(t.postTypes)
+    if (t.structuredContent) setStructuredContent(t.structuredContent)
     setShowTemplateModal(false)
   }
   
@@ -200,9 +204,9 @@ export const Compose = () => {
   useEffect(() => {
     if (editingPostId) return
     if (!caption && mediaFiles.length === 0) return
-    const draft = { caption, platforms: selectedPlatforms, mediaFiles, mediaTypes, platformCaptions, scheduledDate, showScheduler }
+    const draft = { caption, platforms: selectedPlatforms, mediaFiles, mediaTypes, platformCaptions, postTypes, structuredContent, scheduledDate, showScheduler }
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)) } catch {}
-  }, [caption, selectedPlatforms, mediaFiles, mediaTypes, platformCaptions, scheduledDate, showScheduler, editingPostId])
+  }, [caption, selectedPlatforms, mediaFiles, mediaTypes, platformCaptions, postTypes, structuredContent, scheduledDate, showScheduler, editingPostId])
 
   // --- Check for saved draft on mount ---
   useEffect(() => {
@@ -228,6 +232,8 @@ export const Compose = () => {
       if (saved.mediaFiles) setMediaFiles(saved.mediaFiles)
       if (saved.mediaTypes) setMediaTypes(saved.mediaTypes)
       if (saved.platformCaptions) setPlatformCaptions(saved.platformCaptions)
+      if (saved.postTypes) setPostTypes(saved.postTypes)
+      if (saved.structuredContent) setStructuredContent(saved.structuredContent)
       if (saved.scheduledDate) setScheduledDate(saved.scheduledDate)
       if (saved.showScheduler) setShowScheduler(saved.showScheduler)
     } catch {}
@@ -239,13 +245,43 @@ export const Compose = () => {
     setShowDraftRestore(false)
   }
 
-  const getCaptionForPlatform = (pid: string) => platformCaptions[pid] || caption
+  const getPlatformContentType = (pid: string) => getContentType(pid, postTypes[pid])
+
+  const getStructuredContent = (pid: string) => structuredContent[pid] || {}
+
+  const getFieldValue = (pid: string, fieldKey: string) => getStructuredContent(pid)[fieldKey] || ''
+
+  const setFieldValue = (pid: string, fieldKey: string, value: string) => {
+    setStructuredContent(prev => ({
+      ...prev,
+      [pid]: { ...(prev[pid] || {}), [fieldKey]: value }
+    }))
+  }
+
+  const setContentType = (pid: string, typeId: string) => {
+    setPostTypes(prev => ({ ...prev, [pid]: typeId }))
+  }
+
+  const getCaptionForPlatform = (pid: string) => {
+    if (platformCaptions[pid]) return platformCaptions[pid]
+    const ct = getPlatformContentType(pid)
+    if (ct && ct.fields.length > 0) {
+      const primary = getFieldValue(pid, ct.fields[0].key)
+      if (primary) return primary
+    }
+    return caption
+  }
 
   const setCaptionForPlatform = (pid: string, text: string) => {
     if (pid === 'master') {
       setCaption(text)
     } else {
-      setPlatformCaptions(prev => ({ ...prev, [pid]: text }))
+      const ct = getPlatformContentType(pid)
+      if (ct && ct.fields.length > 0) {
+        setFieldValue(pid, ct.fields[0].key, text)
+      } else {
+        setPlatformCaptions(prev => ({ ...prev, [pid]: text }))
+      }
     }
   }
 
@@ -421,14 +457,6 @@ export const Compose = () => {
 
   const activeConstraints = getPlatformConstraint(activePlatform)
 
-  const lowestLimit = useMemo(() => {
-    let min = Infinity
-    for (const pid of selectedPlatforms) {
-      min = Math.min(min, getPlatformConstraint(pid).maxChars)
-    }
-    return min === Infinity ? 999999 : min
-  }, [selectedPlatforms])
-
   const currentEditorCaption = activeEditorPlatform === 'master' ? caption : getCaptionForPlatform(activeEditorPlatform)
 
   // --- Link/URL detection ---
@@ -465,7 +493,9 @@ export const Compose = () => {
           media: mediaFiles,
           socialAccountIds: accountIds,
           scheduledTime: time,
-          status
+          status,
+          structuredContent,
+          postTypes
         })
       } else {
         await addPost(token, {
@@ -475,7 +505,9 @@ export const Compose = () => {
           socialAccountIds: accountIds,
           scheduledTime: time,
           status,
-          tags: []
+          tags: [],
+          structuredContent,
+          postTypes
         })
       }
 
@@ -644,26 +676,102 @@ export const Compose = () => {
                 })}
               </div>
 
-              <div className="relative flex-1">
-                <textarea
-                  value={currentEditorCaption}
-                  onChange={(e) => setCaptionForPlatform(activeEditorPlatform, e.target.value)}
-                  placeholder={activeEditorPlatform === 'master' ? "What's on your mind? Type your post here..." : `Custom caption for ${activeEditorPlatform}...`}
-                  className="w-full h-full min-h-[180px] bg-transparent border-none focus:ring-0 outline-none text-white placeholder:text-white/20 resize-none text-base leading-relaxed"
-                />
-                <div className="absolute bottom-2 right-2 text-xs text-muted-foreground">
-                  {currentEditorCaption.length} / <span className={cn(currentEditorCaption.length > lowestLimit && "text-red-400 font-bold")}>{lowestLimit}</span>
-                </div>
+              <div className="relative flex-1 space-y-3">
+                {activeEditorPlatform !== 'master' && (() => {
+                  const types = getContentTypes(activeEditorPlatform)
+                  const currentType = postTypes[activeEditorPlatform] || types[0]?.id || ''
+                  if (types.length <= 1) return null
+                  return (
+                    <div className="flex gap-1 p-0.5 bg-white/5 rounded-lg border border-white/10">
+                      {types.map(t => (
+                        <button key={t.id} onClick={() => setContentType(activeEditorPlatform, t.id)}
+                          className={cn("px-2.5 py-1 rounded-md text-[10px] font-bold whitespace-nowrap transition-all", currentType === t.id ? "bg-purple-500/20 text-white" : "text-muted-foreground hover:text-white")}>
+                          {t.label}
+                        </button>
+                      ))}
+                    </div>
+                  )
+                })()}
+                {activeEditorPlatform !== 'master' ? (() => {
+                  const ct = getPlatformContentType(activeEditorPlatform)
+                  if (!ct || ct.fields.length === 0) {
+                    return <p className="text-xs text-muted-foreground py-8 text-center">This content type has no text fields (media-only).</p>
+                  }
+                  return (
+                    <div className="space-y-3">
+                      {ct.fields.map(field => (
+                        <div key={field.key}>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                              {field.label}
+                              {!field.required && <span className="text-[9px] font-normal text-white/30 ml-1">(optional)</span>}
+                            </label>
+                            {field.maxLength && (
+                              <span className="text-[10px] text-muted-foreground">
+                                {getFieldValue(activeEditorPlatform, field.key).length} / {field.maxLength}
+                              </span>
+                            )}
+                          </div>
+                          {field.type === 'textarea' ? (
+                            <textarea
+                              value={getFieldValue(activeEditorPlatform, field.key)}
+                              onChange={e => setFieldValue(activeEditorPlatform, field.key, e.target.value)}
+                              placeholder={field.placeholder}
+                              maxLength={field.maxLength}
+                              className="w-full min-h-[120px] bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-white/20 resize-none text-sm focus:outline-none focus:border-purple-500/50"
+                            />
+                          ) : field.type === 'multiline-list' ? (
+                            <textarea
+                              value={getFieldValue(activeEditorPlatform, field.key)}
+                              onChange={e => setFieldValue(activeEditorPlatform, field.key, e.target.value)}
+                              placeholder={field.placeholder}
+                              className="w-full min-h-[100px] bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-white/20 resize-none text-sm focus:outline-none focus:border-purple-500/50 font-mono"
+                            />
+                          ) : field.type === 'number' || field.type === 'date' ? (
+                            <input
+                              type={field.type}
+                              value={getFieldValue(activeEditorPlatform, field.key)}
+                              onChange={e => setFieldValue(activeEditorPlatform, field.key, e.target.value)}
+                              placeholder={field.placeholder}
+                              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-white/20 text-sm focus:outline-none focus:border-purple-500/50"
+                            />
+                          ) : (
+                            <input
+                              type={field.type === 'url' ? 'url' : 'text'}
+                              value={getFieldValue(activeEditorPlatform, field.key)}
+                              onChange={e => setFieldValue(activeEditorPlatform, field.key, e.target.value)}
+                              placeholder={field.placeholder}
+                              maxLength={field.maxLength}
+                              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-white/20 text-sm focus:outline-none focus:border-purple-500/50"
+                            />
+                          )}
+                          {field.fieldNote && (
+                            <p className="text-[9px] text-muted-foreground/60 mt-1 leading-relaxed">{field.fieldNote}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })() : (
+                  <textarea
+                    value={caption}
+                    onChange={e => setCaption(e.target.value)}
+                    placeholder="What's on your mind? Type your post here..."
+                    className="w-full h-full min-h-[180px] bg-transparent border-none focus:ring-0 outline-none text-white placeholder:text-white/20 resize-none text-base leading-relaxed"
+                  />
+                )}
               </div>
 
             {/* Per-platform character bars */}
             {selectedPlatforms.length > 1 && (
               <div className="space-y-1">
                 {selectedPlatforms.map(pid => {
+                  const ct = getPlatformContentType(pid)
                   const c = getPlatformConstraint(pid)
                   const content = getCaptionForPlatform(pid)
-                  const pct = Math.min((content.length / c.maxChars) * 100, 100)
-                  const over = content.length > c.maxChars
+                  const maxChars = ct?.maxChars || c.maxChars
+                  const pct = Math.min((content.length / maxChars) * 100, 100)
+                  const over = content.length > maxChars
                   return (
                     <div key={pid} className="flex items-center gap-2">
                       <span className="text-[10px] font-bold text-muted-foreground uppercase w-16 truncate shrink-0">{pid}</span>
@@ -671,7 +779,7 @@ export const Compose = () => {
                         <div className={cn("h-full rounded-full transition-all", over ? "bg-red-500" : "bg-purple-500/60")} style={{ width: `${pct}%` }} />
                       </div>
                       <span className={cn("text-[10px] w-12 text-right shrink-0", over ? "text-red-400 font-bold" : "text-muted-foreground")}>
-                        {content.length}/{c.maxChars < 10000 ? c.maxChars : '∞'}
+                        {content.length}/{maxChars < 10000 ? maxChars : '∞'}
                       </span>
                     </div>
                   )
@@ -1031,10 +1139,10 @@ export const Compose = () => {
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold text-white">Live Preview</h2>
           <div className="flex items-center gap-2">
-            {/* Per-platform preview tabs */}
+            {/* Per-platform preview tabs — scrollable, no cap */}
             {selectedPlatforms.length > 1 && (
-              <div className="flex p-0.5 bg-white/5 rounded-lg border border-white/10">
-                {selectedPlatforms.slice(0, 5).map(pid => {
+              <div className="flex gap-0.5 p-0.5 bg-white/5 rounded-lg border border-white/10 overflow-x-auto max-w-[260px] scrollbar-thin">
+                {selectedPlatforms.map(pid => {
                   const p = ALL_PLATFORMS.find(x => x.id === pid)
                   if (!p) return null
                   const Icon = p.icon
@@ -1043,7 +1151,7 @@ export const Compose = () => {
                       key={pid}
                       onClick={() => setActivePreviewPlatform(pid)}
                       className={cn(
-                        "p-1.5 rounded-md transition-all",
+                        "p-1.5 rounded-md transition-all shrink-0",
                         activePreviewPlatform === pid ? "bg-white/10 text-white" : "text-muted-foreground hover:text-white"
                       )}
                       title={p.label}
@@ -1052,9 +1160,6 @@ export const Compose = () => {
                     </button>
                   )
                 })}
-                {selectedPlatforms.length > 5 && (
-                  <span className="px-1.5 flex items-center text-[10px] text-muted-foreground">+{selectedPlatforms.length - 5}</span>
-                )}
               </div>
             )}
             <div className="flex p-1 bg-white/5 rounded-lg border border-white/10">
@@ -1115,6 +1220,8 @@ export const Compose = () => {
                 mediaInfo={mediaInfo}
                 isMobile={previewDevice === 'mobile'}
                 getRatioClass={() => previewRatioClass}
+                structuredContent={getStructuredContent(activePlatform)}
+                contentTypeId={postTypes[activePlatform] || getDefaultContentType(activePlatform)}
               />
             })()}
           </div>

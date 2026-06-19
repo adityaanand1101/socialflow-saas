@@ -150,6 +150,8 @@ model Post {
   workspaceId String
   content     String?             @db.Text
   mediaUrls   String[]            // Array of cloud storage file URLs
+  structuredContent Json?         // Per-platform structured fields: { "instagram": { "caption": "..." }, "x": { "text": "...", "poll_options": "..." } }
+  postTypes   Json?               // Per-platform content type selection: { "instagram": "feed", "x": "poll" }
   scheduledAt DateTime?
   status      PostStatus          @default(DRAFT)
   createdAt   DateTime            @default(now())

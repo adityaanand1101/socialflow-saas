@@ -55,7 +55,7 @@ router.get('/', requireAuth, async (req: any, res: any) => {
 
 // POST /api/posts: Create a new post
 router.post('/', requireAuth, async (req: any, res: any) => {
-  const { content, mediaUrls, socialAccountIds, scheduledAt, status } = req.body;
+  const { content, mediaUrls, socialAccountIds, scheduledAt, status, structuredContent, postTypes } = req.body;
 
   try {
     const workspaceId = req.workspaceId;
@@ -71,6 +71,8 @@ router.post('/', requireAuth, async (req: any, res: any) => {
         workspaceId,
         content,
         mediaUrls: mediaUrls || [],
+        structuredContent: structuredContent || undefined,
+        postTypes: postTypes || undefined,
         scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
         status: postStatus,
         accounts: {
@@ -118,7 +120,7 @@ router.post('/', requireAuth, async (req: any, res: any) => {
 // PATCH /api/posts/:id: Update content, media, target accounts, or reschedule
 router.patch('/:id', requireAuth, async (req: any, res: any) => {
   const { id } = req.params;
-  const { content, mediaUrls, socialAccountIds, scheduledAt, status } = req.body;
+  const { content, mediaUrls, socialAccountIds, scheduledAt, status, structuredContent, postTypes } = req.body;
 
   try {
     const post = await prisma.post.findUnique({ where: { id }, include: { accounts: { include: { socialAccount: true } } } });
@@ -131,6 +133,8 @@ router.patch('/:id', requireAuth, async (req: any, res: any) => {
     const updateData: any = {
       ...(content !== undefined && { content }),
       ...(mediaUrls !== undefined && { mediaUrls }),
+      ...(structuredContent !== undefined && { structuredContent }),
+      ...(postTypes !== undefined && { postTypes }),
       ...(scheduledAt !== undefined && { scheduledAt: new Date(scheduledAt) }),
       status: postStatus,
     };

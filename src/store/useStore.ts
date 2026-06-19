@@ -17,6 +17,8 @@ export interface Post {
   status: 'scheduled' | 'draft' | 'failed' | 'published'
   tags: string[]
   socialAccountIds?: string[]
+  structuredContent?: Record<string, Record<string, string>>
+  postTypes?: Record<string, string>
 }
 
 export interface Channel {

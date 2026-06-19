@@ -288,7 +288,7 @@ router.post('/image', requireAuth, async (req: any, res: any) => {
         workspaceId,
         userId,
         fileName: `AI-${Date.now()}.${ext}`,
-        fileUrl: viewUrl,
+        fileUrl: fileName,
         fileType: contentType,
         fileSize: buffer.length,
         tags: ['ai-generated'],

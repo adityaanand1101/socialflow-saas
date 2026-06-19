@@ -239,7 +239,7 @@ router.get('/', requireAuth, async (req: any, res: any) => {
     // Generate a signed GET URL for every asset so private B2 files are viewable
     const mediaWithUrls = await Promise.all(media.map(async (item) => {
       const key = item.fileUrl.includes('http') 
-          ? item.fileUrl.split('/').slice(-2).join('/') 
+          ? item.fileUrl.split('/').slice(-2).join('/').split('?')[0] 
           : item.fileUrl;
 
       let fileUrl: string;

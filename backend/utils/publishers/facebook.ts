@@ -22,7 +22,25 @@ export async function publishToFacebook(
     const message = sc.message || content || '';
 
     const body: Record<string, any> = { message, link: linkUrl };
-    if (mediaUrls.length > 0) body.attached_media = mediaUrls.slice(0, 1).map(url => ({ media_fbid: url }));
+    if (mediaUrls.length > 0) {
+      const attachedMedia: string[] = [];
+      for (const url of mediaUrls.slice(0, 10)) {
+        try {
+          const photoRes = await fetch(`${GRAPH_API}/${pageId}/photos`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url, published: false }),
+          });
+          if (photoRes.ok) {
+            const { id } = await photoRes.json() as any;
+            attachedMedia.push(id);
+          }
+        } catch {}
+      }
+      if (attachedMedia.length > 0) {
+        body.attached_media = attachedMedia.map(id => ({ media_fbid: id }));
+      }
+    }
 
     const res = await fetch(`${GRAPH_API}/${pageId}/feed`, {
       method: 'POST',

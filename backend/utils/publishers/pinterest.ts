@@ -46,8 +46,11 @@ export async function publishToPinterest(
     }
     const { media_id, upload_url, upload_parameters } = await registerRes.json() as any;
 
-    // Step 2: Upload binary to the returned URL
-    await fetch(upload_url, {
+    // Step 2: Upload binary to the returned URL with signed parameters
+    const uploadUrlWithParams = upload_parameters
+      ? upload_url + '?' + new URLSearchParams(upload_parameters as Record<string, string>).toString()
+      : upload_url;
+    await fetch(uploadUrlWithParams, {
       method: 'POST',
       headers: { 'Content-Type': 'video/mp4' },
       body: videoBuffer,

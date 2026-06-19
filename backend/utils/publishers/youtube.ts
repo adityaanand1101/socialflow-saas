@@ -16,40 +16,13 @@ export async function publishToYouTube(
   const ct = postTypes?.[pid] || 'longform';
 
   // ── Community Post / Community Poll ──
+  // NOTE: YouTube does not provide a stable public API for community posts.
+  // These must be created manually via YouTube Studio.
   if (ct === 'community_post' || ct === 'community_poll') {
-    const isPoll = ct === 'community_poll';
-    const body: Record<string, any> = {
-      snippet: {
-        channelId: platformAccountId,
-        text: sc.body || sc.poll_question || content || '',
-        type: isPoll ? 'poll' : 'text',
-      },
-    };
-
-    if (isPoll) {
-      const options = (sc.poll_options || '').split('\n').filter(Boolean).slice(0, 4);
-      body.snippet.pollOptions = options.map((o: string) => ({ text: o }));
-    }
-
-    if (mediaUrls.length > 0) {
-      body.snippet.media = mediaUrls.slice(0, 10).map(url => ({ url, type: 'image' }));
-    }
-
-    // YouTube community posts use a dedicated endpoint
-    const res = await fetch(`${API_BASE}/liveChat/messages?part=snippet`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`YouTube community post failed: ${err.slice(0, 300)}`);
-    }
-    const result = await res.json() as any;
-    return { id: result.id };
+    throw new Error(
+      'YouTube Community Posts are not supported via the YouTube Data API. ' +
+      'Please create community posts manually through YouTube Studio at studio.youtube.com'
+    );
   }
 
   // ── Video upload (longform / shorts) ──
@@ -58,7 +31,6 @@ export async function publishToYouTube(
   const videoUrl = mediaUrls[0];
   const title = sc.title || content?.split('\n')[0] || 'Untitled Video';
   const description = sc.description || content || '';
-  const isShort = ct === 'shorts';
 
   // Step 1: Fetch the video binary
   const videoRes = await fetch(videoUrl);
@@ -66,12 +38,15 @@ export async function publishToYouTube(
   const videoBuffer = await videoRes.buffer();
 
   // Step 2: Initiate resumable upload
+  const tags = sc.tags ? sc.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
+  const categoryId = sc.categoryId || '22';
+
   const metadata = {
     snippet: {
       title: title.slice(0, 100),
       description: description.slice(0, 5000),
-      tags: [],
-      categoryId: '22', // default: Entertainment
+      tags: tags.slice(0, 30),
+      categoryId,
     },
     status: {
       privacyStatus: 'private',

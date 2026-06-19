@@ -1,7 +1,10 @@
 import fetch from 'node-fetch';
+import FormData from 'form-data';
 import type { PublishResult } from './common';
 
 const API_BASE = 'https://oauth.reddit.com';
+
+const UA = 'SocialFlow/1.0 (by /u/socialflow)';
 
 export async function publishToReddit(
   token: string,
@@ -41,9 +44,38 @@ export async function publishToReddit(
 
     case 'image': {
       if (mediaUrls.length === 0) throw new Error('Reddit image post requires at least one image');
+
+      // Step 1: Upload image to subreddit
+      const imgRes = await fetch(mediaUrls[0]);
+      if (!imgRes.ok) throw new Error(`Failed to fetch image for Reddit: ${imgRes.statusText}`);
+      const imgBuffer = await imgRes.buffer();
+      const filename = mediaUrls[0].split('/').pop() || 'image.jpg';
+
+      const form = new FormData();
+      form.append('file', imgBuffer, { filename, contentType: imgRes.headers.get('content-type') || 'image/jpeg' });
+      form.append('sr', subreddit.replace(/^r\//, ''));
+      form.append('name', 'image');
+
+      const uploadRes = await fetch(`${API_BASE}/api/upload_sr_img`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'User-Agent': UA,
+          ...form.getHeaders(),
+        },
+        body: form,
+      });
+      if (!uploadRes.ok) {
+        const err = await uploadRes.text();
+        throw new Error(`Reddit image upload failed: ${err.slice(0, 300)}`);
+      }
+      const uploadData = await uploadRes.json() as any;
+      const imgSrc = uploadData?.img_src || uploadData?.url || '';
+      if (!imgSrc) throw new Error('Reddit image upload returned no URL');
+
+      // Step 2: Submit post with uploaded image URL
       params.append('kind', 'image');
-      // Reddit API for image posts — pass URLs for the API to fetch
-      params.append('url', mediaUrls[0]);
+      params.append('url', imgSrc);
       break;
     }
 
@@ -60,7 +92,7 @@ export async function publishToReddit(
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/x-www-form-urlencoded',
-      'User-Agent': 'SocialFlow/1.0 (by /u/socialflow)',
+      'User-Agent': UA,
     },
     body: params,
   });

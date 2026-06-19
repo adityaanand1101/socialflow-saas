@@ -29,7 +29,7 @@ export async function publishToTumblr(
     case 'photo': {
       payload.type = 'photo';
       if (mediaUrls.length > 0) {
-        payload.data = mediaUrls.slice(0, 10).join(',');
+        payload.data = mediaUrls.slice(0, 10);
       } else {
         throw new Error('Tumblr photo post requires at least one image');
       }

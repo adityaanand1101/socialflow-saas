@@ -1,4 +1,5 @@
 import fetch from 'node-fetch';
+import FormData from 'form-data';
 import type { PublishResult } from './common';
 
 const SLACK_API = 'https://slack.com/api';
@@ -8,18 +9,17 @@ async function uploadFile(token: string, channels: string, fileUrl: string) {
   if (!fileRes.ok) return null;
   const buffer = await fileRes.buffer();
   const filename = fileUrl.split('/').pop() || 'file';
+  const contentType = fileRes.headers.get('content-type') || 'application/octet-stream';
+
+  const form = new FormData();
+  form.append('channels', channels);
+  form.append('filename', filename);
+  form.append('file', buffer, { filename, contentType });
 
   const res = await fetch(`${SLACK_API}/files.upload`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: new URLSearchParams({
-      channels,
-      filename,
-      file: buffer.toString('base64'),
-    }),
+    headers: { Authorization: `Bearer ${token}`, ...form.getHeaders() },
+    body: form,
   });
   if (!res.ok) return null;
   return res.json();

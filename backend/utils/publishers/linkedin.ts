@@ -92,10 +92,6 @@ export async function publishToLinkedIn(
 
   switch (ct) {
     case 'article': {
-      const thumbnailUrn = sc.article_thumbnail_url
-        ? await registerImage(sc.article_thumbnail_url)
-        : null;
-
       const body = {
         author: authorUrn,
         commentary: sc.description || content || '',
@@ -104,8 +100,6 @@ export async function publishToLinkedIn(
           article: {
             title: sc.title || '',
             description: sc.description || '',
-            thumbnail: thumbnailUrn || undefined,
-            source: undefined,
           },
         },
         distribution: {

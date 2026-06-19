@@ -244,7 +244,7 @@ export const AIStudio = () => {
                       size="sm"
                       variant="ghost"
                       className="h-8 gap-1.5 text-purple-400 hover:text-purple-300 text-xs"
-                      onClick={() => navigate(`/compose?caption=${encodeURIComponent(v)}`)}
+                      onClick={() => navigate(`/app/compose?caption=${encodeURIComponent(v)}`)}
                     >
                       <Wand2 className="w-3 h-3" />
                       Compose
@@ -313,7 +313,7 @@ export const AIStudio = () => {
                   size="sm"
                   variant="ghost"
                   className="shrink-0 h-8 text-xs gap-1 text-purple-400 hover:bg-purple-500/10"
-                  onClick={() => navigate('/compose')}
+                  onClick={() => navigate('/app/compose')}
                 >
                   Create <ArrowRight className="w-3 h-3" />
                 </Button>

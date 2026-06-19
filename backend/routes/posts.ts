@@ -6,7 +6,7 @@ import { requireAuth } from '../middlewares/auth';
 const router = Router();
 const prisma = new PrismaClient();
 
-// GET /api/posts: List all posts
+// GET /api/posts: List all posts (paginated, with platforms)
 router.get('/', requireAuth, async (req: any, res: any) => {
   try {
     const workspaceId = req.workspaceId;
@@ -14,13 +14,39 @@ router.get('/', requireAuth, async (req: any, res: any) => {
       return res.status(404).json({ error: 'Workspace not found' });
     }
 
+    const { limit, offset } = req.query;
+    const take = limit ? parseInt(limit as string, 10) : 50;
+    const skip = offset ? parseInt(offset as string, 10) : 0;
+
     const posts = await prisma.post.findMany({
       where: { workspaceId },
       include: { accounts: { include: { socialAccount: true } } },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(take, 100),
+      skip,
     });
 
-    res.json(posts);
+    const transformed = posts.map(p => ({
+      id: p.id,
+      userId: p.userId,
+      workspaceId: p.workspaceId,
+      content: p.content,
+      caption: p.content,
+      mediaUrls: p.mediaUrls,
+      media: p.mediaUrls,
+      platforms: p.accounts.map(a => a.socialAccount.platform.toLowerCase()),
+      scheduledAt: p.scheduledAt,
+      scheduledTime: p.scheduledAt?.toISOString(),
+      status: p.status.toLowerCase(),
+      tags: [],
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt,
+      accounts: p.accounts,
+    }));
+
+    const total = await prisma.post.count({ where: { workspaceId } });
+
+    res.json({ posts: transformed, total, limit: take, offset: skip });
   } catch (error) {
     console.error('Error fetching posts:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -54,7 +80,7 @@ router.post('/', requireAuth, async (req: any, res: any) => {
           }))
         }
       },
-      include: { accounts: true }
+      include: { accounts: { include: { socialAccount: true } } }
     });
 
     // If scheduled, add to BullMQ with jobId = postId to allow cancellation/rescheduling
@@ -75,7 +101,14 @@ router.post('/', requireAuth, async (req: any, res: any) => {
       }
     }
 
-    res.status(201).json(newPost);
+    res.status(201).json({
+      ...newPost,
+      caption: newPost.content,
+      media: newPost.mediaUrls,
+      platforms: newPost.accounts.map(a => a.socialAccount?.platform?.toLowerCase()).filter(Boolean),
+      scheduledTime: newPost.scheduledAt?.toISOString(),
+      tags: [],
+    });
   } catch (error) {
     console.error('Error creating post:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -88,7 +121,7 @@ router.patch('/:id', requireAuth, async (req: any, res: any) => {
   const { content, mediaUrls, socialAccountIds, scheduledAt, status } = req.body;
 
   try {
-    const post = await prisma.post.findUnique({ where: { id }, include: { accounts: true } });
+    const post = await prisma.post.findUnique({ where: { id }, include: { accounts: { include: { socialAccount: true } } } });
     if (!post || post.workspaceId !== req.workspaceId) {
       return res.status(404).json({ error: 'Post not found' });
     }
@@ -116,7 +149,7 @@ router.patch('/:id', requireAuth, async (req: any, res: any) => {
     const updatedPost = await prisma.post.update({
       where: { id },
       data: updateData,
-      include: { accounts: true }
+      include: { accounts: { include: { socialAccount: true } } }
     });
 
     // Handle rescheduling/queue job updates
@@ -142,7 +175,14 @@ router.patch('/:id', requireAuth, async (req: any, res: any) => {
       }
     }
 
-    res.json(updatedPost);
+    res.json({
+      ...updatedPost,
+      caption: updatedPost.content,
+      media: updatedPost.mediaUrls,
+      platforms: updatedPost.accounts.map((a: any) => a.socialAccount?.platform?.toLowerCase()).filter(Boolean),
+      scheduledTime: updatedPost.scheduledAt?.toISOString(),
+      tags: [],
+    });
   } catch (error) {
     console.error('Error updating post:', error);
     res.status(500).json({ error: 'Internal server error' });

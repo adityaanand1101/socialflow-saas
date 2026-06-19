@@ -79,6 +79,10 @@ export const Compose = () => {
   const [newTemplateName, setNewTemplateName] = useState('')
   const [platformCaptions, setPlatformCaptions] = useState<Record<string, string>>({})
   const [activeEditorPlatform, setActiveEditorPlatform] = useState<string>('master')
+  const [showHashtagModal, setShowHashtagModal] = useState(false)
+  const [hashtagSuggestions, setHashtagSuggestions] = useState<string[]>([])
+  const [hashtagNiche, setHashtagNiche] = useState('')
+  const [hashtagLoading, setHashtagLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const DRAFT_KEY = 'socialflow_draft'
@@ -246,6 +250,35 @@ export const Compose = () => {
 
   const libraryMedia = mediaData?.assets || []
 
+  // --- Hashtag helpers ---
+  const generateHashtags = async () => {
+    if (!hashtagNiche.trim()) return
+    setHashtagLoading(true)
+    try {
+      const token = await getToken()
+      const res = await apiFetch('/api/ai/hashtags', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ niche: hashtagNiche, keywords: [] }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setHashtagSuggestions(data.hashtags || [])
+      }
+    } catch (err) {
+      console.error('Failed to generate hashtags:', err)
+    } finally {
+      setHashtagLoading(false)
+    }
+  }
+
+  const insertHashtag = (tag: string) => {
+    const target = activeEditorPlatform === 'master' ? caption : platformCaptions[activeEditorPlatform] || caption
+    const newText = target ? `${target} ${tag}` : tag
+    setCaptionForPlatform(activeEditorPlatform, newText)
+    setHashtagSuggestions(prev => prev.filter(h => h !== tag))
+  }
+
   const handleMediaUpload = async (file: File): Promise<any> => {
     setIsUploadingMedia(true)
     try {
@@ -381,6 +414,13 @@ export const Compose = () => {
 
   const currentEditorCaption = activeEditorPlatform === 'master' ? caption : getCaptionForPlatform(activeEditorPlatform)
 
+  // --- Link/URL detection ---
+  const detectedUrls = useMemo(() => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g
+    const matches = currentEditorCaption.match(urlRegex)
+    return matches || []
+  }, [currentEditorCaption])
+
   const handlePost = async (status: 'published' | 'draft' | 'scheduled', force = false) => {
     if (status !== 'draft' && hasWarnings && !showWarnings && !force) {
       setShowWarnings(true)
@@ -423,7 +463,7 @@ export const Compose = () => {
       }
 
       queryClient.invalidateQueries({ queryKey: ['posts'] })
-      navigate('/calendar')
+      navigate('/app/calendar')
       clearDraft()
     } catch (error) {
       console.error('Failed to save post:', error)
@@ -643,6 +683,26 @@ export const Compose = () => {
               </div>
             )}
 
+            {/* Link Preview */}
+            {detectedUrls.length > 0 && (
+              <div className="space-y-1.5">
+                {detectedUrls.slice(0, 1).map((url, i) => (
+                  <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-blue-500/5 border border-blue-500/20">
+                    <div className="w-6 h-6 rounded bg-blue-500/10 flex items-center justify-center shrink-0">
+                      <span className="text-[10px]">🔗</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] text-blue-300 truncate">{url}</p>
+                      <p className="text-[9px] text-muted-foreground">Link will be included in post</p>
+                    </div>
+                  </div>
+                ))}
+                {detectedUrls.length > 1 && (
+                  <p className="text-[10px] text-muted-foreground">+{detectedUrls.length - 1} more URL{detectedUrls.length > 2 ? 's' : ''} detected</p>
+                )}
+              </div>
+            )}
+
             {/* Warnings */}
             {hasWarnings && (
               <div className="space-y-1.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
@@ -680,8 +740,13 @@ export const Compose = () => {
                 <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-white">
                   <Smile className="w-5 h-5" />
                 </Button>
-                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-white">
+                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-white relative" onClick={() => { setHashtagNiche(''); setHashtagSuggestions([]); setShowHashtagModal(true) }} title="Hashtag suggestions">
                   <Hash className="w-5 h-5" />
+                  {(() => {
+                    const count = (caption.match(/#\w+/g) || []).length
+                    if (count > 0) return <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-purple-500 text-[7px] font-bold text-white flex items-center justify-center">{count}</span>
+                    return null
+                  })()}
                 </Button>
                 <div className="w-px h-6 bg-white/10" />
                 <Button
@@ -747,6 +812,58 @@ export const Compose = () => {
                     </div>
                     <div className="p-4 border-t border-white/10 bg-white/5 flex justify-end">
                       <Button onClick={() => setShowMediaLibrary(false)}>Done</Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Hashtag Modal */}
+              {showHashtagModal && (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[310] flex items-center justify-center p-4" onClick={() => setShowHashtagModal(false)}>
+                  <div className="bg-[#141218] border border-white/10 rounded-2xl w-full max-w-lg max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                    <div className="p-4 border-b border-white/10 flex items-center justify-between">
+                      <h3 className="font-bold text-white">Hashtag Suggestions</h3>
+                      <button onClick={() => setShowHashtagModal(false)} className="text-muted-foreground hover:text-white">
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="p-4 border-b border-white/10 flex items-center gap-2">
+                      <input
+                        value={hashtagNiche}
+                        onChange={e => setHashtagNiche(e.target.value)}
+                        placeholder="e.g. marketing, tech, food..."
+                        className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50"
+                        onKeyDown={e => { if (e.key === 'Enter') generateHashtags() }}
+                      />
+                      <Button size="sm" onClick={generateHashtags} disabled={hashtagLoading || !hashtagNiche.trim()}>
+                        {hashtagLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                        {hashtagLoading ? '...' : 'Generate'}
+                      </Button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                      {hashtagSuggestions.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center h-40 text-muted-foreground text-center">
+                          <Hash className="w-10 h-10 mb-2 opacity-20" />
+                          <p className="text-sm">Enter a niche above to generate hashtag ideas.</p>
+                          <p className="text-xs mt-1">Click a hashtag to insert it into your caption.</p>
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap gap-2">
+                          {hashtagSuggestions.map((tag, i) => (
+                            <button
+                              key={i}
+                              onClick={() => insertHashtag(tag)}
+                              className="px-3 py-1.5 bg-white/5 hover:bg-purple-500/20 border border-white/10 hover:border-purple-500/50 rounded-full text-sm text-purple-400 transition-all"
+                            >
+                              {tag}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-4 border-t border-white/10 flex items-center justify-between text-xs text-muted-foreground">
+                      <span>Click a hashtag to add it to your caption.</span>
+                      <Button variant="ghost" size="sm" onClick={() => setShowHashtagModal(false)}>Done</Button>
                     </div>
                   </div>
                 </div>
@@ -860,7 +977,7 @@ export const Compose = () => {
                     type="datetime-local"
                     value={scheduledDate}
                     onChange={(e) => setScheduledDate(e.target.value)}
-                    min={format(new Date(), "yyyy-MM-dd'T'HH:mm")}
+                    min={format(new Date(Date.now() + 10 * 60 * 1000), "yyyy-MM-dd'T'HH:mm")}
                     className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500/50"
                   />
                   <Button 

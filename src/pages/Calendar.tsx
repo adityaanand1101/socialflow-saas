@@ -79,7 +79,11 @@ export const Calendar = () => {
     staleTime: 1000 * 60 * 5,
   })
 
-  const posts = useMemo(() => Array.isArray(postsData) ? postsData : [], [postsData])
+  const posts = useMemo(() => {
+    if (Array.isArray(postsData)) return postsData as any[]
+    if (postsData?.posts) return postsData.posts as any[]
+    return []
+  }, [postsData])
 
   // --- Navigation Logic ---
   const next = () => {
@@ -130,7 +134,7 @@ export const Calendar = () => {
       const token = await getToken()
       if (!token) return
       
-      const post = posts.find(p => p.id === postId)
+      const post = posts.find((p: any) => p.id === postId)
       if (!post) return
 
       const existingDate = new Date(post.scheduledAt || post.scheduledTime || new Date())
@@ -233,10 +237,10 @@ export const Calendar = () => {
             viewMode === 'day' ? "grid-cols-1" : "grid-cols-7"
           )}>
             {calendarDays.map((day, i) => {
-              const dayPosts = posts.filter(p => {
+              const dayPosts = posts.filter((p: any) => {
                 const pDate = new Date(p.scheduledAt || p.scheduledTime);
                 return isSameDay(pDate, day);
-              }).sort((a, b) => new Date(a.scheduledAt || a.scheduledTime).getTime() - new Date(b.scheduledAt || b.scheduledTime).getTime());
+              }).sort((a: any, b: any) => new Date(a.scheduledAt || a.scheduledTime).getTime() - new Date(b.scheduledAt || b.scheduledTime).getTime());
 
               const isCurrentMonth = isSameMonth(day, currentDate)
               
@@ -268,7 +272,7 @@ export const Calendar = () => {
                   </div>
 
                   <div className="space-y-1 pr-1">
-                    {dayPosts.map((post) => (
+                    {dayPosts.map((post: any) => (
                       <div 
                         key={post.id} 
                         draggable

@@ -69,11 +69,11 @@ export const Dashboard = () => {
           <p className="text-muted-foreground mt-1">Here's what's happening across your social channels.</p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" className="gap-2" onClick={() => navigate('/calendar')}>
+          <Button variant="outline" className="gap-2" onClick={() => navigate('/app/calendar')}>
             <CalendarIcon className="w-4 h-4" />
             View Calendar
           </Button>
-          <Button className="gap-2" onClick={() => navigate('/compose')}>
+          <Button className="gap-2" onClick={() => navigate('/app/compose')}>
             <Plus className="w-4 h-4" />
             Create Post
           </Button>
@@ -109,7 +109,7 @@ export const Dashboard = () => {
                 <CardTitle>Upcoming Posts</CardTitle>
                 <CardDescription>Your next scheduled content across all platforms.</CardDescription>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => navigate('/calendar')}>View Calendar</Button>
+              <Button variant="ghost" size="sm" onClick={() => navigate('/app/calendar')}>View Calendar</Button>
             </CardHeader>
             <CardContent className="space-y-3">
               {upcomingPosts.length === 0 ? (
@@ -119,7 +119,7 @@ export const Dashboard = () => {
                   </div>
                   <p className="text-white font-medium">No scheduled posts yet</p>
                   <p className="text-muted-foreground text-sm mt-1">Create and schedule your first post</p>
-                  <Button className="mt-4 gap-2" onClick={() => navigate('/compose')}>
+                  <Button className="mt-4 gap-2" onClick={() => navigate('/app/compose')}>
                     <Plus className="w-4 h-4" /> Create Post
                   </Button>
                 </div>
@@ -165,7 +165,7 @@ export const Dashboard = () => {
               <Button 
                 variant="outline" 
                 className="w-full border-dashed border-white/20 hover:border-white/40 bg-transparent text-muted-foreground"
-                onClick={() => navigate('/compose')}
+                onClick={() => navigate('/app/compose')}
               >
                 + Add New Content
               </Button>
@@ -184,7 +184,7 @@ export const Dashboard = () => {
               {channels.length === 0 ? (
                 <div className="text-center py-8">
                   <p className="text-muted-foreground text-sm">No channels connected</p>
-                  <Button variant="outline" className="mt-3" size="sm" onClick={() => navigate('/channels')}>
+                  <Button variant="outline" className="mt-3" size="sm" onClick={() => navigate('/app/channels')}>
                     Connect Channels
                   </Button>
                 </div>

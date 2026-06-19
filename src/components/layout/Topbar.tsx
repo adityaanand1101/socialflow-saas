@@ -117,7 +117,7 @@ export const Topbar = () => {
       </div>
 
       <div className="flex items-center gap-4">
-        <Button className="hidden md:flex items-center gap-2" onClick={() => navigate('/compose')}>
+        <Button className="hidden md:flex items-center gap-2" onClick={() => navigate('/app/compose')}>
           <Plus className="w-4 h-4" />
           Quick Compose
         </Button>

@@ -31,3 +31,4 @@ dist-ssr
 .env.*
 !backend/.env.example
 sync-env-config.ps1
+_CREDENTIALS.txt

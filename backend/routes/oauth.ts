@@ -301,7 +301,9 @@ router.get('/:platform/callback', async (req: any, res) => {
 
     const usesBasicAuth = platform === 'tumblr' || platform === 'slack' || platform === 'x';
 
+    const requestBody = bodyParams.toString();
     console.log(`[${platform}] Exchanging code at ${provider.tokenUrl}`);
+    console.log(`[${platform}] Request body (redacted): grant_type=authorization_code&redirect_uri=${encodeURIComponent(redirectUri)}&client_id=${provider.clientId.substring(0,8)}...&client_secret=${provider.clientSecret.substring(0,4)}...&code=${(code as string).substring(0,8)}...`);
     const tokenRes = await fetch(provider.tokenUrl, {
       method: 'POST',
       headers: {
@@ -310,7 +312,7 @@ router.get('/:platform/callback', async (req: any, res) => {
           'Authorization': 'Basic ' + Buffer.from(`${provider.clientId}:${provider.clientSecret}`).toString('base64')
         })
       },
-      body: bodyParams.toString()
+      body: requestBody
     });
 
     console.log(`[${platform}] Token response status: ${tokenRes.status}`);
@@ -318,6 +320,8 @@ router.get('/:platform/callback', async (req: any, res) => {
     if (!tokenRes.ok) {
       const errText = await tokenRes.text();
       console.error(`[${platform}] Token exchange failed: ${errText}`);
+      // Log the full request details for debugging
+      console.error(`[${platform}] FAILED REQUEST DETAILS - url: ${provider.tokenUrl}, redirect_uri: ${redirectUri}, client_id: ${provider.clientId}, code (first 10): ${(code as string).substring(0,10)}`);
       throw new Error(`Failed to exchange code for token: ${errText}`);
     }
 

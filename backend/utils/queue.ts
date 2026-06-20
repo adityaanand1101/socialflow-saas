@@ -36,7 +36,7 @@ async function refreshSocialAccountToken(account: any) {
     linkedin: 'https://www.linkedin.com/oauth/v2/accessToken',
     x: 'https://api.twitter.com/2/oauth2/token',
     instagram: 'https://api.instagram.com/oauth/access_token',
-    facebook: 'https://graph.facebook.com/v18.0/oauth/access_token',
+    facebook: 'https://graph.facebook.com/v22.0/oauth/access_token',
     threads: 'https://graph.threads.net/oauth/access_token',
     youtube: 'https://oauth2.googleapis.com/token',
     pinterest: 'https://api.pinterest.com/v5/oauth/token',

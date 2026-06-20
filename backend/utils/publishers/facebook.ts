@@ -1,7 +1,7 @@
 import fetch from 'node-fetch';
 import type { PublishResult } from './common';
 
-const GRAPH_API = 'https://graph.facebook.com/v18.0';
+const GRAPH_API = 'https://graph.facebook.com/v22.0';
 
 export async function publishToFacebook(
   token: string,

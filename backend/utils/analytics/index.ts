@@ -1,6 +1,6 @@
 import fetch from 'node-fetch';
 
-const GRAPH_API = 'https://graph.facebook.com/v18.0';
+const GRAPH_API = 'https://graph.facebook.com/v22.0';
 const TWITTER_API = 'https://api.twitter.com/2';
 
 export interface PlatformAnalytics {

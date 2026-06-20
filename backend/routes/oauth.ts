@@ -43,17 +43,17 @@ const providers = {
   },
   instagram: {
     // Instagram Graph API uses Facebook Login with Instagram scopes
-    authUrl: 'https://www.facebook.com/v18.0/dialog/oauth',
-    tokenUrl: 'https://graph.facebook.com/v18.0/oauth/access_token',
+    authUrl: 'https://www.facebook.com/v22.0/dialog/oauth',
+    tokenUrl: 'https://graph.facebook.com/v22.0/oauth/access_token',
     // Get user's Facebook Pages + Instagram Business Accounts
-    profileUrl: 'https://graph.facebook.com/v18.0/me?fields=id,name,accounts{id,name,access_token,instagram_business_account{id,username,profile_picture_url}}',
+    profileUrl: 'https://graph.facebook.com/v22.0/me?fields=id,name,accounts{id,name,access_token,instagram_business_account{id,username,profile_picture_url}}',
     clientId: process.env.FACEBOOK_CLIENT_ID || '',
     clientSecret: process.env.FACEBOOK_CLIENT_SECRET || '',
     scopes: 'public_profile,email,pages_show_list,pages_read_engagement,pages_manage_posts,instagram_basic,instagram_content_publish,instagram_manage_insights',
   },
   facebook: {
-    authUrl: 'https://www.facebook.com/v18.0/dialog/oauth',
-    tokenUrl: 'https://graph.facebook.com/v18.0/oauth/access_token',
+    authUrl: 'https://www.facebook.com/v22.0/dialog/oauth',
+    tokenUrl: 'https://graph.facebook.com/v22.0/oauth/access_token',
     profileUrl: 'https://graph.facebook.com/me?fields=id,name,picture',
     clientId: process.env.FACEBOOK_CLIENT_ID || '',
     clientSecret: process.env.FACEBOOK_CLIENT_SECRET || '',
@@ -61,10 +61,10 @@ const providers = {
   },
   threads: {
     // Threads API uses Facebook Login with Threads scopes
-    authUrl: 'https://www.facebook.com/v18.0/dialog/oauth',
-    tokenUrl: 'https://graph.facebook.com/v18.0/oauth/access_token',
+    authUrl: 'https://www.facebook.com/v22.0/dialog/oauth',
+    tokenUrl: 'https://graph.facebook.com/v22.0/oauth/access_token',
     // Get user's Facebook Pages that have Threads linked
-    profileUrl: 'https://graph.facebook.com/v18.0/me?fields=id,name,accounts{id,name,access_token,threads_profile{id,username,name,profile_picture_url}}',
+    profileUrl: 'https://graph.facebook.com/v22.0/me?fields=id,name,accounts{id,name,access_token,threads_profile{id,username,name,profile_picture_url}}',
     clientId: process.env.FACEBOOK_CLIENT_ID || '',
     clientSecret: process.env.FACEBOOK_CLIENT_SECRET || '',
     scopes: 'public_profile,email,pages_show_list,pages_read_engagement,pages_manage_posts,threads_basic,threads_content_publish',
@@ -357,7 +357,7 @@ router.get('/:platform/callback', async (req: any, res) => {
     
     if (platform === 'instagram' || platform === 'threads') {
       // First, get user's Facebook Pages to find the one with Instagram/Threads
-      const pagesRes = await fetch('https://graph.facebook.com/v18.0/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,profile_picture_url},threads_profile{id,username,name,profile_picture_url}', {
+      const pagesRes = await fetch('https://graph.facebook.com/v22.0/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,profile_picture_url},threads_profile{id,username,name,profile_picture_url}', {
         headers: profileHeaders
       });
       
@@ -397,7 +397,7 @@ router.get('/:platform/callback', async (req: any, res) => {
       if (platform === 'instagram') {
         const igAccount = targetPage.instagram_business_account;
         // Use the Instagram Graph API endpoint for the business account
-        finalProfileUrl = `https://graph.facebook.com/v18.0/${igAccount.id}?fields=id,username,profile_picture_url`;
+        finalProfileUrl = `https://graph.facebook.com/v22.0/${igAccount.id}?fields=id,username,profile_picture_url`;
       } else if (platform === 'threads') {
         const threadsProfile = targetPage.threads_profile;
         // Use the Threads API endpoint

@@ -2,7 +2,7 @@ import fetch from 'node-fetch';
 import type { PublishResult } from './common';
 import { pollMediaStatus, checkRateLimit } from './common';
 
-const GRAPH_API = 'https://graph.facebook.com/v18.0';
+const GRAPH_API = 'https://graph.facebook.com/v22.0';
 
 export async function publishToInstagram(
   token: string,

@@ -18,7 +18,12 @@ import integrationsRouter from './routes/integrations';
 import externalApiRouter from './routes/externalApi';
 import channelsRouter from './routes/channels';
 import notificationsRouter from './routes/notifications';
+import tagsRouter from './routes/tags';
+import shortlinksRouter from './routes/shortlinks';
+import webhooksRouter from './routes/webhooks';
+import analyticsRouter from './routes/analytics';
 import { requireAuth } from './middlewares/auth';
+import { startRecoverySweep } from './utils/queue';
 
 dotenv.config();
 
@@ -136,6 +141,10 @@ app.use('/api/integrations', integrationsRouter);
 app.use('/api/external', externalApiRouter);
 app.use('/api/channels', channelsRouter);
 app.use('/api/notifications', notificationsRouter);
+app.use('/api/tags', tagsRouter);
+app.use('/api/shortlinks', shortlinksRouter);
+app.use('/api/analytics', analyticsRouter);
+app.use('/api/webhooks', webhooksRouter);
 
 app.get('/api/user/me', requireAuth, async (req: any, res: any) => {
   try {
@@ -175,11 +184,25 @@ app.use((req, res, next) => {
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
 // Only start the server when this file is run directly, not when imported for tests
-if (process.env.NODE_ENV !== 'test') {
-  console.log(`[Startup] Attempting to start server on port ${PORT} and binding to 0.0.0.0...`);
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[Startup] Server is successfully running on port ${PORT}`);
-  });
-}
+  if (process.env.NODE_ENV !== 'test') {
+    console.log(`[Startup] Attempting to start server on port ${PORT} and binding to 0.0.0.0...`);
+    const server = app.listen(PORT, '0.0.0.0', () => {
+      console.log(`[Startup] Server is successfully running on port ${PORT}`);
+      
+      // Start recovery sweep for stuck posts
+      startRecoverySweep(5 * 60 * 1000);
+    });
+
+    // Graceful shutdown
+    const shutdown = () => {
+      console.log('[Shutdown] Received signal, closing server...');
+      server.close(() => {
+        console.log('[Shutdown] Server closed');
+        process.exit(0);
+      });
+    };
+    process.on('SIGTERM', shutdown);
+    process.on('SIGINT', shutdown);
+  }
 
 export default app;

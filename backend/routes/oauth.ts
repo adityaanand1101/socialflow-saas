@@ -61,7 +61,7 @@ const providers = {
   },
   threads: {
     authUrl: 'https://threads.net/oauth/authorize',
-    tokenUrl: 'https://graph.threads.net/v1.0/oauth/access_token',
+    tokenUrl: 'https://graph.threads.net/oauth/access_token',
     profileUrl: 'https://graph.threads.net/v1.0/me?fields=id,username,name,profile_picture_url',
     clientId: process.env.THREADS_CLIENT_ID || '',
     clientSecret: process.env.THREADS_CLIENT_SECRET || '',

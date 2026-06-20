@@ -14,6 +14,7 @@ import {
   TrendingUp,
   AlertCircle,
 } from 'lucide-react'
+import { useAuth } from '@clerk/react'
 import { cn } from '@/lib/utils'
 import { apiFetch } from '@/lib/api'
 
@@ -65,13 +66,15 @@ export const Analytics = () => {
   const [data, setData] = useState<AnalyticsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { getToken } = useAuth()
 
   useEffect(() => {
     const fetchAnalytics = async () => {
       try {
         setLoading(true)
         setError(null)
-        const res = await apiFetch('/api/analytics')
+        const token = await getToken()
+        const res = await apiFetch('/api/analytics', { headers: { Authorization: `Bearer ${token}` } })
         if (!res.ok) throw new Error(`API error: ${res.statusText}`)
         const json = await res.json()
         setData(json)
@@ -82,7 +85,7 @@ export const Analytics = () => {
       }
     }
     fetchAnalytics()
-  }, [])
+  }, [getToken])
 
   const formatNumber = (n: number) => {
     if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'

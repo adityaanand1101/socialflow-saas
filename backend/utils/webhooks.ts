@@ -10,7 +10,7 @@ export const triggerWebhooks = async (workspaceId: string, eventName: string, pa
       where: {
         workspaceId,
         isActive: true,
-        events: { has: eventName }
+        events: { has: eventName as any }
       }
     });
 
@@ -28,17 +28,40 @@ export const triggerWebhooks = async (workspaceId: string, eventName: string, pa
         'User-Agent': 'SocialFlow-Webhook-System'
       };
 
-      if (endpoint.secret) {
-        const signature = crypto.createHmac('sha256', endpoint.secret).update(bodyString).digest('hex');
-        headers['x-socialflow-signature'] = signature;
-      }
+      const signature = crypto.createHmac('sha256', endpoint.secret).update(bodyString).digest('hex');
+      headers['x-socialflow-signature'] = signature;
 
-      // Fire and forget, or handle retries in a real queue
-      fetch(endpoint.url, {
-        method: 'POST',
-        headers,
-        body: bodyString
-      }).catch(e => console.error(`Webhook delivery to ${endpoint.url} failed:`, e.message));
+      // Fire with retry logic (3 attempts, exponential backoff)
+      let attempt = 0;
+      const maxAttempts = 3;
+      while (attempt < maxAttempts) {
+        try {
+          const response = await fetch(endpoint.url, {
+            method: 'POST',
+            headers,
+            body: bodyString
+          });
+          
+          if (response.ok) {
+            await prisma.webhookEndpoint.update({
+              where: { id: endpoint.id },
+              data: { lastTriggeredAt: new Date() }
+            });
+            break;
+          }
+          
+          attempt++;
+        } catch (e: any) {
+          if (attempt === maxAttempts - 1) {
+            console.error(`Webhook delivery to ${endpoint.url} failed after ${maxAttempts} attempts:`, e.message);
+          }
+        }
+        
+        attempt++;
+        if (attempt < maxAttempts) {
+          await new Promise(r => setTimeout(r, Math.pow(2, attempt) * 1000));
+        }
+      }
     }
   } catch (error) {
     console.error('Webhook trigger system failed:', error);

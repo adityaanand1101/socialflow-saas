@@ -4,7 +4,7 @@ import { PrismaClient } from '@prisma/client';
 import { decryptToken, encryptToken } from './crypto';
 import fetch from 'node-fetch';
 import { triggerWebhooks } from './webhooks';
-import { checkRateLimit } from './publishers/common';
+import { checkRateLimit, publishWithTokenRefresh } from './publishers/common';
 
 const redisUrl = process.env.REDIS_URL;
 const connection = redisUrl ? new IORedis(redisUrl, { maxRetriesPerRequest: null }) : new IORedis({
@@ -187,19 +187,21 @@ try {
           // Apply per-platform rate limiting
           await checkRateLimit(platform);
 
-          const decryptedToken = await refreshSocialAccountToken(account);
-
           // Import is hoisted — call the real publisher from the publishers module
           const { publishToPlatform: realPublish } = await import('./publishers');
 
-          const result = await realPublish(
-            platform,
-            decryptedToken,
-            post.content || '',
-            post.mediaUrls,
-            account.platformAccountId,
-            (post.structuredContent as Record<string, Record<string, string>> | undefined),
-            (post.postTypes as Record<string, string> | undefined),
+          const result = await publishWithTokenRefresh(
+            (token: string) => realPublish(
+              platform,
+              token,
+              post.content || '',
+              post.mediaUrls,
+              account.platformAccountId,
+              (post.structuredContent as Record<string, Record<string, string>> | undefined),
+              (post.postTypes as Record<string, string> | undefined),
+            ),
+            () => refreshSocialAccountToken(account),
+            { platform, accountId: account.id }
           );
 
           await prisma.socialAccountPost.update({
@@ -266,6 +268,85 @@ try {
   });
 } catch (error) {
   console.warn('Failed to initialize BullMQ:', (error as any).message);
+}
+
+/**
+ * Recovery sweep: finds posts stuck in SCHEDULED/PUBLISHING past their scheduled time
+ * and re-queues them for publishing.
+ * 
+ * This handles cases where:
+ * - Worker crashed before processing
+ * - Network issues prevented publishing
+ * - Token refresh failed silently
+ */
+export async function runRecoverySweep(): Promise<number> {
+  const now = new Date();
+  const thresholdMinutes = 5; // only re-queue posts scheduled at least 5 minutes ago
+  const cutoff = new Date(now.getTime() - thresholdMinutes * 60 * 1000);
+
+  const stuckPosts = await prisma.post.findMany({
+    where: {
+      status: { in: ['SCHEDULED', 'PUBLISHING'] },
+      scheduledAt: { lt: cutoff },
+    },
+    include: { accounts: { include: { socialAccount: true } } },
+  });
+
+  if (stuckPosts.length === 0) {
+    console.log('[Recovery] No stuck posts found');
+    return 0;
+  }
+
+  console.log(`[Recovery] Found ${stuckPosts.length} stuck post(s), re-queueing...`);
+
+  let requeued = 0;
+  for (const post of stuckPosts) {
+    try {
+      // Reset post status to SCHEDULED so worker picks it up
+      await prisma.post.update({
+        where: { id: post.id },
+        data: { status: 'SCHEDULED' }
+      });
+
+      // Reset account post statuses
+      await prisma.socialAccountPost.updateMany({
+        where: { postId: post.id },
+        data: { status: 'SCHEDULED', errorMessage: null }
+      });
+
+      // Re-add to queue
+      await postQueue?.add('post-publishing', { postId: post.id }, {
+        removeOnComplete: true,
+        removeOnFail: 20,
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5000 },
+      });
+
+      requeued++;
+      console.log(`[Recovery] Re-queued post ${post.id}`);
+    } catch (err) {
+      console.error(`[Recovery] Failed to re-queue post ${post.id}:`, err);
+    }
+  }
+
+  return requeued;
+}
+
+/**
+ * Start the recovery sweep as a periodic job (every 5 minutes by default)
+ */
+export function startRecoverySweep(intervalMs = 5 * 60 * 1000) {
+  console.log(`[Recovery] Starting periodic sweep every ${intervalMs / 60000} minutes`);
+  
+  // Run once immediately
+  runRecoverySweep().catch(console.error);
+  
+  // Then run periodically
+  const interval = setInterval(() => {
+    runRecoverySweep().catch(console.error);
+  }, intervalMs);
+
+  return () => clearInterval(interval);
 }
 
 export { postQueue, postWorker };

@@ -7,6 +7,13 @@ export type SocialPlatform =
   | 'facebook' | 'threads' | 'bluesky' | 'slack' | 'pinterest' 
   | 'mastodon' | 'reddit' | 'discord' | 'telegram' | 'tumblr'
 
+export interface ThreadPost {
+  id: string
+  content: string
+  delayMinutes: number
+  media?: string[]
+}
+
 export interface Post {
   id: string
   platforms: SocialPlatform[]
@@ -19,6 +26,7 @@ export interface Post {
   socialAccountIds?: string[]
   structuredContent?: Record<string, Record<string, string>>
   postTypes?: Record<string, string>
+  thread?: ThreadPost[]
 }
 
 export interface Channel {
@@ -123,19 +131,25 @@ export const useStore = create<SocialFlowStore>((set) => ({
 
   addPost: async (token: string, postData) => {
     try {
+      const body: any = {
+        content: postData.caption,
+        mediaUrls: postData.media,
+        socialAccountIds: postData.socialAccountIds || [],
+        scheduledAt: postData.scheduledTime,
+        status: postData.status?.toUpperCase()
+      }
+      if (postData.structuredContent) body.structuredContent = postData.structuredContent
+      if (postData.postTypes) body.postTypes = postData.postTypes
+      if (postData.thread) body.thread = postData.thread
+      if (postData.tags) body.tags = postData.tags
+      if (postData.platforms) body.platforms = postData.platforms
       const res = await apiFetch('/api/posts', {
         method: 'POST',
         headers: { 
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          content: postData.caption,
-          mediaUrls: postData.media,
-          socialAccountIds: postData.socialAccountIds || [],
-          scheduledAt: postData.scheduledTime,
-          status: postData.status?.toUpperCase()
-        })
+        body: JSON.stringify(body)
       })
 
       if (res.ok) {
@@ -169,6 +183,11 @@ export const useStore = create<SocialFlowStore>((set) => ({
       if (updates.media !== undefined) payload.mediaUrls = updates.media;
       if (updates.socialAccountIds !== undefined) payload.socialAccountIds = updates.socialAccountIds;
       if (updates.status !== undefined) payload.status = updates.status.toUpperCase();
+      if (updates.structuredContent !== undefined) payload.structuredContent = updates.structuredContent;
+      if (updates.postTypes !== undefined) payload.postTypes = updates.postTypes;
+      if (updates.thread !== undefined) payload.thread = updates.thread;
+      if (updates.platforms !== undefined) payload.platforms = updates.platforms;
+      if (updates.tags !== undefined) payload.tags = updates.tags;
       
       const res = await apiFetch(`/api/posts/${id}`, {
         method: 'PATCH',

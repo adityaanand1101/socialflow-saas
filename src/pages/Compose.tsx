@@ -1,13 +1,13 @@
-import { useRef, useState, useEffect, useMemo } from 'react'
+import { useRef, useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
-import { 
-  Image as ImageIcon, Smile, Hash, Send, Calendar,
+import {
+  Image as ImageIcon, Hash, Send, Calendar,
   Save, Sparkles, Smartphone, Monitor, Loader2, X, Clock, Upload,
-  AlertTriangle, Trash2
+  AlertTriangle, Trash2, Lock, Plus, GripVertical, Link2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useStore } from '@/store/useStore'
@@ -17,6 +17,8 @@ import { useAuth } from '@clerk/react'
 import { format, addDays, isValid, parseISO } from 'date-fns'
 import { ALL_PLATFORMS } from '@/lib/platforms'
 import { getPlatformConstraint, PLATFORM_CONSTRAINTS, getPlatformWarnings, getContentTypes, getContentType, getDefaultContentType } from '@/lib/platformConstraints'
+import { RichTextEditor } from '@/components/editor/RichTextEditor'
+import { stripHtml, wrapPlainText } from '@/lib/htmlUtils'
 
 const toneOptions = ['Professional', 'Casual', 'Funny', 'Inspirational', 'Urgent']
 
@@ -78,15 +80,22 @@ export const Compose = () => {
   const [templates, setTemplates] = useState<any[]>([])
   const [newTemplateName, setNewTemplateName] = useState('')
   const [platformCaptions, setPlatformCaptions] = useState<Record<string, string>>({})
+  const [brokenOutPlatforms, setBrokenOutPlatforms] = useState<Set<string>>(new Set())
   const [activeEditorPlatform, setActiveEditorPlatform] = useState<string>('master')
   const [showHashtagModal, setShowHashtagModal] = useState(false)
   const [hashtagSuggestions, setHashtagSuggestions] = useState<string[]>([])
   const [hashtagNiche, setHashtagNiche] = useState('')
   const [hashtagLoading, setHashtagLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [postTypes, setPostTypes] = useState<Record<string, string>>({})
   const [structuredContent, setStructuredContent] = useState<Record<string, Record<string, string>>>({})
+  const [threadPosts, setThreadPosts] = useState<{ id: string; content: string; delayMinutes: number }[]>([])
+  const [showThreadEditor, setShowThreadEditor] = useState(false)
+  const [showShortlinkModal, setShowShortlinkModal] = useState(false)
+  const [shortlinkProvider, setShortlinkProvider] = useState<'dub' | 'shortio' | 'kutt' | 'linkdrip'>('dub')
+  const [shortlinkApiKey, setShortlinkApiKey] = useState('')
+  const [shortlinkDomain, setShortlinkDomain] = useState('')
+  const [shortlinkLoading, setShortlinkLoading] = useState(false)
 
   const DRAFT_KEY = 'socialflow_draft'
   const TEMPLATES_KEY = 'socialflow_templates'
@@ -101,7 +110,7 @@ export const Compose = () => {
   }
 
   const saveTemplate = (name: string) => {
-    const entry = { id: Date.now().toString(), name, caption, platforms: selectedPlatforms, mediaFiles, mediaTypes, platformCaptions, postTypes, structuredContent, createdAt: new Date().toISOString() }
+    const entry = { id: Date.now().toString(), name, caption, platforms: selectedPlatforms, mediaFiles, mediaTypes, platformCaptions, postTypes, structuredContent, threadPosts, createdAt: new Date().toISOString() }
     const raw = localStorage.getItem(TEMPLATES_KEY)
     const list = raw ? JSON.parse(raw) : []
     list.unshift(entry)
@@ -117,12 +126,13 @@ export const Compose = () => {
   }
 
   const applyTemplate = (t: any) => {
-    if (t.caption) setCaption(t.caption)
+    if (t.caption) reloadEditor(wrapPlainText(t.caption))
     if (t.platforms) setSelectedPlatforms(t.platforms)
     if (t.mediaFiles) setMediaFiles(t.mediaFiles)
     if (t.mediaTypes) setMediaTypes(t.mediaTypes)
     if (t.platformCaptions) setPlatformCaptions(t.platformCaptions)
     if (t.postTypes) setPostTypes(t.postTypes)
+    if (t.threadPosts) setThreadPosts(t.threadPosts)
     if (t.structuredContent) setStructuredContent(t.structuredContent)
     setShowTemplateModal(false)
   }
@@ -156,6 +166,18 @@ export const Compose = () => {
     return map
   }, [connectedAccounts])
 
+  const connectedPlatformIds = useMemo(() => new Set(Object.keys(platformToAccountIds)), [platformToAccountIds])
+
+  const availablePlatforms = useMemo(
+    () => SORTED_PLATFORMS.filter(p => connectedPlatformIds.has(p.id)),
+    [connectedPlatformIds],
+  )
+
+  // Deselect platforms that are no longer connected
+  useEffect(() => {
+    setSelectedPlatforms(prev => prev.filter(p => connectedPlatformIds.has(p)))
+  }, [connectedPlatformIds])
+
   // --- React Query for Media ---
   const { data: mediaData } = useQuery({
     queryKey: ['media', 'root'],
@@ -172,7 +194,7 @@ export const Compose = () => {
     const params = new URLSearchParams(window.location.search)
     const captionParam = params.get('caption')
     if (captionParam) {
-      setCaption(captionParam)
+      setCaption(wrapPlainText(captionParam))
       window.history.replaceState({}, '', '/compose')
     }
   }, [])
@@ -185,7 +207,7 @@ export const Compose = () => {
         const res = await apiFetch(`/api/posts/${editingPostId}`, { headers: { Authorization: `Bearer ${token}` } })
         if (res.ok) {
           const post = await res.json()
-          setCaption(post.content || post.caption || '')
+          setCaption(wrapPlainText(post.content || post.caption || ''))
           const platforms = post.platforms || ['instagram']
           setSelectedPlatforms(platforms)
           setActivePreviewPlatform(platforms[0])
@@ -203,10 +225,10 @@ export const Compose = () => {
   // --- Draft auto-save ---
   useEffect(() => {
     if (editingPostId) return
-    if (!caption && mediaFiles.length === 0) return
-    const draft = { caption, platforms: selectedPlatforms, mediaFiles, mediaTypes, platformCaptions, postTypes, structuredContent, scheduledDate, showScheduler }
+    if (!caption && mediaFiles.length === 0 && threadPosts.length === 0) return
+    const draft = { caption, platforms: selectedPlatforms, mediaFiles, mediaTypes, platformCaptions, postTypes, structuredContent, scheduledDate, showScheduler, threadPosts }
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)) } catch {}
-  }, [caption, selectedPlatforms, mediaFiles, mediaTypes, platformCaptions, postTypes, structuredContent, scheduledDate, showScheduler, editingPostId])
+  }, [caption, selectedPlatforms, mediaFiles, mediaTypes, platformCaptions, postTypes, structuredContent, scheduledDate, showScheduler, threadPosts, editingPostId])
 
   // --- Check for saved draft on mount ---
   useEffect(() => {
@@ -227,13 +249,14 @@ export const Compose = () => {
     if (!raw) return
     try {
       const saved = JSON.parse(raw)
-      if (saved.caption) setCaption(saved.caption)
+      if (saved.caption) reloadEditor(wrapPlainText(saved.caption))
       if (saved.platforms) setSelectedPlatforms(saved.platforms)
       if (saved.mediaFiles) setMediaFiles(saved.mediaFiles)
       if (saved.mediaTypes) setMediaTypes(saved.mediaTypes)
       if (saved.platformCaptions) setPlatformCaptions(saved.platformCaptions)
       if (saved.postTypes) setPostTypes(saved.postTypes)
       if (saved.structuredContent) setStructuredContent(saved.structuredContent)
+      if (saved.threadPosts) setThreadPosts(saved.threadPosts)
       if (saved.scheduledDate) setScheduledDate(saved.scheduledDate)
       if (saved.showScheduler) setShowScheduler(saved.showScheduler)
     } catch {}
@@ -285,6 +308,42 @@ export const Compose = () => {
     }
   }
 
+  const isCustomized = (pid: string) => brokenOutPlatforms.has(pid) || pid in platformCaptions || pid in structuredContent
+
+  const breakoutPlatform = (pid: string) => {
+    const ct = getPlatformContentType(pid)
+    if (ct && ct.fields.length > 0) {
+      setFieldValue(pid, ct.fields[0].key, caption)
+    } else {
+      setPlatformCaptions(prev => ({ ...prev, [pid]: caption }))
+    }
+    setBrokenOutPlatforms(prev => {
+      const next = new Set(prev)
+      next.add(pid)
+      return next
+    })
+    setActiveEditorPlatform(pid)
+  }
+
+  const resetToGlobal = (pid: string) => {
+    setPlatformCaptions(prev => {
+      const next = { ...prev }
+      delete next[pid]
+      return next
+    })
+    setStructuredContent(prev => {
+      const next = { ...prev }
+      delete next[pid]
+      return next
+    })
+    setBrokenOutPlatforms(prev => {
+      const next = new Set(prev)
+      next.delete(pid)
+      return next
+    })
+    setActiveEditorPlatform('master')
+  }
+
   const libraryMedia = mediaData?.assets || []
 
   // --- Hashtag helpers ---
@@ -314,6 +373,40 @@ export const Compose = () => {
     const newText = target ? `${target} ${tag}` : tag
     setCaptionForPlatform(activeEditorPlatform, newText)
     setHashtagSuggestions(prev => prev.filter(h => h !== tag))
+  }
+
+  const handleShortenLinks = async () => {
+    setShortlinkLoading(true)
+    setShowShortlinkModal(false)
+    try {
+      const token = await getToken()
+      if (!token) return
+      
+      const res = await apiFetch('/api/shortlinks/auto', {
+        method: 'POST',
+        headers: { 
+          Authorization: `Bearer ${token}`, 
+          'Content-Type': 'application/json' 
+        },
+        body: JSON.stringify({
+          content: caption,
+          provider: shortlinkProvider,
+          apiKey: shortlinkApiKey,
+          domain: shortlinkDomain || undefined
+        }),
+      })
+      
+      if (res.ok) {
+        const data = await res.json()
+        if (data.shortenedContent) {
+          reloadEditor(data.shortenedContent)
+        }
+      }
+    } catch (err) {
+      console.error('Failed to shorten links:', err)
+    } finally {
+      setShortlinkLoading(false)
+    }
   }
 
   const handleMediaUpload = async (file: File): Promise<any> => {
@@ -408,7 +501,7 @@ export const Compose = () => {
       const res = await apiFetch('/api/ai/rewrite', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ caption: targetText, tone: selectedTone, platform: activeEditorPlatform }),
+        body: JSON.stringify({ caption: stripHtml(targetText), tone: selectedTone, platform: activeEditorPlatform }),
       })
       if (res.ok) {
         const data = await res.json()
@@ -421,13 +514,25 @@ export const Compose = () => {
     }
   }
 
-  const COMMON_EMOJIS = ['😀','😁','😂','🤣','😅','😊','😍','🥰','😘','🤗','😎','🤩','😢','😭','😤','😡','👍','👎','👏','🙌','💪','🤝','🔥','⭐','💯','❤️','💜','💙','✨','🎉','🎊','🎯','🚀','✅','❌','💡','📢','💬','🗣️','💎','🌟','🫶','🏆','⚡']
+  // Rich text editor ref counter for external content reloads
+  const [editorReloadKey, setEditorReloadKey] = useState(0)
 
-  const insertEmoji = (emoji: string) => {
-    const target = activeEditorPlatform === 'master' ? caption : platformCaptions[activeEditorPlatform] || caption
-    setCaptionForPlatform(activeEditorPlatform, `${target}${emoji}`)
-    setShowEmojiPicker(false)
-  }
+  const reloadEditor = useCallback((newCaption: string) => {
+    setCaption(newCaption)
+    setEditorReloadKey(k => k + 1)
+  }, [])
+
+  const addThreadPost = useCallback(() => {
+    setThreadPosts(prev => [...prev, { id: crypto.randomUUID?.() || Math.random().toString(36).slice(2), content: '', delayMinutes: 5 }])
+  }, [])
+
+  const removeThreadPost = useCallback((id: string) => {
+    setThreadPosts(prev => prev.filter(p => p.id !== id))
+  }, [])
+
+  const updateThreadPost = useCallback((id: string, updates: Partial<{ content: string; delayMinutes: number }>) => {
+    setThreadPosts(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p))
+  }, [])
 
   const removeMedia = (index: number) => {
     const removed = mediaFiles[index]
@@ -443,7 +548,7 @@ export const Compose = () => {
     const result: Record<string, string[]> = {}
     for (const pid of selectedPlatforms) {
       const content = getCaptionForPlatform(pid)
-      const w = getPlatformWarnings(pid, content, mediaInfo)
+      const w = getPlatformWarnings(pid, stripHtml(content), mediaInfo)
       if (w.length > 0) result[pid] = w
     }
     return result
@@ -462,7 +567,7 @@ export const Compose = () => {
   // --- Link/URL detection ---
   const detectedUrls = useMemo(() => {
     const urlRegex = /(https?:\/\/[^\s]+)/g
-    const matches = currentEditorCaption.match(urlRegex)
+    const matches = stripHtml(currentEditorCaption).match(urlRegex)
     return matches || []
   }, [currentEditorCaption])
 
@@ -471,13 +576,15 @@ export const Compose = () => {
       setShowWarnings(true)
       return
     }
-    if (!caption && status !== 'draft') return
+    if (!stripHtml(caption).trim() && status !== 'draft') return
     
     setIsSubmitting(true)
     try {
       const token = await getToken()
       if (!token) return
       const time = status === 'scheduled' ? new Date(scheduledDate).toISOString() : new Date().toISOString()
+
+      const plainCaption = stripHtml(caption)
 
       // Resolve platform IDs to connected social account IDs
       const accountIds: string[] = []
@@ -489,25 +596,27 @@ export const Compose = () => {
       if (editingPostId) {
         await updatePost(token, editingPostId, {
           platforms: selectedPlatforms,
-          caption,
+          caption: plainCaption,
           media: mediaFiles,
           socialAccountIds: accountIds,
           scheduledTime: time,
           status,
           structuredContent,
-          postTypes
+          postTypes,
+          thread: threadPosts
         })
       } else {
         await addPost(token, {
           platforms: selectedPlatforms,
-          caption,
+          caption: plainCaption,
           media: mediaFiles,
           socialAccountIds: accountIds,
           scheduledTime: time,
           status,
           tags: [],
           structuredContent,
-          postTypes
+          postTypes,
+          thread: threadPosts
         })
       }
 
@@ -569,8 +678,21 @@ export const Compose = () => {
             <CardDescription>Choose where you want to publish this post.</CardDescription>
           </CardHeader>
           <CardContent>
+            {availablePlatforms.length === 0 ? (
+              <div className="text-center py-6">
+                <p className="text-sm text-muted-foreground mb-3">No channels connected yet.</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate('/channels')}
+                  className="text-xs"
+                >
+                  Connect a Channel
+                </Button>
+              </div>
+            ) : (
             <div className="flex flex-wrap gap-2">
-              {SORTED_PLATFORMS.map((p: any) => {
+              {availablePlatforms.map((p: any) => {
                 const c = PLATFORM_CONSTRAINTS[p.id]
                 const selected = selectedPlatforms.includes(p.id)
                 return (
@@ -616,6 +738,7 @@ export const Compose = () => {
                 )
               })}
             </div>
+            )}
           </CardContent>
         </Card>
 
@@ -645,19 +768,19 @@ export const Compose = () => {
             <CardContent className="flex-1 flex flex-col space-y-4">
               {/* Per-platform editor tabs */}
               <div className="flex gap-1 p-0.5 bg-white/5 rounded-lg border border-white/10 overflow-x-auto">
-                <button
-                  onClick={() => setActiveEditorPlatform('master')}
-                  className={cn(
-                    "px-3 py-1.5 rounded-md text-xs font-bold whitespace-nowrap transition-all",
-                    activeEditorPlatform === 'master' ? "bg-purple-500/20 text-white" : "text-muted-foreground hover:text-white"
-                  )}
-                >
-                  Master
-                </button>
+                  <button
+                    onClick={() => setActiveEditorPlatform('master')}
+                    className={cn(
+                      "px-3 py-1.5 rounded-md text-xs font-bold whitespace-nowrap transition-all",
+                      activeEditorPlatform === 'master' ? "bg-purple-500/20 text-white" : "text-muted-foreground hover:text-white"
+                    )}
+                  >
+                    Global
+                  </button>
                 {selectedPlatforms.map(pid => {
                   const p = ALL_PLATFORMS.find(x => x.id === pid)
                   if (!p) return null
-                  const hasCustom = pid in platformCaptions
+                  const hasCustom = isCustomized(pid)
                   const Icon = p.icon
                   return (
                     <button
@@ -677,101 +800,127 @@ export const Compose = () => {
               </div>
 
               <div className="relative flex-1 space-y-3">
-                {activeEditorPlatform !== 'master' && (() => {
+                {activeEditorPlatform !== 'master' && !isCustomized(activeEditorPlatform) ? (
+                  <div
+                    onClick={() => breakoutPlatform(activeEditorPlatform)}
+                    className="relative min-h-[200px] rounded-xl border-2 border-dashed border-white/10 bg-white/[0.02] flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-purple-500/40 hover:bg-purple-500/5 transition-all group"
+                  >
+                    <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-purple-500/20 transition-all">
+                      <Lock className="w-5 h-5 text-white/40 group-hover:text-purple-400" />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm font-bold text-white/60 group-hover:text-white transition-colors">Using global content</p>
+                      <p className="text-[11px] text-white/30 mt-1">Click to customize content for this platform</p>
+                    </div>
+                  </div>
+                ) : activeEditorPlatform !== 'master' ? (() => {
                   const types = getContentTypes(activeEditorPlatform)
                   const currentType = postTypes[activeEditorPlatform] || types[0]?.id || ''
-                  if (types.length <= 1) return null
                   return (
-                    <div className="flex gap-1 p-0.5 bg-white/5 rounded-lg border border-white/10">
-                      {types.map(t => (
-                        <button key={t.id} onClick={() => setContentType(activeEditorPlatform, t.id)}
-                          className={cn("px-2.5 py-1 rounded-md text-[10px] font-bold whitespace-nowrap transition-all", currentType === t.id ? "bg-purple-500/20 text-white" : "text-muted-foreground hover:text-white")}>
-                          {t.label}
-                        </button>
-                      ))}
-                    </div>
-                  )
-                })()}
-                {activeEditorPlatform !== 'master' ? (() => {
-                  const ct = getPlatformContentType(activeEditorPlatform)
-                  if (!ct || ct.fields.length === 0) {
-                    return <p className="text-xs text-muted-foreground py-8 text-center">This content type has no text fields (media-only).</p>
-                  }
-                  return (
-                    <div className="space-y-3">
-                      {ct.fields.map(field => (
-                        <div key={field.key}>
-                          <div className="flex items-center justify-between mb-1">
-                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                              {field.label}
-                              {!field.required && <span className="text-[9px] font-normal text-white/30 ml-1">(optional)</span>}
-                            </label>
-                            {field.maxLength && (
-                              <span className="text-[10px] text-muted-foreground">
-                                {getFieldValue(activeEditorPlatform, field.key).length} / {field.maxLength}
-                              </span>
-                            )}
-                          </div>
-                          {field.type === 'textarea' ? (
-                            <textarea
-                              value={getFieldValue(activeEditorPlatform, field.key)}
-                              onChange={e => setFieldValue(activeEditorPlatform, field.key, e.target.value)}
-                              placeholder={field.placeholder}
-                              maxLength={field.maxLength}
-                              className="w-full min-h-[120px] bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-white/20 resize-none text-sm focus:outline-none focus:border-purple-500/50"
-                            />
-                          ) : field.type === 'multiline-list' ? (
-                            <textarea
-                              value={getFieldValue(activeEditorPlatform, field.key)}
-                              onChange={e => setFieldValue(activeEditorPlatform, field.key, e.target.value)}
-                              placeholder={field.placeholder}
-                              className="w-full min-h-[100px] bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-white/20 resize-none text-sm focus:outline-none focus:border-purple-500/50 font-mono"
-                            />
-                          ) : field.type === 'select' ? (
-                            <select
-                              value={getFieldValue(activeEditorPlatform, field.key)}
-                              onChange={e => setFieldValue(activeEditorPlatform, field.key, e.target.value)}
-                              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500/50"
-                            >
-                              {(Array.isArray(field.options) ? field.options : []).map((opt, oi) => {
-                                const val = typeof opt === 'string' ? opt : opt.value
-                                const lbl = typeof opt === 'string' ? opt : opt.label
-                                return (
-                                  <option key={oi} value={val} className="bg-gray-800 text-white">{lbl}</option>
-                                )
-                              })}
-                            </select>
-                          ) : field.type === 'number' || field.type === 'date' ? (
-                            <input
-                              type={field.type}
-                              value={getFieldValue(activeEditorPlatform, field.key)}
-                              onChange={e => setFieldValue(activeEditorPlatform, field.key, e.target.value)}
-                              placeholder={field.placeholder}
-                              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-white/20 text-sm focus:outline-none focus:border-purple-500/50"
-                            />
-                          ) : (
-                            <input
-                              type={field.type === 'url' ? 'url' : 'text'}
-                              value={getFieldValue(activeEditorPlatform, field.key)}
-                              onChange={e => setFieldValue(activeEditorPlatform, field.key, e.target.value)}
-                              placeholder={field.placeholder}
-                              maxLength={field.maxLength}
-                              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-white/20 text-sm focus:outline-none focus:border-purple-500/50"
-                            />
-                          )}
-                          {field.fieldNote && (
-                            <p className="text-[9px] text-muted-foreground/60 mt-1 leading-relaxed">{field.fieldNote}</p>
-                          )}
+                    <>
+                      {types.length > 1 && (
+                        <div className="flex gap-1 p-0.5 bg-white/5 rounded-lg border border-white/10">
+                          {types.map(t => (
+                            <button key={t.id} onClick={() => setContentType(activeEditorPlatform, t.id)}
+                              className={cn("px-2.5 py-1 rounded-md text-[10px] font-bold whitespace-nowrap transition-all", currentType === t.id ? "bg-purple-500/20 text-white" : "text-muted-foreground hover:text-white")}>
+                              {t.label}
+                            </button>
+                          ))}
                         </div>
-                      ))}
-                    </div>
+                      )}
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => resetToGlobal(activeEditorPlatform)}
+                          className="text-[10px] text-muted-foreground hover:text-amber-400 transition-colors flex items-center gap-1"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
+                          Reset to global
+                        </button>
+                      </div>
+                      {(() => {
+                        const ct = getPlatformContentType(activeEditorPlatform)
+                        if (!ct || ct.fields.length === 0) {
+                          return <p className="text-xs text-muted-foreground py-8 text-center">This content type has no text fields (media-only).</p>
+                        }
+                        return (
+                          <div className="space-y-3">
+                            {ct.fields.map(field => (
+                              <div key={field.key}>
+                                <div className="flex items-center justify-between mb-1">
+                                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                                    {field.label}
+                                    {!field.required && <span className="text-[9px] font-normal text-white/30 ml-1">(optional)</span>}
+                                  </label>
+                                  {field.maxLength && (
+                                    <span className="text-[10px] text-muted-foreground">
+                                      {getFieldValue(activeEditorPlatform, field.key).length} / {field.maxLength}
+                                    </span>
+                                  )}
+                                </div>
+                                {field.type === 'textarea' ? (
+                                  <textarea
+                                    value={getFieldValue(activeEditorPlatform, field.key)}
+                                    onChange={e => setFieldValue(activeEditorPlatform, field.key, e.target.value)}
+                                    placeholder={field.placeholder}
+                                    maxLength={field.maxLength}
+                                    className="w-full min-h-[120px] bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-white/20 resize-none text-sm focus:outline-none focus:border-purple-500/50"
+                                  />
+                                ) : field.type === 'multiline-list' ? (
+                                  <textarea
+                                    value={getFieldValue(activeEditorPlatform, field.key)}
+                                    onChange={e => setFieldValue(activeEditorPlatform, field.key, e.target.value)}
+                                    placeholder={field.placeholder}
+                                    className="w-full min-h-[100px] bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-white/20 resize-none text-sm focus:outline-none focus:border-purple-500/50 font-mono"
+                                  />
+                                ) : field.type === 'select' ? (
+                                  <select
+                                    value={getFieldValue(activeEditorPlatform, field.key)}
+                                    onChange={e => setFieldValue(activeEditorPlatform, field.key, e.target.value)}
+                                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500/50"
+                                  >
+                                    {(Array.isArray(field.options) ? field.options : []).map((opt, oi) => {
+                                      const val = typeof opt === 'string' ? opt : opt.value
+                                      const lbl = typeof opt === 'string' ? opt : opt.label
+                                      return (
+                                        <option key={oi} value={val} className="bg-gray-800 text-white">{lbl}</option>
+                                      )
+                                    })}
+                                  </select>
+                                ) : field.type === 'number' || field.type === 'date' ? (
+                                  <input
+                                    type={field.type}
+                                    value={getFieldValue(activeEditorPlatform, field.key)}
+                                    onChange={e => setFieldValue(activeEditorPlatform, field.key, e.target.value)}
+                                    placeholder={field.placeholder}
+                                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-white/20 text-sm focus:outline-none focus:border-purple-500/50"
+                                  />
+                                ) : (
+                                  <input
+                                    type={field.type === 'url' ? 'url' : 'text'}
+                                    value={getFieldValue(activeEditorPlatform, field.key)}
+                                    onChange={e => setFieldValue(activeEditorPlatform, field.key, e.target.value)}
+                                    placeholder={field.placeholder}
+                                    maxLength={field.maxLength}
+                                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-white/20 text-sm focus:outline-none focus:border-purple-500/50"
+                                  />
+                                )}
+                                {field.fieldNote && (
+                                  <p className="text-[9px] text-muted-foreground/60 mt-1 leading-relaxed">{field.fieldNote}</p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      })()}
+                    </>
                   )
                 })() : (
-                  <textarea
+                  <RichTextEditor
+                    key={editorReloadKey}
                     value={caption}
-                    onChange={e => setCaption(e.target.value)}
+                    onChange={setCaption}
                     placeholder="What's on your mind? Type your post here..."
-                    className="w-full h-full min-h-[180px] bg-transparent border-none focus:ring-0 outline-none text-white placeholder:text-white/20 resize-none text-base leading-relaxed"
+                    minHeight="180px"
                   />
                 )}
               </div>
@@ -780,9 +929,10 @@ export const Compose = () => {
             {selectedPlatforms.length > 1 && (
               <div className="space-y-1">
                 {selectedPlatforms.map(pid => {
+                  const raw = getCaptionForPlatform(pid)
+                  const content = stripHtml(raw)
                   const ct = getPlatformContentType(pid)
                   const c = getPlatformConstraint(pid)
-                  const content = getCaptionForPlatform(pid)
                   const maxChars = ct?.maxChars || c.maxChars
                   const pct = Math.min((content.length / maxChars) * 100, 100)
                   const over = content.length > maxChars
@@ -798,6 +948,73 @@ export const Compose = () => {
                     </div>
                   )
                 })}
+              </div>
+            )}
+
+            {/* Thread Editor */}
+            {showThreadEditor && (
+              <div className="space-y-2 p-3 rounded-xl bg-white/[0.02] border border-white/10">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-white uppercase tracking-wider">Thread Posts</span>
+                    <span className="text-[10px] text-muted-foreground">{threadPosts.length + 1} total (1 main + {threadPosts.length} thread)</span>
+                  </div>
+                  <button
+                    onClick={() => setShowThreadEditor(false)}
+                    className="text-[10px] text-muted-foreground hover:text-white transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {threadPosts.map((tp, idx) => (
+                    <div key={tp.id} className="flex gap-2 items-start group">
+                      <div className="flex flex-col items-center gap-1 pt-2 shrink-0">
+                        <GripVertical className="w-3.5 h-3.5 text-white/20" />
+                        <div className="w-5 h-5 rounded-full bg-purple-500/20 flex items-center justify-center">
+                          <span className="text-[8px] font-bold text-purple-400">#{idx + 2}</span>
+                        </div>
+                      </div>
+                      <div className="flex-1 space-y-1.5">
+                        <textarea
+                          value={tp.content}
+                          onChange={e => updateThreadPost(tp.id, { content: e.target.value })}
+                          placeholder="Additional post in this thread..."
+                          className="w-full min-h-[60px] bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-white placeholder:text-white/20 resize-none text-xs focus:outline-none focus:border-purple-500/50"
+                        />
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[9px] text-muted-foreground">Delay after previous:</span>
+                            <select
+                              value={tp.delayMinutes}
+                              onChange={e => updateThreadPost(tp.id, { delayMinutes: Number(e.target.value) })}
+                              className="text-[10px] bg-white/5 border border-white/10 rounded px-1.5 py-0.5 text-white focus:outline-none"
+                            >
+                              {[0, 1, 2, 5, 10, 15, 30, 60, 120, 360, 720, 1440].map(m => (
+                                <option key={m} value={m} className="bg-gray-800">
+                                  {m === 0 ? 'Immediately' : m < 60 ? `${m}m` : m < 1440 ? `${m / 60}h` : `${m / 1440}d`}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <button
+                            onClick={() => removeThreadPost(tp.id)}
+                            className="opacity-0 group-hover:opacity-100 text-[10px] text-red-400 hover:text-red-300 transition-all"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  onClick={addThreadPost}
+                  className="w-full py-1.5 rounded-lg border border-dashed border-white/10 text-[11px] text-muted-foreground hover:text-white hover:border-purple-500/40 transition-all flex items-center justify-center gap-1"
+                >
+                  <Plus className="w-3 h-3" />
+                  Add thread post
+                </button>
               </div>
             )}
 
@@ -876,20 +1093,7 @@ export const Compose = () => {
                 >
                   <ImageIcon className="w-5 h-5" />
                 </Button>
-                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-white relative" onClick={() => setShowEmojiPicker(!showEmojiPicker)}>
-                  <Smile className="w-5 h-5" />
-                  {showEmojiPicker && (
-                    <div className="absolute bottom-full left-0 mb-2 p-2 bg-[#1a1a2e] border border-white/10 rounded-xl shadow-2xl w-[280px] z-50" onMouseDown={e => e.preventDefault()}>
-                      <div className="grid grid-cols-8 gap-1">
-                        {COMMON_EMOJIS.map((emoji, i) => (
-                          <button key={i} onClick={() => insertEmoji(emoji)} className="p-1 hover:bg-white/10 rounded text-lg leading-none transition-colors">
-                            {emoji}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </Button>
+
                 <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-white relative" onClick={() => { setHashtagNiche(''); setHashtagSuggestions([]); setShowHashtagModal(true) }} title="Hashtag suggestions">
                   <Hash className="w-5 h-5" />
                   {(() => {
@@ -897,6 +1101,22 @@ export const Compose = () => {
                     if (count > 0) return <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-purple-500 text-[7px] font-bold text-white flex items-center justify-center">{count}</span>
                     return null
                   })()}
+                </Button>
+                <Button
+                  variant="ghost" size="icon"
+                  className={cn("text-muted-foreground hover:text-white", showThreadEditor && "text-purple-400")}
+                  onClick={() => setShowThreadEditor(!showThreadEditor)}
+                  title="Thread posts"
+                >
+                  <GripVertical className="w-5 h-5" />
+                </Button>
+                <Button
+                  variant="ghost" size="icon"
+                  className={cn("text-muted-foreground hover:text-white", showShortlinkModal && "text-purple-400")}
+                  onClick={() => setShowShortlinkModal(true)}
+                  title="Shorten links"
+                >
+                  <Link2 className="w-5 h-5" />
                 </Button>
                 <div className="w-px h-6 bg-white/10" />
                 <Button
@@ -1060,6 +1280,69 @@ export const Compose = () => {
                           </button>
                         </div>
                       ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Shortlink Modal */}
+              {showShortlinkModal && (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[300] flex items-center justify-center p-4" onClick={() => setShowShortlinkModal(false)}>
+                  <div className="bg-[#141218] border border-white/10 rounded-2xl w-full max-w-lg max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                    <div className="p-4 border-b border-white/10 flex items-center justify-between">
+                      <h3 className="font-bold text-white">Shorten Links</h3>
+                      <button onClick={() => setShowShortlinkModal(false)} className="text-muted-foreground hover:text-white">
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="p-4 border-b border-white/10 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider w-20 shrink-0">Provider</label>
+                        <select
+                          value={shortlinkProvider}
+                          onChange={e => setShortlinkProvider(e.target.value as any)}
+                          className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50"
+                        >
+                          <option value="dub">Dub.co</option>
+                          <option value="shortio">Short.io</option>
+                          <option value="kutt">Kutt.it</option>
+                          <option value="linkdrip">LinkDrip</option>
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider w-20 shrink-0">API Key</label>
+                        <input
+                          type="password"
+                          value={shortlinkApiKey}
+                          onChange={e => setShortlinkApiKey(e.target.value)}
+                          placeholder="Enter API key..."
+                          className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider w-20 shrink-0">Domain</label>
+                        <input
+                          type="text"
+                          value={shortlinkDomain}
+                          onChange={e => setShortlinkDomain(e.target.value)}
+                          placeholder="Optional custom domain..."
+                          className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                      <div className="text-center text-muted-foreground py-8">
+                        <Link2 className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                        <p className="text-sm">Enter provider details above, then click Shorten to auto-replace links in your caption.</p>
+                        <p className="text-xs mt-1">All https:// URLs will be shortened using the selected provider.</p>
+                      </div>
+                    </div>
+                    <div className="p-4 border-t border-white/10 flex items-center justify-between">
+                      <Button variant="ghost" size="sm" onClick={() => setShowShortlinkModal(false)}>Cancel</Button>
+                      <Button size="sm" onClick={handleShortenLinks} disabled={shortlinkLoading || !shortlinkApiKey.trim()}>
+                        {shortlinkLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}
+                        {shortlinkLoading ? '...' : 'Shorten Links'}
+                      </Button>
                     </div>
                   </div>
                 </div>

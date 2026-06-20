@@ -84,6 +84,40 @@ export function getContentType(url: string): string {
 }
 
 /**
+ * Executes a publisher function with automatic token refresh on 401.
+ * If the publisher throws a 401 error, it will refresh the token and retry once.
+ */
+export async function publishWithTokenRefresh<T>(
+  publisherFn: (token: string) => Promise<T>,
+  refreshFn: () => Promise<string>,
+  context: { platform: string; accountId: string }
+): Promise<T> {
+  let token = await refreshFn();
+  try {
+    return await publisherFn(token);
+  } catch (err: any) {
+    const message = err?.message || String(err);
+    const is401 = err?.status === 401 || 
+                  message.includes('401') || 
+                  message.includes('Unauthorized') ||
+                  message.includes('invalid_token') ||
+                  message.includes('expired_token');
+    
+    if (is401) {
+      console.log(`[${context.platform}] Token expired for account ${context.accountId}, refreshing and retrying...`);
+      token = await refreshFn();
+      try {
+        return await publisherFn(token);
+      } catch (retryErr) {
+        console.error(`[${context.platform}] Retry after token refresh failed:`, retryErr);
+        throw retryErr;
+      }
+    }
+    throw err;
+  }
+}
+
+/**
  * Simple in-memory per-platform rate limiter.
  * Tracks request count per platform in a rolling 60-second window.
  */

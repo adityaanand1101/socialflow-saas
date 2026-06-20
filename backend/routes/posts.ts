@@ -20,7 +20,7 @@ router.get('/', requireAuth, async (req: any, res: any) => {
 
     const posts = await prisma.post.findMany({
       where: { workspaceId },
-      include: { accounts: { include: { socialAccount: true } } },
+      include: { accounts: { include: { socialAccount: true } }, tags: { include: { tag: true } } },
       orderBy: { createdAt: 'desc' },
       take: Math.min(take, 100),
       skip,
@@ -38,7 +38,7 @@ router.get('/', requireAuth, async (req: any, res: any) => {
       scheduledAt: p.scheduledAt,
       scheduledTime: p.scheduledAt?.toISOString(),
       status: p.status.toLowerCase(),
-      tags: [],
+      tags: p.tags?.map((pt: any) => pt.tag.name) || [],
       createdAt: p.createdAt,
       updatedAt: p.updatedAt,
       accounts: p.accounts,
@@ -55,7 +55,7 @@ router.get('/', requireAuth, async (req: any, res: any) => {
 
 // POST /api/posts: Create a new post
 router.post('/', requireAuth, async (req: any, res: any) => {
-  const { content, mediaUrls, socialAccountIds, scheduledAt, status, structuredContent, postTypes } = req.body;
+  const { content, mediaUrls, socialAccountIds, scheduledAt, status, structuredContent, postTypes, tags } = req.body;
 
   try {
     const workspaceId = req.workspaceId;
@@ -64,6 +64,24 @@ router.post('/', requireAuth, async (req: any, res: any) => {
     }
 
     const postStatus = status || (scheduledAt ? 'SCHEDULED' : 'DRAFT');
+
+    // Find or create tag IDs
+    let tagConnect: any = undefined;
+    if (tags && tags.length > 0) {
+      const existingTags = await prisma.tag.findMany({
+        where: { name: { in: tags }, workspaceId }
+      });
+      const existingTagNames = new Set(existingTags.map(t => t.name));
+      const newTagNames = tags.filter((t: string) => !existingTagNames.has(t));
+
+      const createdTags = await Promise.all(
+        newTagNames.map((name: string) => prisma.tag.create({ data: { name, workspaceId } }))
+      );
+
+      tagConnect = {
+        create: [...existingTags, ...createdTags].map(tag => ({ tagId: tag.id }))
+      };
+    }
 
     const newPost = await prisma.post.create({
       data: {
@@ -80,9 +98,10 @@ router.post('/', requireAuth, async (req: any, res: any) => {
             socialAccountId: accountId,
             status: postStatus
           }))
-        }
+        },
+        tags: tagConnect
       },
-      include: { accounts: { include: { socialAccount: true } } }
+      include: { accounts: { include: { socialAccount: true } }, tags: { include: { tag: true } } }
     });
 
     // If scheduled, add to BullMQ with jobId = postId to allow cancellation/rescheduling
@@ -109,7 +128,7 @@ router.post('/', requireAuth, async (req: any, res: any) => {
       media: newPost.mediaUrls,
       platforms: newPost.accounts.map(a => a.socialAccount?.platform?.toLowerCase()).filter(Boolean),
       scheduledTime: newPost.scheduledAt?.toISOString(),
-      tags: [],
+      tags: newPost.tags?.map((pt: any) => pt.tag.name) || [],
     });
   } catch (error) {
     console.error('Error creating post:', error);
@@ -120,10 +139,10 @@ router.post('/', requireAuth, async (req: any, res: any) => {
 // PATCH /api/posts/:id: Update content, media, target accounts, or reschedule
 router.patch('/:id', requireAuth, async (req: any, res: any) => {
   const { id } = req.params;
-  const { content, mediaUrls, socialAccountIds, scheduledAt, status, structuredContent, postTypes } = req.body;
+  const { content, mediaUrls, socialAccountIds, scheduledAt, status, structuredContent, postTypes, tags } = req.body;
 
   try {
-    const post = await prisma.post.findUnique({ where: { id }, include: { accounts: { include: { socialAccount: true } } } });
+    const post = await prisma.post.findUnique({ where: { id }, include: { accounts: { include: { socialAccount: true } }, tags: { include: { tag: true } } } });
     if (!post || post.workspaceId !== req.workspaceId) {
       return res.status(404).json({ error: 'Post not found' });
     }
@@ -138,6 +157,24 @@ router.patch('/:id', requireAuth, async (req: any, res: any) => {
       ...(scheduledAt !== undefined && { scheduledAt: new Date(scheduledAt) }),
       status: postStatus,
     };
+
+    // Handle tags if provided
+    if (tags !== undefined) {
+      const existingTags = await prisma.tag.findMany({
+        where: { name: { in: tags }, workspaceId: req.workspaceId }
+      });
+      const existingTagNames = new Set(existingTags.map(t => t.name));
+      const newTagNames = tags.filter((t: string) => !existingTagNames.has(t));
+
+      const createdTags = await Promise.all(
+        newTagNames.map((name: string) => prisma.tag.create({ data: { name, workspaceId: req.workspaceId } }))
+      );
+
+      await prisma.postTag.deleteMany({ where: { postId: id } });
+      updateData.tags = {
+        create: [...existingTags, ...createdTags].map(tag => ({ tagId: tag.id }))
+      };
+    }
 
     // If socialAccountIds provided, replace the junction table records
     if (socialAccountIds !== undefined) {
@@ -179,13 +216,18 @@ router.patch('/:id', requireAuth, async (req: any, res: any) => {
       }
     }
 
+    const updatedPostWithTags = await prisma.post.findUnique({
+      where: { id: updatedPost.id },
+      include: { accounts: { include: { socialAccount: true } }, tags: { include: { tag: true } } }
+    });
+    
     res.json({
       ...updatedPost,
       caption: updatedPost.content,
       media: updatedPost.mediaUrls,
       platforms: updatedPost.accounts.map((a: any) => a.socialAccount?.platform?.toLowerCase()).filter(Boolean),
       scheduledTime: updatedPost.scheduledAt?.toISOString(),
-      tags: [],
+      tags: updatedPostWithTags?.tags?.map((pt: any) => pt.tag.name) || [],
     });
   } catch (error) {
     console.error('Error updating post:', error);

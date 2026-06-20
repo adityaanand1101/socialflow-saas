@@ -42,12 +42,14 @@ const providers = {
     scopes: 'tweet.read tweet.write users.read offline.access',
   },
   instagram: {
-    authUrl: 'https://api.instagram.com/oauth/authorize',
-    tokenUrl: 'https://api.instagram.com/oauth/access_token',
-    profileUrl: 'https://graph.instagram.com/me?fields=id,username',
-    clientId: process.env.INSTAGRAM_CLIENT_ID || '',
-    clientSecret: process.env.INSTAGRAM_CLIENT_SECRET || '',
-    scopes: 'user_profile,user_media',
+    // Instagram Graph API uses Facebook Login with Instagram scopes
+    authUrl: 'https://www.facebook.com/v18.0/dialog/oauth',
+    tokenUrl: 'https://graph.facebook.com/v18.0/oauth/access_token',
+    // Get user's Facebook Pages + Instagram Business Accounts
+    profileUrl: 'https://graph.facebook.com/v18.0/me?fields=id,name,accounts{id,name,access_token,instagram_business_account{id,username,profile_picture_url}}',
+    clientId: process.env.FACEBOOK_CLIENT_ID || '',
+    clientSecret: process.env.FACEBOOK_CLIENT_SECRET || '',
+    scopes: 'public_profile,email,pages_show_list,pages_read_engagement,pages_manage_posts,instagram_basic,instagram_content_publish,instagram_manage_insights',
   },
   facebook: {
     authUrl: 'https://www.facebook.com/v18.0/dialog/oauth',
@@ -58,12 +60,14 @@ const providers = {
     scopes: 'public_profile,email,pages_show_list,pages_read_engagement,pages_manage_posts',
   },
   threads: {
-    authUrl: 'https://threads.net/oauth/authorize',
-    tokenUrl: 'https://graph.threads.net/oauth/access_token',
-    profileUrl: 'https://graph.threads.net/me?fields=id,username',
-    clientId: process.env.THREADS_CLIENT_ID || '',
-    clientSecret: process.env.THREADS_CLIENT_SECRET || '',
-    scopes: 'threads_basic,threads_content_publish',
+    // Threads API uses Facebook Login with Threads scopes
+    authUrl: 'https://www.facebook.com/v18.0/dialog/oauth',
+    tokenUrl: 'https://graph.facebook.com/v18.0/oauth/access_token',
+    // Get user's Facebook Pages that have Threads linked
+    profileUrl: 'https://graph.facebook.com/v18.0/me?fields=id,name,accounts{id,name,access_token,threads_profile{id,username,name,profile_picture_url}}',
+    clientId: process.env.FACEBOOK_CLIENT_ID || '',
+    clientSecret: process.env.FACEBOOK_CLIENT_SECRET || '',
+    scopes: 'public_profile,email,pages_show_list,pages_read_engagement,pages_manage_posts,threads_basic,threads_content_publish',
   },
   gmb: {
     authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
@@ -182,11 +186,22 @@ router.get('/:platform/connect', requireAuth, async (req: any, res: any) => {
     const provider = providers[platform as keyof typeof providers];
     
     if (!provider || !provider.clientId) {
+      console.error(`[${platform}] OAuth not configured - missing clientId`);
       return res.status(400).json({ error: `OAuth for ${platform} is not configured on the server.` });
     }
 
     const redirectUri = getRedirectUri(platform);
     const state = req.auth.userId; 
+
+    console.log(`[${platform}] OAuth connect - redirectUri: ${redirectUri}, clientId: ${provider.clientId?.substring(0, 10)}...`);
+    
+    // Validate redirect URI format
+    try {
+      new URL(redirectUri);
+    } catch {
+      console.error(`[${platform}] Invalid redirect URI: ${redirectUri}`);
+      return res.status(500).json({ error: `Invalid redirect URI configuration for ${platform}` });
+    }
 
     const authUrl = new URL(provider.authUrl);
     authUrl.searchParams.append('response_type', 'code');
@@ -222,16 +237,34 @@ router.get('/:platform/connect', requireAuth, async (req: any, res: any) => {
 
 router.get('/:platform/callback', async (req: any, res) => {
   const { platform } = req.params;
-  const { code, state: clerkId } = req.query;
+  const { code, state: clerkId, error, error_description, error_reason } = req.query;
+
+  // Handle OAuth errors from the provider
+  if (error) {
+    console.error(`[${platform}] OAuth error: ${error} - ${error_description} - ${error_reason}`);
+    return res.status(400).send(`
+      <html><body>
+      <h2>OAuth Authorization Failed</h2>
+      <p><strong>Error:</strong> ${error}</p>
+      <p><strong>Description:</strong> ${error_description || 'Unknown'}</p>
+      <p><strong>Reason:</strong> ${error_reason || 'Unknown'}</p>
+      <a href="${FRONTEND_URL}/app/channels">Return to App</a>
+      </body></html>
+    `);
+  }
 
   if (!code || !clerkId) {
+    console.error(`[${platform}] Missing code or state parameter`);
     return res.status(400).send('Missing code or state parameter.');
   }
 
   const provider = providers[platform as keyof typeof providers];
   if (!provider || !provider.clientId || !provider.clientSecret) {
+    console.error(`[${platform}] Provider not configured`);
     return res.status(400).send('Unsupported or unconfigured platform');
   }
+
+  console.log(`[${platform}] OAuth callback - code received, exchanging for token...`);
 
   try {
     let accessToken = '';
@@ -247,6 +280,7 @@ router.get('/:platform/callback', async (req: any, res) => {
 
     // Execute the real OAuth code exchange flow
     const redirectUri = getRedirectUri(platform);
+    console.log(`[${platform}] Token exchange - redirectUri: ${redirectUri}`);
     
     const bodyParams = new URLSearchParams();
     bodyParams.append('grant_type', 'authorization_code');
@@ -269,6 +303,7 @@ router.get('/:platform/callback', async (req: any, res) => {
 
     const usesBasicAuth = platform === 'tumblr' || platform === 'slack' || platform === 'x';
 
+    console.log(`[${platform}] Exchanging code at ${provider.tokenUrl}`);
     const tokenRes = await fetch(provider.tokenUrl, {
       method: 'POST',
       headers: {
@@ -280,12 +315,16 @@ router.get('/:platform/callback', async (req: any, res) => {
       body: bodyParams.toString()
     });
 
+    console.log(`[${platform}] Token response status: ${tokenRes.status}`);
+
     if (!tokenRes.ok) {
       const errText = await tokenRes.text();
+      console.error(`[${platform}] Token exchange failed: ${errText}`);
       throw new Error(`Failed to exchange code for token: ${errText}`);
     }
 
     const tokenData = await tokenRes.json() as any;
+    console.log(`[${platform}] Token exchange successful`);
     
     // Slack sometimes nests the user token inside authed_user depending on the scopes requested
     if (platform === 'slack') {
@@ -311,16 +350,78 @@ router.get('/:platform/callback', async (req: any, res) => {
       profileHeaders['User-Agent'] = 'SocialFlowApp';
     }
 
-    const profileRes = await fetch(provider.profileUrl, {
-      headers: profileHeaders
+    // Special handling for Instagram and Threads - need to fetch Page access token first
+    let finalProfileUrl = provider.profileUrl;
+    let finalProfileHeaders = { ...profileHeaders };
+    let pageAccessToken = accessToken; // default to user token
+    
+    if (platform === 'instagram' || platform === 'threads') {
+      // First, get user's Facebook Pages to find the one with Instagram/Threads
+      const pagesRes = await fetch('https://graph.facebook.com/v18.0/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,profile_picture_url},threads_profile{id,username,name,profile_picture_url}', {
+        headers: profileHeaders
+      });
+      
+      if (!pagesRes.ok) {
+        const errBody = await pagesRes.text().catch(() => '');
+        throw new Error(`Failed to fetch Facebook pages: HTTP ${pagesRes.status} - ${errBody}`);
+      }
+      
+      const pagesData = await pagesRes.json() as any;
+      const pages = pagesData.data || [];
+      
+      console.log(`[${platform}] Found ${pages.length} Facebook pages`);
+      
+      // Find page with Instagram Business Account (for Instagram) or Threads profile (for Threads)
+      let targetPage = null;
+      
+      if (platform === 'instagram') {
+        targetPage = pages.find((page: any) => page.instagram_business_account);
+      } else if (platform === 'threads') {
+        targetPage = pages.find((page: any) => page.threads_profile);
+      }
+      
+      if (!targetPage) {
+        throw new Error(
+          platform === 'instagram' 
+            ? 'No Instagram Business Account found. Make sure you have an Instagram Business/Creator account connected to a Facebook Page you manage.'
+            : 'No Threads profile found. Make sure you have Threads connected to a Facebook Page you manage.'
+        );
+      }
+      
+      console.log(`[${platform}] Found target page: ${targetPage.name} (${targetPage.id})`);
+      
+      // Use the Page Access Token for Instagram/Threads API calls
+      pageAccessToken = targetPage.access_token;
+      finalProfileHeaders = { 'Authorization': `Bearer ${pageAccessToken}` };
+      
+      if (platform === 'instagram') {
+        const igAccount = targetPage.instagram_business_account;
+        // Use the Instagram Graph API endpoint for the business account
+        finalProfileUrl = `https://graph.facebook.com/v18.0/${igAccount.id}?fields=id,username,profile_picture_url`;
+      } else if (platform === 'threads') {
+        const threadsProfile = targetPage.threads_profile;
+        // Use the Threads API endpoint
+        finalProfileUrl = `https://graph.threads.net/v1.0/${threadsProfile.id}?fields=id,username,name,profile_picture_url`;
+      }
+    }
+
+    const profileRes = await fetch(finalProfileUrl, {
+      headers: finalProfileHeaders
     });
 
     if (!profileRes.ok) {
        const errBody = await profileRes.text().catch(() => '(unable to read body)');
-       throw new Error(`Failed to fetch profile from ${platform}: HTTP ${profileRes.status} - ${errBody}`);
+       throw new Error(`Failed to fetch ${platform} profile: HTTP ${profileRes.status} - ${errBody}`);
     }
 
     const profileData = await profileRes.json() as any;
+    
+    // For Instagram/Threads, also store the page access token for publishing
+    if (platform === 'instagram' || platform === 'threads') {
+      // We'll store the page access token as the refreshToken for later use in publishing
+      // This allows us to make API calls with the correct page-level token
+      accessToken = pageAccessToken;
+    }
     
     // Normalize profile structure per platform
     if (platform === 'linkedin') {
@@ -339,11 +440,18 @@ router.get('/:platform/callback', async (req: any, res) => {
       profile.username = profileData.email || 'youtube_channel';
       profile.displayName = profileData.name || 'YouTube User';
       profile.avatarUrl = profileData.picture || null;
-    } else if (platform === 'instagram' || platform === 'threads') {
-      profile.id = profileData.id;
+    } else if (platform === 'instagram') {
+      // profileData is from Instagram Graph API
+      profile.id = profileData.id; // Instagram Business Account ID
       profile.username = profileData.username;
       profile.displayName = profileData.username;
-      profile.avatarUrl = null;
+      profile.avatarUrl = profileData.profile_picture_url || null;
+    } else if (platform === 'threads') {
+      // profileData is from Threads API
+      profile.id = profileData.id; // Threads profile ID
+      profile.username = profileData.username;
+      profile.displayName = profileData.name || profileData.username;
+      profile.avatarUrl = profileData.profile_picture_url || null;
     } else if (platform === 'facebook') {
       profile.id = profileData.id;
       profile.username = profileData.name?.replace(/\s+/g, '').toLowerCase();

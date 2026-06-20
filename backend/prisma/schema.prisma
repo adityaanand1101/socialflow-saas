@@ -64,15 +64,20 @@ model ApiKey {
 }
 
 model WebhookEndpoint {
-  id          String    @id @default(uuid())
+  id          String       @id @default(uuid())
   workspaceId String
   url         String
-  secret      String?
-  events      String[]  // Array of event names (e.g., ["post.published", "post.failed"])
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  secret      String
+  events      WebhookEvent[]
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  lastTriggeredAt DateTime?
+
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([isActive])
 }
 
 model WorkspaceMember {
@@ -144,6 +149,29 @@ model SocialAccount {
   @@unique([workspaceId, platform, platformAccountId])
 }
 
+model Tag {
+  id          String    @id @default(uuid())
+  name        String
+  color       String    @default("#7C3AED") // Default purple
+  workspaceId String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  posts       PostTag[]
+
+  @@unique([name, workspaceId])
+  @@index([workspaceId])
+}
+
+model PostTag {
+  postId   String
+  tagId    String
+  post     Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tag      Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([postId, tagId])
+}
+
 model Post {
   id          String              @id @default(uuid())
   userId      String
@@ -161,6 +189,7 @@ model Post {
   user        User                @relation(fields: [userId], references: [id])
   workspace   Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   accounts    SocialAccountPost[]
+  tags        PostTag[]
 }
 
 // Junction table to link posts to target accounts
@@ -279,3 +308,13 @@ enum InviteStatus {
   DECLINED
   EXPIRED
 }
+
+enum WebhookEvent {
+  POST_PUBLISHED
+  POST_FAILED
+  POST_SCHEDULED
+  ACCOUNT_CONNECTED
+  ACCOUNT_DISCONNECTED
+}
+
+

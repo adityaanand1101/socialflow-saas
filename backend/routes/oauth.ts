@@ -189,7 +189,17 @@ router.get('/:platform/connect', requireAuth, async (req: any, res: any) => {
     }
 
     const redirectUri = getRedirectUri(platform);
-    const state = req.auth.userId; 
+    const clerkUserId = req.auth.userId;
+    const state = clerkUserId;
+    if (platform === 'threads') {
+      res.cookie('pending_oauth_user', clerkUserId, {
+        maxAge: 120000,
+        httpOnly: true,
+        secure: true,
+        sameSite: 'lax',
+        path: '/'
+      });
+    }
 
     console.log(`[${platform}] OAuth connect - redirectUri: ${redirectUri}, clientId: ${provider.clientId?.substring(0, 10)}...`);
     
@@ -251,7 +261,10 @@ router.get('/:platform/callback', async (req: any, res) => {
     `);
   }
 
-  if (!code || !clerkId) {
+  // Threads API has been observed to drop the state parameter — recover clerkId from cookie
+  let resolvedClerkId = (clerkId as string) || req.cookies?.pending_oauth_user;
+
+  if (!code || !resolvedClerkId) {
     console.error(`[${platform}] Missing code or state parameter`);
     return res.status(400).send('Missing code or state parameter.');
   }
@@ -292,10 +305,10 @@ router.get('/:platform/callback', async (req: any, res) => {
     }
 
     if (platform === 'x') {
-      const codeVerifier = pkceStore.get(clerkId as string);
+      const codeVerifier = pkceStore.get(resolvedClerkId);
       if (codeVerifier) {
         bodyParams.append('code_verifier', codeVerifier);
-        pkceStore.delete(clerkId as string);
+        pkceStore.delete(resolvedClerkId);
       }
     }
 
@@ -481,7 +494,7 @@ router.get('/:platform/callback', async (req: any, res) => {
 
     // Find user and their active workspace
     const user = await prisma.user.findUnique({
-      where: { clerkId: clerkId as string },
+      where: { clerkId: resolvedClerkId },
       include: { memberships: { include: { workspace: true } } }
     });
 

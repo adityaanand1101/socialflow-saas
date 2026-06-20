@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
@@ -42,6 +43,7 @@ app.use(cors({
 app.use(helmet({
   contentSecurityPolicy: false // Disable CSP for easier initial deployment
 }));
+app.use(cookieParser());
 
 // 2. Health check (Priority)
 app.get('/api/health', (req, res) => {

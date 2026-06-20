@@ -72,6 +72,7 @@ export const Channels = () => {
     try {
       const token = await getToken()
       const res = await apiFetch(`/api/oauth/${platform}/connect`, {
+        credentials: 'include',
         headers: { Authorization: `Bearer ${token}` }
       })
 

@@ -60,14 +60,12 @@ const providers = {
     scopes: 'public_profile,email,pages_show_list,pages_read_engagement,pages_manage_posts',
   },
   threads: {
-    // Threads API uses Facebook Login with Threads scopes
-    authUrl: 'https://www.facebook.com/v22.0/dialog/oauth',
-    tokenUrl: 'https://graph.facebook.com/v22.0/oauth/access_token',
-    // Get user's Facebook Pages that have Threads linked
-    profileUrl: 'https://graph.facebook.com/v22.0/me?fields=id,name,accounts{id,name,access_token,threads_profile{id,username,name,profile_picture_url}}',
-    clientId: process.env.FACEBOOK_CLIENT_ID || '',
-    clientSecret: process.env.FACEBOOK_CLIENT_SECRET || '',
-    scopes: 'public_profile,email,pages_show_list,pages_read_engagement,pages_manage_posts,threads_basic,threads_content_publish',
+    authUrl: 'https://threads.net/oauth/authorize',
+    tokenUrl: 'https://graph.threads.net/v1.0/oauth/access_token',
+    profileUrl: 'https://graph.threads.net/v1.0/me?fields=id,username,name,profile_picture_url',
+    clientId: process.env.THREADS_CLIENT_ID || '',
+    clientSecret: process.env.THREADS_CLIENT_SECRET || '',
+    scopes: 'threads_basic,threads_content_publish',
   },
   gmb: {
     authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
@@ -350,14 +348,14 @@ router.get('/:platform/callback', async (req: any, res) => {
       profileHeaders['User-Agent'] = 'SocialFlowApp';
     }
 
-    // Special handling for Instagram and Threads - need to fetch Page access token first
+    // Special handling for Instagram - need to fetch Page access token first
     let finalProfileUrl = provider.profileUrl;
     let finalProfileHeaders = { ...profileHeaders };
     let pageAccessToken = accessToken; // default to user token
     
-    if (platform === 'instagram' || platform === 'threads') {
-      // First, get user's Facebook Pages to find the one with Instagram/Threads
-      const pagesRes = await fetch('https://graph.facebook.com/v22.0/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,profile_picture_url},threads_profile{id,username,name,profile_picture_url}', {
+    if (platform === 'instagram') {
+      // First, get user's Facebook Pages to find the one with Instagram
+      const pagesRes = await fetch('https://graph.facebook.com/v22.0/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,profile_picture_url}', {
         headers: profileHeaders
       });
       
@@ -371,38 +369,21 @@ router.get('/:platform/callback', async (req: any, res) => {
       
       console.log(`[${platform}] Found ${pages.length} Facebook pages`);
       
-      // Find page with Instagram Business Account (for Instagram) or Threads profile (for Threads)
-      let targetPage = null;
-      
-      if (platform === 'instagram') {
-        targetPage = pages.find((page: any) => page.instagram_business_account);
-      } else if (platform === 'threads') {
-        targetPage = pages.find((page: any) => page.threads_profile);
-      }
+      // Find page with Instagram Business Account
+      const targetPage = pages.find((page: any) => page.instagram_business_account);
       
       if (!targetPage) {
         throw new Error(
-          platform === 'instagram' 
-            ? 'No Instagram Business Account found. Make sure you have an Instagram Business/Creator account connected to a Facebook Page you manage.'
-            : 'No Threads profile found. Make sure you have Threads connected to a Facebook Page you manage.'
+          'No Instagram Business Account found. Make sure you have an Instagram Business/Creator account connected to a Facebook Page you manage.'
         );
       }
       
       console.log(`[${platform}] Found target page: ${targetPage.name} (${targetPage.id})`);
       
-      // Use the Page Access Token for Instagram/Threads API calls
+      const igAccount = targetPage.instagram_business_account;
       pageAccessToken = targetPage.access_token;
       finalProfileHeaders = { 'Authorization': `Bearer ${pageAccessToken}` };
-      
-      if (platform === 'instagram') {
-        const igAccount = targetPage.instagram_business_account;
-        // Use the Instagram Graph API endpoint for the business account
-        finalProfileUrl = `https://graph.facebook.com/v22.0/${igAccount.id}?fields=id,username,profile_picture_url`;
-      } else if (platform === 'threads') {
-        const threadsProfile = targetPage.threads_profile;
-        // Use the Threads API endpoint
-        finalProfileUrl = `https://graph.threads.net/v1.0/${threadsProfile.id}?fields=id,username,name,profile_picture_url`;
-      }
+      finalProfileUrl = `https://graph.facebook.com/v22.0/${igAccount.id}?fields=id,username,profile_picture_url`;
     }
 
     const profileRes = await fetch(finalProfileUrl, {
@@ -416,10 +397,8 @@ router.get('/:platform/callback', async (req: any, res) => {
 
     const profileData = await profileRes.json() as any;
     
-    // For Instagram/Threads, also store the page access token for publishing
-    if (platform === 'instagram' || platform === 'threads') {
-      // We'll store the page access token as the refreshToken for later use in publishing
-      // This allows us to make API calls with the correct page-level token
+    // For Instagram, store the page access token for publishing
+    if (platform === 'instagram') {
       accessToken = pageAccessToken;
     }
     

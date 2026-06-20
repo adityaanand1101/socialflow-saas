@@ -188,6 +188,8 @@ async function fetchYouTube(
 
 // ─── Threads ────────────────────────────────────────────────────────────
 
+const THREADS_GRAPH_API = 'https://graph.threads.net/v1.0';
+
 async function fetchThreads(
   token: string, _platformAccountId: string,
   username: string, displayName?: string, avatarUrl?: string,
@@ -200,7 +202,7 @@ async function fetchThreads(
   };
   try {
     const userRes = await fetch(
-      `${GRAPH_API}/${_platformAccountId}?fields=threads_profile_picture_url,threads_biography,username,name,followers_count,follows_count,media_count`,
+      `${THREADS_GRAPH_API}/${_platformAccountId}?fields=id,username,name,profile_picture_url,followers_count,follows_count,media_count`,
       { headers: { Authorization: `Bearer ${token}` } },
     );
     if (userRes.ok) {
@@ -209,7 +211,7 @@ async function fetchThreads(
       base.following = u.follows_count ?? 0;
       base.postsCount = u.media_count ?? 0;
       if (u.name) base.accountName = u.name;
-      if (u.threads_profile_picture_url) base.avatarUrl = u.threads_profile_picture_url;
+      if (u.profile_picture_url) base.avatarUrl = u.profile_picture_url;
     }
   } catch (e: any) { base.error = e.message; }
   return base;

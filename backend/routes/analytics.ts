@@ -2,6 +2,9 @@ import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth } from '../middlewares/auth';
 import { fetchAnalyticsForAccount } from '../utils/analytics';
+import { decryptToken } from '../utils/crypto';
+
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || '';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -38,18 +41,20 @@ router.get('/', requireAuth, async (req: any, res: any) => {
       where: { workspaceId },
     });
 
-    // 2. Fetch analytics for each account in parallel
+    // 2. Fetch analytics for each account in parallel (decrypting tokens first)
     const platformResults = await Promise.allSettled(
-      socialAccounts.map(acct =>
-        fetchAnalyticsForAccount(
+      socialAccounts.map(acct => {
+        let token = acct.accessToken;
+        try { token = decryptToken(acct.accessToken, ENCRYPTION_KEY); } catch { /* use raw token if decryption fails */ }
+        return fetchAnalyticsForAccount(
           acct.platform.toLowerCase(),
-          acct.accessToken,
+          token,
           acct.platformAccountId,
           acct.username,
           acct.displayName || undefined,
           acct.avatarUrl || undefined,
-        ),
-      ),
+        );
+      }),
     );
 
     const platforms: any[] = [];

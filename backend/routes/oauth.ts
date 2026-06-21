@@ -356,6 +356,33 @@ router.get('/:platform/callback', async (req: any, res) => {
 
     if (!accessToken) throw new Error('No access token received from provider');
 
+    // Threads: Exchange short-lived token (1 hour) for long-lived token (60 days)
+    if (platform === 'threads') {
+      try {
+        const qs = new URLSearchParams({
+          grant_type: 'th_exchange_token',
+          client_secret: provider.clientSecret,
+          access_token: accessToken,
+        });
+        const longLivedUrl = `https://graph.threads.net/access_token?${qs.toString()}`;
+        console.log(`[threads] Exchanging short-lived token for long-lived token`);
+        const longLivedRes = await fetch(longLivedUrl);
+        if (longLivedRes.ok) {
+          const longLivedData = await longLivedRes.json();
+          if (longLivedData.access_token) {
+            accessToken = longLivedData.access_token;
+            tokenExpiresIn = longLivedData.expires_in || 5184000; // 60 days default
+            console.log(`[threads] Long-lived token obtained, expires_in: ${tokenExpiresIn}s`);
+          }
+        } else {
+          const errText = await longLivedRes.text();
+          console.warn(`[threads] Long-lived exchange failed, using short-lived token: ${errText}`);
+        }
+      } catch (e) {
+        console.warn(`[threads] Long-lived exchange error, using short-lived token:`, e);
+      }
+    }
+
     // Fetch user profile info from the platform
     const profileHeaders: Record<string, string> = {
       'Authorization': `Bearer ${accessToken}`

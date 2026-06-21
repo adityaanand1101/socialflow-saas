@@ -66,7 +66,7 @@ const providers = {
   threads: {
     authUrl: 'https://threads.net/oauth/authorize',
     tokenUrl: 'https://graph.threads.net/oauth/access_token',
-    profileUrl: 'https://graph.threads.net/v1.0/me?fields=id,username,name,profile_picture_url',
+    profileUrl: 'https://graph.threads.net/v1.0/me?fields=id,username,name',
     clientId: process.env.THREADS_CLIENT_ID || '',
     clientSecret: process.env.THREADS_CLIENT_SECRET || '',
     scopes: 'threads_basic,threads_content_publish',
@@ -475,6 +475,7 @@ router.get('/:platform/callback', async (req: any, res) => {
       finalProfileUrl = `https://graph.facebook.com/v22.0/${igAccount.id}?fields=id,username,profile_picture_url`;
     }
 
+    let profileData: any = {};
     const profileRes = await fetch(finalProfileUrl, {
       headers: finalProfileHeaders
     });
@@ -484,7 +485,7 @@ router.get('/:platform/callback', async (req: any, res) => {
        throw new Error(`Failed to fetch ${platform} profile: HTTP ${profileRes.status} - ${errBody}`);
     }
 
-    const profileData = await profileRes.json() as any;
+    profileData = await profileRes.json() as any;
     
     // For Instagram, store the page access token for publishing
     if (platform === 'instagram') {
@@ -519,7 +520,7 @@ router.get('/:platform/callback', async (req: any, res) => {
       profile.id = profileData.id; // Threads profile ID
       profile.username = profileData.username;
       profile.displayName = profileData.name || profileData.username;
-      profile.avatarUrl = profileData.profile_picture_url || null;
+      profile.avatarUrl = null;
     } else if (platform === 'facebook') {
       profile.id = profileData.id;
       profile.username = profileData.name?.replace(/\s+/g, '').toLowerCase();

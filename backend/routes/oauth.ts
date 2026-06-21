@@ -196,7 +196,7 @@ router.get('/:platform/connect', requireAuth, async (req: any, res: any) => {
         maxAge: 120000,
         httpOnly: true,
         secure: true,
-        sameSite: 'lax',
+        sameSite: 'none',
         path: '/'
       });
     }
@@ -542,6 +542,9 @@ router.get('/:platform/callback', async (req: any, res) => {
         tokenExpiresAt: tokenExpiresAt
       }
     });
+
+    // Clear the Threads recovery cookie if it exists
+    res.clearCookie('pending_oauth_user', { path: '/' });
 
     // Redirect back to frontend channels page
     res.redirect(`${FRONTEND_URL}/app/channels?success=true`);

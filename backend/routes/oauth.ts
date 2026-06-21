@@ -195,7 +195,7 @@ router.get('/:platform/connect', requireAuth, async (req: any, res: any) => {
     const redirectUri = getRedirectUri(platform);
     const clerkUserId = req.auth.userId;
     const state = clerkUserId;
-    if (platform === 'threads') {
+    if (platform === 'threads' || platform === 'facebook' || platform === 'instagram') {
       res.cookie('pending_oauth_user', clerkUserId, {
         maxAge: 120000,
         httpOnly: true,
@@ -270,7 +270,21 @@ router.get('/:platform/callback', async (req: any, res) => {
 
   if (!code || !resolvedClerkId) {
     console.error(`[${platform}] Missing code or state parameter`);
-    return res.status(400).send('Missing code or state parameter.');
+    console.error(`[${platform}] code present: ${!!code}, state/clerkId from query: ${!!clerkId}, cookie: ${!!req.cookies?.pending_oauth_user}`);
+    console.error(`[${platform}] query params: ${JSON.stringify(req.query)}`);
+    console.error(`[${platform}] cookies: ${JSON.stringify(req.cookies)}`);
+    return res.status(400).send(`
+      <html><body>
+      <h2>OAuth Callback Failed</h2>
+      <p><strong>Error:</strong> Missing code or state parameter</p>
+      <p><strong>Code present:</strong> ${!!code}</p>
+      <p><strong>State/ClerkId from query:</strong> ${!!clerkId}</p>
+      <p><strong>Cookie present:</strong> ${!!req.cookies?.pending_oauth_user}</p>
+      <p><strong>Query params:</strong> ${JSON.stringify(req.query)}</p>
+      <p><strong>Cookies:</strong> ${JSON.stringify(req.cookies)}</p>
+      <a href="${FRONTEND_URL}/app/channels">Return to App</a>
+      </body></html>
+    `);
   }
 
   const provider = providers[platform as keyof typeof providers];
@@ -457,11 +471,14 @@ router.get('/:platform/callback', async (req: any, res) => {
       const pages = pagesData.data || [];
       
       console.log(`[${platform}] Found ${pages.length} Facebook pages`);
+      console.log(`[${platform}] Pages: ${JSON.stringify(pages.map((p: any) => ({ id: p.id, name: p.name, hasIg: !!p.instagram_business_account })))}`);
       
       // Find page with Instagram Business Account
       const targetPage = pages.find((page: any) => page.instagram_business_account);
       
       if (!targetPage) {
+        console.error(`[${platform}] No page with Instagram Business Account found among ${pages.length} pages`);
+        console.error(`[${platform}] Pages list: ${pages.map((p: any) => p.name).join(', ')}`);
         throw new Error(
           'No Instagram Business Account found. Make sure you have an Instagram Business/Creator account connected to a Facebook Page you manage.'
         );

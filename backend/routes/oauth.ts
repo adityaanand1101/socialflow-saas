@@ -280,7 +280,13 @@ router.get('/:platform/callback', async (req: any, res) => {
   }
 
   console.log(`[${platform}] OAuth callback - code received, exchanging for token...`);
-  console.log(`[${platform}] Callback details - code (first 10): ${(code as string).substring(0,10)}..., platform: ${platform}, cookie present: ${!!req.cookies?.pending_oauth_user}, clerkId from state: ${!!clerkId}`);
+  console.log(`[${platform}] Callback details - raw query: ${JSON.stringify(req.query)}, code (first 10): ${(code as string).substring(0,10)}..., code length: ${(code as string).length}, platform: ${platform}, cookie present: ${!!req.cookies?.pending_oauth_user}, clerkId from state: ${!!clerkId}`);
+  console.log(`[${platform}] Full request URL: ${req.protocol}://${req.get('host')}${req.originalUrl}`);
+  // Check for special characters in the code
+  const codeStr = code as string;
+  if (/[+\s&=%]/.test(codeStr)) {
+    console.warn(`[${platform}] WARNING: Code contains special characters (+, &, =, %, or spaces) that may be corrupted by query parsing`);
+  }
 
   // Dedup: prevent processing the same authorization code twice
   const codeKey = `${platform}:${code}`;
@@ -312,7 +318,12 @@ router.get('/:platform/callback', async (req: any, res) => {
     };
 
     // Execute the real OAuth code exchange flow
-    const redirectUri = getRedirectUri(platform);
+    let redirectUri = getRedirectUri(platform);
+    // Meta Dashboard may add trailing slash to redirect URIs — detect from request URL
+    if (platform === 'threads' && req.originalUrl?.startsWith(getRedirectUri(platform) + '/')) {
+      redirectUri = getRedirectUri(platform) + '/';
+      console.log(`[${platform}] Request URL has trailing slash, adjusting redirect_uri to match Dashboard`);
+    }
     console.log(`[${platform}] Token exchange - redirectUri: ${redirectUri}`);
     
     const bodyParams = new URLSearchParams();
@@ -356,7 +367,19 @@ router.get('/:platform/callback', async (req: any, res) => {
       const errText = await tokenRes.text();
       console.error(`[${platform}] Token exchange failed: ${errText}`);
       // Log the full request details for debugging
-      console.error(`[${platform}] FAILED REQUEST DETAILS - url: ${provider.tokenUrl}, redirect_uri: ${redirectUri}, client_id: ${provider.clientId}, code (first 10): ${(code as string).substring(0,10)}`);
+      console.error(`[${platform}] FAILED REQUEST DETAILS - url: ${provider.tokenUrl}`);
+      console.error(`[${platform}] redirect_uri: ${redirectUri}`);
+      console.error(`[${platform}] client_id: ${provider.clientId}`);
+      console.error(`[${platform}] code (first 10): ${codeStr.substring(0,10)}, code length: ${codeStr.length}`);
+      console.error(`[${platform}] code character codes: ${codeStr.split('').map(c => c.charCodeAt(0)).join(',')}`);
+      console.error(`[${platform}] Request body sent (URL-decoded): ${decodeURIComponent(requestBody)}`);
+      // Try to parse error details
+      try {
+        const errObj = JSON.parse(errText);
+        if (errObj.error?.fbtrace_id) {
+          console.error(`[${platform}] FB Trace ID: ${errObj.error.fbtrace_id} - share this with Meta support`);
+        }
+      } catch {}
       throw new Error(`Failed to exchange code for token: ${errText}`);
     }
 

@@ -202,7 +202,7 @@ async function fetchThreads(
   };
   try {
     const userRes = await fetch(
-      `${THREADS_GRAPH_API}/${_platformAccountId}?fields=id,username,name,profile_picture_url,followers_count,follows_count,media_count`,
+      `${THREADS_GRAPH_API}/${_platformAccountId}?fields=id,username,name,threads_profile_picture_url`,
       { headers: { Authorization: `Bearer ${token}` } },
     );
     if (userRes.ok) {
@@ -211,7 +211,7 @@ async function fetchThreads(
       base.following = u.follows_count ?? 0;
       base.postsCount = u.media_count ?? 0;
       if (u.name) base.accountName = u.name;
-      if (u.profile_picture_url) base.avatarUrl = u.profile_picture_url;
+      if (u.threads_profile_picture_url) base.avatarUrl = u.threads_profile_picture_url;
     }
   } catch (e: any) { base.error = e.message; }
   return base;

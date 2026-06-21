@@ -26,12 +26,42 @@ let postQueue: any;
 let postWorker: any;
 
 async function refreshSocialAccountToken(account: any) {
+  const platformKey = account.platform.toLowerCase();
+
+  // Threads uses th_exchange_token (no refresh_token returned by the API).
+  if (platformKey === 'threads') {
+    if (!account.tokenExpiresAt) return decryptToken(account.accessToken, ENCRYPTION_KEY);
+    const expiresAt = new Date(account.tokenExpiresAt);
+    const sevenDaysFromNow = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    if (expiresAt > sevenDaysFromNow) return decryptToken(account.accessToken, ENCRYPTION_KEY);
+
+    try {
+      const currentToken = decryptToken(account.accessToken, ENCRYPTION_KEY);
+      const clientSecret = process.env.THREADS_CLIENT_SECRET || '';
+      const refreshUrl = `https://graph.threads.net/access_token?grant_type=th_exchange_token&client_secret=${encodeURIComponent(clientSecret)}&access_token=${encodeURIComponent(currentToken)}`;
+      const res = await fetch(refreshUrl);
+      if (!res.ok) throw new Error(`Threads token refresh failed: ${await res.text()}`);
+      const data = await res.json() as any;
+      const newToken = data.access_token;
+      if (!newToken) throw new Error('No access_token in Threads refresh response');
+      const expiresIn = data.expires_in || 5184000;
+      const encrypted = encryptToken(newToken, ENCRYPTION_KEY);
+      const newExpiresAt = new Date(Date.now() + expiresIn * 1000);
+      await prisma.socialAccount.update({
+        where: { id: account.id },
+        data: { accessToken: encrypted, tokenExpiresAt: newExpiresAt }
+      });
+      return newToken;
+    } catch (err) {
+      console.error(`Error refreshing Threads token:`, err);
+      return decryptToken(account.accessToken, ENCRYPTION_KEY);
+    }
+  }
+
   if (!account.refreshToken || !account.tokenExpiresAt || new Date(account.tokenExpiresAt) > new Date()) {
     return decryptToken(account.accessToken, ENCRYPTION_KEY);
   }
 
-  const platformKey = account.platform.toLowerCase();
-  
   const providerUrls: Record<string, string> = {
     linkedin: 'https://www.linkedin.com/oauth/v2/accessToken',
     x: 'https://api.twitter.com/2/oauth2/token',

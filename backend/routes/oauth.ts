@@ -66,7 +66,7 @@ const providers = {
   threads: {
     authUrl: 'https://threads.net/oauth/authorize',
     tokenUrl: 'https://graph.threads.net/oauth/access_token',
-    profileUrl: 'https://graph.threads.net/v1.0/me?fields=id,username,name',
+    profileUrl: 'https://graph.threads.net/v1.0/me?fields=id,username,name,threads_profile_picture_url',
     clientId: process.env.THREADS_CLIENT_ID || '',
     clientSecret: process.env.THREADS_CLIENT_SECRET || '',
     scopes: 'threads_basic,threads_content_publish',
@@ -520,7 +520,7 @@ router.get('/:platform/callback', async (req: any, res) => {
       profile.id = profileData.id; // Threads profile ID
       profile.username = profileData.username;
       profile.displayName = profileData.name || profileData.username;
-      profile.avatarUrl = null;
+      profile.avatarUrl = profileData.threads_profile_picture_url || null;
     } else if (platform === 'facebook') {
       profile.id = profileData.id;
       profile.username = profileData.name?.replace(/\s+/g, '').toLowerCase();

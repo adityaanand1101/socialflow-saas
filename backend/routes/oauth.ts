@@ -14,6 +14,10 @@ const prisma = new PrismaClient();
 // In-memory store for PKCE code_verifiers (keyed by Clerk userId / state param)
 const pkceStore = new Map<string, string>();
 
+// In-memory cache to detect duplicate OAuth code processing (e.g., browser prefetch + real redirect)
+const processedCodes = new Map<string, number>();
+const CODE_DEDUP_TTL_MS = 60000; // 1 minute
+
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || '';
 if (!ENCRYPTION_KEY) {
   console.error('CRITICAL: ENCRYPTION_KEY not set — OAuth token encryption will fail');
@@ -276,6 +280,24 @@ router.get('/:platform/callback', async (req: any, res) => {
   }
 
   console.log(`[${platform}] OAuth callback - code received, exchanging for token...`);
+  console.log(`[${platform}] Callback details - code (first 10): ${(code as string).substring(0,10)}..., platform: ${platform}, cookie present: ${!!req.cookies?.pending_oauth_user}, clerkId from state: ${!!clerkId}`);
+
+  // Dedup: prevent processing the same authorization code twice
+  const codeKey = `${platform}:${code}`;
+  const now = Date.now();
+  if (processedCodes.has(codeKey)) {
+    const firstSeen = processedCodes.get(codeKey)!;
+    console.warn(`[${platform}] DUPLICATE CALLBACK DETECTED - code ${(code as string).substring(0,10)}... was first seen ${now - firstSeen}ms ago. Skipping.`);
+    console.warn(`[${platform}] This means the callback URL was requested TWICE. Possible browser prefetch or redirect loop.`);
+    return res.redirect(`${FRONTEND_URL}/app/channels?duplicate=true`);
+  }
+  processedCodes.set(codeKey, now);
+  // Clean up old entries every 10 codes
+  if (processedCodes.size > 10) {
+    for (const [key, ts] of processedCodes) {
+      if (now - ts > CODE_DEDUP_TTL_MS) processedCodes.delete(key);
+    }
+  }
 
   try {
     let accessToken = '';

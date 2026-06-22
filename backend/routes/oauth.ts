@@ -52,7 +52,7 @@ const providers = {
     authUrl: 'https://api.instagram.com/oauth/authorize',
     tokenUrl: 'https://api.instagram.com/oauth/access_token',
     // Get Instagram user profile + account type
-    profileUrl: 'https://graph.instagram.com/me?fields=id,username,account_type,profile_picture_url',
+    profileUrl: 'https://graph.instagram.com/v24.0/me?fields=id,username,account_type,profile_picture_url',
     clientId: process.env.INSTAGRAM_CLIENT_ID || '',
     clientSecret: process.env.INSTAGRAM_CLIENT_SECRET || '',
     scopes: 'instagram_business_basic,instagram_business_content_publish',
@@ -506,7 +506,13 @@ router.get('/:platform/callback', async (req: any, res) => {
     }
 
     profileData = await profileRes.json() as any;
-    
+
+    // Handle Instagram Login API data[] response wrapping (some API versions return data array)
+    if (platform === 'instagram' && Array.isArray(profileData.data) && profileData.data.length > 0) {
+      profileData = profileData.data[0];
+      console.log(`[${platform}] Unwrapped data[] response format`);
+    }
+
     // For Instagram, store the page access token for publishing
     if (platform === 'instagram') {
       accessToken = pageAccessToken;
@@ -515,7 +521,7 @@ router.get('/:platform/callback', async (req: any, res) => {
     // Normalize profile structure per platform
     // For Instagram, detect account_type from profile response
     if (platform === 'instagram') {
-      igAccountType = profileData.account_type || null;
+      igAccountType = profileData.user_id || profileData.account_type ? (profileData.account_type || null) : null;
       console.log(`[${platform}] Instagram account_type: ${igAccountType}`);
     }
 
@@ -537,7 +543,7 @@ router.get('/:platform/callback', async (req: any, res) => {
       profile.avatarUrl = profileData.picture || null;
     } else if (platform === 'instagram') {
       // profileData is from Instagram Login API (graph.instagram.com)
-      profile.id = profileData.id; // Instagram Business/Creator Account ID
+      profile.id = profileData.user_id || profileData.id; // user_id in newer API versions
       profile.username = profileData.username;
       profile.displayName = profileData.username;
       profile.avatarUrl = profileData.profile_picture_url || null;

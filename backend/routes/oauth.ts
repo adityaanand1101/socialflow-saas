@@ -52,7 +52,7 @@ const providers = {
     authUrl: 'https://api.instagram.com/oauth/authorize',
     tokenUrl: 'https://api.instagram.com/oauth/access_token',
     // Get Instagram user profile + account type
-    profileUrl: 'https://graph.instagram.com/v22.0/me?fields=id,username,account_type,profile_picture_url',
+    profileUrl: 'https://graph.instagram.com/me?fields=id,username,account_type,profile_picture_url',
     clientId: process.env.INSTAGRAM_CLIENT_ID || '',
     clientSecret: process.env.INSTAGRAM_CLIENT_SECRET || '',
     scopes: 'instagram_business_basic,instagram_business_content_publish',

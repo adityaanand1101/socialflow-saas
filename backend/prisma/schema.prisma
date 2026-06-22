@@ -101,6 +101,17 @@ enum Role {
   VIEWER
 }
 
+enum ConnectionType {
+  API
+  MANUAL
+}
+
+enum InstagramAccountSubtype {
+  PERSONAL
+  CREATOR
+  BUSINESS
+}
+
 enum PlatformType {
   INSTAGRAM
   X
@@ -126,19 +137,31 @@ enum PostStatus {
   PUBLISHING
   PUBLISHED
   FAILED
+  PENDING_MANUAL
+  MARKED_DONE
 }
 
 model SocialAccount {
   id                String       @id @default(uuid())
   workspaceId       String
   platform          PlatformType
-  platformAccountId String       // Remote platform account ID
+  connectionType    ConnectionType          @default(API)
+  igAccountSubtype  InstagramAccountSubtype?  // only meaningful for platform=INSTAGRAM
+
+  // API-path fields — null for MANUAL connections
+  platformAccountId String?
   username          String
   displayName       String?
   avatarUrl         String?
-  accessToken       String       // Encrypted in database
-  refreshToken      String?      // Encrypted in database
+  accessToken       String?
+  refreshToken      String?
   tokenExpiresAt    DateTime?
+
+  // MANUAL-path fields — only populated for MANUAL connections
+  manualHandle      String?
+  manualDisplayName String?
+  manualAvatarUrl   String?
+
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
 
@@ -147,6 +170,7 @@ model SocialAccount {
   posts             SocialAccountPost[]
 
   @@unique([workspaceId, platform, platformAccountId])
+  @@index([workspaceId, platform])
 }
 
 model Tag {

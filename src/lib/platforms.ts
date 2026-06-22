@@ -15,7 +15,7 @@ export interface PlatformDef {
 }
 
 export const ALL_PLATFORMS: PlatformDef[] = [
-  { id: 'instagram', label: 'Instagram', icon: Instagram, color: 'text-pink-400', bgHover: 'hover:border-pink-500/50 hover:bg-pink-500/5', description: 'Reels, Stories & Feed', authNote: 'Requires Instagram Business account', limit: 2200 },
+  { id: 'instagram', label: 'Instagram', icon: Instagram, color: 'text-pink-400', bgHover: 'hover:border-pink-500/50 hover:bg-pink-500/5', description: 'Reels, Stories & Feed', authNote: 'Business/Creator accounts: OAuth via Instagram Login. Personal accounts: manual connect with handle only.', limit: 2200 },
   { id: 'facebook', label: 'Facebook', icon: Facebook, color: 'text-blue-500', bgHover: 'hover:border-blue-600/50 hover:bg-blue-600/5', description: 'Pages & Groups', authNote: 'Requires Facebook Page admin access', limit: 63206 },
   { id: 'threads', label: 'Threads', icon: Threads, color: 'text-white', bgHover: 'hover:border-white/30 hover:bg-white/5', description: 'Text-based sharing', authNote: 'Requires Threads account', limit: 500 },
   { id: 'x', label: 'X (Twitter)', icon: Twitter, color: 'text-white', bgHover: 'hover:border-gray-400/50 hover:bg-gray-400/5', description: 'Tweets & Threads', authNote: 'Requires X developer access', limit: 280 },

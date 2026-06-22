@@ -20,6 +20,7 @@ export const Channels = () => {
   const [showInfoModal, setShowInfoModal] = useState<string | null>(null)
   const [showCustomModal, setShowCustomModal] = useState<string | null>(null)
   const [showDisconnectModal, setShowDisconnectModal] = useState<string | null>(null)
+  const [showConnectChoice, setShowConnectChoice] = useState<string | null>(null)
   const [customCreds, setCustomCreds] = useState({ identifier: '', password: '' })
   const [menuOpen, setMenuOpen] = useState<string | null>(null)
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
@@ -48,10 +49,11 @@ export const Channels = () => {
     setShowInfoModal(null)
     setShowCustomModal(null)
     setShowDisconnectModal(null)
+    setShowConnectChoice(null)
   }, [])
 
   useEffect(() => {
-    if (!showInfoModal && !showCustomModal && !showDisconnectModal) return
+    if (!showInfoModal && !showCustomModal && !showDisconnectModal && !showConnectChoice) return
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeModals() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -65,6 +67,11 @@ export const Channels = () => {
   const handleConnect = async (platform: string) => {
     if (platform === 'bluesky' || platform === 'telegram') {
       setShowCustomModal(platform)
+      return
+    }
+
+    if (platform === 'instagram') {
+      setShowConnectChoice(platform)
       return
     }
 
@@ -285,6 +292,80 @@ export const Channels = () => {
         </div>
       )}
 
+      {/* Connect Choice Modal (e.g. Instagram: API vs Manual) */}
+      {showConnectChoice && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={(e) => e.target === e.currentTarget && setShowConnectChoice(null)}>
+          <div className="bg-[#141218] border border-white/10 rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-base font-bold text-white">Connect Instagram</h2>
+              <button onClick={() => setShowConnectChoice(null)} className="p-2 hover:bg-white/5 rounded-lg">
+                <X className="w-4 h-4 text-muted-foreground" />
+              </button>
+            </div>
+            <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
+              Instagram only supports Business and Creator accounts via API. Personal accounts can be connected manually with just your handle.
+            </p>
+            <div className="space-y-3">
+              <Button
+                className="w-full justify-start gap-3 h-auto py-3 px-4"
+                variant="outline"
+                onClick={() => {
+                  setShowConnectChoice(null)
+                  setConnecting('instagram')
+                  ;(async () => {
+                    try {
+                      const token = await getToken()
+                      const res = await apiFetch(`/api/oauth/instagram/connect`, {
+                        credentials: 'include',
+                        headers: { Authorization: `Bearer ${token}` }
+                      })
+                      const data = await res.json()
+                      if (res.ok && data.authUrl) {
+                        window.open(data.authUrl, '_blank', 'noopener,noreferrer')
+                        showNotification('success', `A new tab has opened to connect Instagram. After authorizing, come back and refresh.`)
+                      } else {
+                        showNotification('error', `Failed to connect Instagram: ${data.error || res.statusText}`)
+                      }
+                    } catch (e: any) {
+                      showNotification('error', `Network error: Could not reach the backend.`)
+                    } finally {
+                      setConnecting(null)
+                    }
+                  })()
+                }}
+                disabled={connecting === 'instagram'}
+              >
+                {connecting === 'instagram' ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : (
+                  <div className="w-8 h-8 rounded-lg bg-pink-500/10 flex items-center justify-center shrink-0">
+                    <Instagram className="w-4 h-4 text-pink-400" />
+                  </div>
+                )}
+                <div className="text-left">
+                  <p className="text-sm font-bold text-white">Business / Creator Account</p>
+                  <p className="text-[11px] text-muted-foreground">Connect via OAuth — auto-publish posts</p>
+                </div>
+              </Button>
+              <Button
+                className="w-full justify-start gap-3 h-auto py-3 px-4"
+                variant="outline"
+                onClick={() => {
+                  setShowConnectChoice(null)
+                  setShowCustomModal('instagram')
+                }}
+              >
+                <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
+                  <Instagram className="w-4 h-4 text-pink-400" />
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-bold text-white">Personal Account</p>
+                  <p className="text-[11px] text-muted-foreground">Connect manually with handle — you post, we remind</p>
+                </div>
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Custom Connect Modal */}
       {showCustomModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={(e) => e.target === e.currentTarget && setShowCustomModal(null)}>
@@ -316,37 +397,46 @@ export const Channels = () => {
               <div className="space-y-2">
                 <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
                   {showCustomModal === 'bluesky' ? 'Handle (e.g. user.bsky.social)' : 
-                   showCustomModal === 'telegram' ? 'Bot Name / Identifier' : 'Integration Token Name'}
+                   showCustomModal === 'telegram' ? 'Bot Name / Identifier' : 
+                   showCustomModal === 'instagram' ? 'Instagram Handle' : 'Integration Token Name'}
                 </label>
                 <input
                   type="text"
                   value={customCreds.identifier}
                   onChange={(e) => setCustomCreds(c => ({ ...c, identifier: e.target.value }))}
+                  placeholder={showCustomModal === 'instagram' ? '@your_handle' : ''}
                   className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500/50"
                 />
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                  {showCustomModal === 'bluesky' ? 'App Password' : 
-                   showCustomModal === 'telegram' ? 'Bot Token' : 'Integration Token Secret'}
-                </label>
-                <input
-                  type="password"
-                  value={customCreds.password}
-                  onChange={(e) => setCustomCreds(c => ({ ...c, password: e.target.value }))}
-                  className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500/50"
-                />
+              {showCustomModal !== 'instagram' && (
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                    {showCustomModal === 'bluesky' ? 'App Password' : 
+                     showCustomModal === 'telegram' ? 'Bot Token' : 'Integration Token Secret'}
+                  </label>
+                  <input
+                    type="password"
+                    value={customCreds.password}
+                    onChange={(e) => setCustomCreds(c => ({ ...c, password: e.target.value }))}
+                    className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500/50"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    {showCustomModal === 'bluesky' ? "Generate this in your Bluesky Settings > Advanced > App Passwords" : 
+                     showCustomModal === 'telegram' ? "Get this from @BotFather on Telegram" : "Generate this in your Medium Settings"}
+                  </p>
+                </div>
+              )}
+              {showCustomModal === 'instagram' && (
                 <p className="text-[10px] text-muted-foreground">
-                  {showCustomModal === 'bluesky' ? "Generate this in your Bluesky Settings > Advanced > App Passwords" : 
-                   showCustomModal === 'telegram' ? "Get this from @BotFather on Telegram" : "Generate this in your Medium Settings"}
+                  Enter your Instagram handle (e.g., @username). We'll remind you to post — no API access for personal accounts.
                 </p>
-              </div>
+              )}
             </div>
 
             <Button 
               className="w-full" 
               onClick={handleCustomConnect}
-              disabled={!customCreds.identifier || !customCreds.password || connecting === showCustomModal}
+              disabled={!customCreds.identifier || (showCustomModal !== 'instagram' && !customCreds.password) || connecting === showCustomModal}
             >
               {connecting === showCustomModal ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Connect Account'}
             </Button>
@@ -421,7 +511,14 @@ export const Channels = () => {
                       </Avatar>
                       <div>
                         <h3 className="font-bold text-white">{channel.name}</h3>
-                        <p className="text-xs text-muted-foreground capitalize">{channel.platform}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <p className="text-xs text-muted-foreground capitalize">{channel.platform}</p>
+                          {channel.connectionType === 'MANUAL' ? (
+                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">Manual</span>
+                          ) : (
+                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-green-500/20 text-green-400 border border-green-500/30">API</span>
+                          )}
+                        </div>
                       </div>
                     </div>
 

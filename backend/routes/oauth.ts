@@ -46,14 +46,16 @@ const providers = {
     scopes: 'tweet.read tweet.write users.read offline.access',
   },
   instagram: {
-    // Instagram Graph API uses Facebook Login with Instagram scopes
-    authUrl: 'https://www.facebook.com/v22.0/dialog/oauth',
-    tokenUrl: 'https://graph.facebook.com/v22.0/oauth/access_token',
-    // Get user's Facebook Pages + Instagram Business Accounts
-    profileUrl: 'https://graph.facebook.com/v22.0/me?fields=id,name,accounts{id,name,access_token,instagram_business_account{id,username,profile_picture_url}}',
-    clientId: process.env.FACEBOOK_CLIENT_ID || '',
-    clientSecret: process.env.FACEBOOK_CLIENT_SECRET || '',
-    scopes: 'public_profile,email,pages_show_list,pages_read_engagement,pages_manage_posts,instagram_basic,instagram_content_publish,instagram_manage_insights',
+    // Instagram API with Instagram Login (Business Login for Instagram)
+    // Uses Instagram-hosted OAuth, does NOT require a linked Facebook Page
+    // Only works for Business/Creator accounts (personal accounts rejected at OAuth layer)
+    authUrl: 'https://api.instagram.com/oauth/authorize',
+    tokenUrl: 'https://api.instagram.com/oauth/access_token',
+    // Get Instagram user profile + account type
+    profileUrl: 'https://graph.instagram.com/v22.0/me?fields=id,username,account_type,profile_picture_url',
+    clientId: process.env.INSTAGRAM_CLIENT_ID || '',
+    clientSecret: process.env.INSTAGRAM_CLIENT_SECRET || '',
+    scopes: 'instagram_business_basic,instagram_business_content_publish',
   },
   facebook: {
     authUrl: 'https://www.facebook.com/v22.0/dialog/oauth',
@@ -451,45 +453,16 @@ router.get('/:platform/callback', async (req: any, res) => {
       profileHeaders['User-Agent'] = 'SocialFlowApp';
     }
 
-    // Special handling for Instagram - need to fetch Page access token first
+    // Special handling for Instagram - Instagram Login API returns profile directly
     let finalProfileUrl = provider.profileUrl;
     let finalProfileHeaders = { ...profileHeaders };
     let pageAccessToken = accessToken; // default to user token
+    let igAccountType: string | null = null;
     
     if (platform === 'instagram') {
-      // First, get user's Facebook Pages to find the one with Instagram
-      const pagesRes = await fetch('https://graph.facebook.com/v22.0/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,profile_picture_url}', {
-        headers: profileHeaders
-      });
-      
-      if (!pagesRes.ok) {
-        const errBody = await pagesRes.text().catch(() => '');
-        throw new Error(`Failed to fetch Facebook pages: HTTP ${pagesRes.status} - ${errBody}`);
-      }
-      
-      const pagesData = await pagesRes.json() as any;
-      const pages = pagesData.data || [];
-      
-      console.log(`[${platform}] Found ${pages.length} Facebook pages`);
-      console.log(`[${platform}] Pages: ${JSON.stringify(pages.map((p: any) => ({ id: p.id, name: p.name, hasIg: !!p.instagram_business_account })))}`);
-      
-      // Find page with Instagram Business Account
-      const targetPage = pages.find((page: any) => page.instagram_business_account);
-      
-      if (!targetPage) {
-        console.error(`[${platform}] No page with Instagram Business Account found among ${pages.length} pages`);
-        console.error(`[${platform}] Pages list: ${pages.map((p: any) => p.name).join(', ')}`);
-        throw new Error(
-          'No Instagram Business Account found. Make sure you have an Instagram Business/Creator account connected to a Facebook Page you manage.'
-        );
-      }
-      
-      console.log(`[${platform}] Found target page: ${targetPage.name} (${targetPage.id})`);
-      
-      const igAccount = targetPage.instagram_business_account;
-      pageAccessToken = targetPage.access_token;
-      finalProfileHeaders = { 'Authorization': `Bearer ${pageAccessToken}` };
-      finalProfileUrl = `https://graph.facebook.com/v22.0/${igAccount.id}?fields=id,username,profile_picture_url`;
+      // Instagram Login API returns user profile directly with account_type
+      // No Facebook Pages lookup needed
+      console.log(`[${platform}] Using Instagram Login API - fetching profile from ${finalProfileUrl}`);
     }
 
     let profileData: any = {};
@@ -510,6 +483,12 @@ router.get('/:platform/callback', async (req: any, res) => {
     }
     
     // Normalize profile structure per platform
+    // For Instagram, detect account_type from profile response
+    if (platform === 'instagram') {
+      igAccountType = profileData.account_type || null;
+      console.log(`[${platform}] Instagram account_type: ${igAccountType}`);
+    }
+
     if (platform === 'linkedin') {
       profile.id = profileData.sub || profileData.id;
       profile.username = profileData.email || profileData.name?.replace(/\s+/g, '').toLowerCase() || 'linkedin_user';
@@ -527,8 +506,8 @@ router.get('/:platform/callback', async (req: any, res) => {
       profile.displayName = profileData.name || 'YouTube User';
       profile.avatarUrl = profileData.picture || null;
     } else if (platform === 'instagram') {
-      // profileData is from Instagram Graph API
-      profile.id = profileData.id; // Instagram Business Account ID
+      // profileData is from Instagram Login API (graph.instagram.com)
+      profile.id = profileData.id; // Instagram Business/Creator Account ID
       profile.username = profileData.username;
       profile.displayName = profileData.username;
       profile.avatarUrl = profileData.profile_picture_url || null;
@@ -602,6 +581,15 @@ router.get('/:platform/callback', async (req: any, res) => {
     const mappedPlatform = platform.toUpperCase() as PlatformType;
     const tokenExpiresAt = new Date(Date.now() + tokenExpiresIn * 1000);
 
+    // Determine connection type and account subtype
+    const connectionType = 'API' as const;
+    let igAccountSubtype: 'PERSONAL' | 'CREATOR' | 'BUSINESS' | undefined;
+    if (platform === 'instagram' && igAccountType) {
+      const t = igAccountType.toUpperCase();
+      if (t === 'BUSINESS' || t === 'MEDIA_CREATOR' || t === 'CREATOR') igAccountSubtype = t === 'MEDIA_CREATOR' ? 'CREATOR' : t;
+      else igAccountSubtype = 'BUSINESS'; // fallback
+    }
+
     // Upsert Social Account
     await prisma.socialAccount.upsert({
       where: {
@@ -618,6 +606,8 @@ router.get('/:platform/callback', async (req: any, res) => {
         displayName: profile.displayName,
         avatarUrl: profile.avatarUrl,
         tokenExpiresAt: tokenExpiresAt,
+        connectionType,
+        igAccountSubtype,
         updatedAt: new Date(),
       },
       create: {
@@ -629,7 +619,9 @@ router.get('/:platform/callback', async (req: any, res) => {
         avatarUrl: profile.avatarUrl,
         accessToken: encryptedAccess,
         refreshToken: encryptedRefresh,
-        tokenExpiresAt: tokenExpiresAt
+        tokenExpiresAt: tokenExpiresAt,
+        connectionType,
+        igAccountSubtype
       }
     });
 
@@ -654,15 +646,26 @@ router.get('/:platform/callback', async (req: any, res) => {
 
 router.post('/:platform/manual-connect', requireAuth, async (req: any, res: any) => {
   const { platform } = req.params;
-  const { identifier, password } = req.body;
+  const { identifier, password, displayName, avatarUrl } = req.body;
   const clerkId = req.auth.userId;
 
-  if (!identifier || !password) {
-    return res.status(400).json({ error: 'Missing required credentials' });
-  }
-
-  if (platform !== 'bluesky' && platform !== 'telegram') {
-    return res.status(400).json({ error: 'Manual connect is only supported for Bluesky and Telegram' });
+  if (platform === 'instagram') {
+    // Instagram manual connect: identifier = @handle, displayName/avatarUrl optional
+    if (!identifier) {
+      return res.status(400).json({ error: 'Instagram handle is required' });
+    }
+    // Validate handle format
+    const handle = identifier.startsWith('@') ? identifier.slice(1) : identifier;
+    if (!/^[a-zA-Z0-9._]{1,30}$/.test(handle)) {
+      return res.status(400).json({ error: 'Invalid Instagram handle format' });
+    }
+  } else {
+    if (!identifier || !password) {
+      return res.status(400).json({ error: 'Missing required credentials' });
+    }
+    if (platform !== 'bluesky' && platform !== 'telegram') {
+      return res.status(400).json({ error: 'Manual connect is only supported for Bluesky, Telegram, and Instagram' });
+    }
   }
 
   try {
@@ -678,51 +681,162 @@ router.post('/:platform/manual-connect', requireAuth, async (req: any, res: any)
     const workspaceId = user.memberships[0].workspaceId;
 
     let profileId = identifier;
-    let displayName = identifier;
-    let avatarUrl: string | null = null;
-    let tokenExpiresAt = null; // These tokens typically don't expire automatically
+    let finalDisplayName = displayName || identifier;
+    let finalAvatarUrl = avatarUrl || null;
+    let tokenExpiresAt = null;
+    let connectionType = 'MANUAL' as const;
+    let igAccountSubtype = 'PERSONAL' as const;
 
-    // Optional: Add logic here to verify the tokens against the platform APIs
-    // e.g. Call Bluesky ATP server or Medium API to ensure credentials are valid
-    // For now, we trust the input and store it securely.
+    if (platform === 'instagram') {
+      // For Instagram manual: store handle in manualHandle, no tokens
+      profileId = `manual_${identifier.startsWith('@') ? identifier.slice(1) : identifier}`;
+    } else {
+      // Bluesky/Telegram: store credentials in token fields
+    }
 
     const mappedPlatform = platform.toUpperCase() as PlatformType;
-    
-    // We store the 'identifier' in refreshToken and 'password' in accessToken
-    // This allows us to reuse the existing encrypted storage structure
-    const encryptedAccess = encryptToken(password, ENCRYPTION_KEY);
-    const encryptedRefresh = encryptToken(identifier, ENCRYPTION_KEY);
 
-    await prisma.socialAccount.upsert({
-      where: {
-        workspaceId_platform_platformAccountId: {
+    if (platform === 'instagram') {
+      await prisma.socialAccount.upsert({
+        where: {
+          workspaceId_platform_platformAccountId: {
+            workspaceId,
+            platform: mappedPlatform,
+            platformAccountId: profileId
+          }
+        },
+        update: {
+          manualHandle: identifier,
+          manualDisplayName: finalDisplayName,
+          manualAvatarUrl: finalAvatarUrl,
+          connectionType,
+          igAccountSubtype,
+          updatedAt: new Date(),
+        },
+        create: {
           workspaceId,
           platform: mappedPlatform,
-          platformAccountId: profileId
+          platformAccountId: profileId,
+          username: identifier,
+          displayName: finalDisplayName,
+          avatarUrl: finalAvatarUrl,
+          connectionType,
+          igAccountSubtype,
+          manualHandle: identifier,
+          manualDisplayName: finalDisplayName,
+          manualAvatarUrl: finalAvatarUrl,
+          tokenExpiresAt: null
         }
-      },
-      update: {
-        accessToken: encryptedAccess,
-        refreshToken: encryptedRefresh,
-        updatedAt: new Date(),
-      },
-      create: {
-        workspaceId,
-        platform: mappedPlatform,
-        platformAccountId: profileId,
-        username: identifier,
-        displayName: displayName,
-        avatarUrl: avatarUrl,
-        accessToken: encryptedAccess,
-        refreshToken: encryptedRefresh,
-        tokenExpiresAt: tokenExpiresAt // null means never expires
-      }
-    });
+      });
+    } else {
+      // Bluesky/Telegram: existing logic
+      const encryptedAccess = encryptToken(password, ENCRYPTION_KEY);
+      const encryptedRefresh = encryptToken(identifier, ENCRYPTION_KEY);
+
+      await prisma.socialAccount.upsert({
+        where: {
+          workspaceId_platform_platformAccountId: {
+            workspaceId,
+            platform: mappedPlatform,
+            platformAccountId: profileId
+          }
+        },
+        update: {
+          accessToken: encryptedAccess,
+          refreshToken: encryptedRefresh,
+          updatedAt: new Date(),
+        },
+        create: {
+          workspaceId,
+          platform: mappedPlatform,
+          platformAccountId: profileId,
+          username: identifier,
+          displayName: finalDisplayName,
+          avatarUrl: finalAvatarUrl,
+          accessToken: encryptedAccess,
+          refreshToken: encryptedRefresh,
+          tokenExpiresAt: tokenExpiresAt,
+          connectionType,
+          igAccountSubtype: undefined
+        }
+      });
+    }
 
     res.json({ success: true });
   } catch (error: any) {
     console.error('Manual Connect Error:', error);
     res.status(500).json({ error: 'Failed to securely store credentials' });
+  }
+});
+
+// Mark manual post as done (self-reported)
+router.patch('/posts/:postId/mark-posted', requireAuth, async (req: any, res: any) => {
+  try {
+    const { postId } = req.params;
+    const clerkId = req.auth.userId;
+
+    // Verify the post belongs to the user's workspace
+    const post = await prisma.post.findUnique({
+      where: { id: postId },
+      include: { accounts: { include: { socialAccount: true } } }
+    });
+
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { clerkId: clerkId as string },
+      include: { memberships: { include: { workspace: true } } }
+    });
+
+    if (!user || user.memberships.length === 0 || user.memberships[0].workspaceId !== post.workspaceId) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    // Find the manual Instagram account post
+    const manualAccountPost = post.accounts.find(ap => 
+      ap.socialAccount.platform === 'INSTAGRAM' && ap.socialAccount.connectionType === 'MANUAL'
+    );
+
+    if (!manualAccountPost) {
+      return res.status(400).json({ error: 'No manual Instagram account found for this post' });
+    }
+
+    // Update status to MARKED_DONE
+    await prisma.socialAccountPost.update({
+      where: {
+        postId_socialAccountId: {
+          postId: post.id,
+          socialAccountId: manualAccountPost.socialAccountId
+        }
+      },
+      data: {
+        status: 'MARKED_DONE',
+        publishedAt: new Date()
+      }
+    });
+
+    // Check if all account posts are done
+    const allAccountPosts = await prisma.socialAccountPost.findMany({
+      where: { postId: post.id }
+    });
+
+    const allDone = allAccountPosts.every(ap => 
+      ap.status === 'PUBLISHED' || ap.status === 'MARKED_DONE'
+    );
+
+    if (allDone) {
+      await prisma.post.update({
+        where: { id: post.id },
+        data: { status: 'PUBLISHED' }
+      });
+    }
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Mark Posted Error:', error);
+    res.status(500).json({ error: 'Failed to mark post as done' });
   }
 });
 

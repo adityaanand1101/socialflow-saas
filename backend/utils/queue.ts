@@ -209,10 +209,27 @@ try {
 
       let overallSuccess = true;
       let failureCount = 0;
+      let manualCount = 0;
 
       for (const accountPost of post.accounts) {
         const account = accountPost.socialAccount;
         const platform = account.platform.toLowerCase();
+
+        // Skip manual connections (e.g., personal Instagram accounts)
+        if (account.connectionType === 'MANUAL') {
+          manualCount++;
+          await prisma.socialAccountPost.update({
+            where: {
+              postId_socialAccountId: {
+                postId: post.id,
+                socialAccountId: account.id
+              }
+            },
+            data: { status: 'PENDING_MANUAL' }
+          });
+          continue;
+        }
+
         try {
           // Apply per-platform rate limiting
           await checkRateLimit(platform);
@@ -226,7 +243,7 @@ try {
               token,
               post.content || '',
               post.mediaUrls,
-              account.platformAccountId,
+              account.platformAccountId!,
               (post.structuredContent as Record<string, Record<string, string>> | undefined),
               (post.postTypes as Record<string, string> | undefined),
             ),
@@ -267,7 +284,23 @@ try {
         }
       }
 
-      const postStatus = overallSuccess ? 'PUBLISHED' : (failureCount === post.accounts.length ? 'FAILED' : 'PUBLISHED'); 
+      const nonManualCount = post.accounts.length - manualCount;
+      let postStatus: 'PUBLISHED' | 'FAILED' | 'PENDING_MANUAL' = 'PUBLISHED';
+      if (nonManualCount === 0 && manualCount > 0) {
+        // All accounts are manual — post is pending manual action
+        postStatus = 'PENDING_MANUAL';
+      } else if (overallSuccess && failureCount === 0) {
+        postStatus = 'PUBLISHED';
+      } else if (failureCount === nonManualCount && manualCount === 0) {
+        postStatus = 'FAILED';
+      } else if (failureCount > 0 && failureCount < nonManualCount) {
+        // Some API accounts succeeded, some failed — partial success
+        postStatus = 'PUBLISHED';
+      } else if (failureCount > 0 && failureCount === nonManualCount) {
+        postStatus = 'FAILED';
+      } else {
+        postStatus = overallSuccess ? 'PUBLISHED' : 'FAILED';
+      }
       
       await prisma.post.update({
         where: { id: postId },

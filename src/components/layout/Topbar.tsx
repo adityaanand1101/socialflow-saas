@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Search, Bell, Plus, ExternalLink, Settings, LogOut, User } from 'lucide-react'
+import { Search, Bell, Plus, ExternalLink, Settings, LogOut } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { useUser, useAuth } from '@clerk/react'
@@ -45,11 +45,14 @@ export const Topbar = () => {
     }
   }, [getToken])
 
-  useEffect(() => {
-    fetchNotifications()
-    const interval = setInterval(fetchNotifications, 30000)
-    return () => clearInterval(interval)
-  }, [fetchNotifications])
+  const handleOpenNotifications = useCallback(() => {
+    if (!open) {
+      fetchNotifications()
+      setOpen(true)
+    } else {
+      setOpen(false)
+    }
+  }, [open, fetchNotifications])
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -128,7 +131,7 @@ export const Topbar = () => {
         </Button>
 
         <div className="flex items-center gap-2 px-3" ref={dropdownRef}>
-          <Button variant="ghost" size="icon" className="relative" onClick={() => setOpen(!open)}>
+          <Button variant="ghost" size="icon" className="relative" onClick={handleOpenNotifications}>
             <Bell className="w-5 h-5" />
             {unreadCount > 0 && (
               <span className="absolute -top-0.5 -right-0.5 w-4.5 h-4.5 bg-pink-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center">

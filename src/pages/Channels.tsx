@@ -476,7 +476,7 @@ export const Channels = () => {
               const PlatformIcon = platform?.icon || Instagram
               const hasStats = channel.followers != null || channel.engagementRate != null || channel.reach != null
               return (
-                <Card key={channel.id} className="relative overflow-hidden group hover:border-white/20 transition-all">
+                <Card key={channel.id} className="relative group hover:border-white/20 transition-all">
                   <div className="absolute top-0 left-0 right-0 h-24 opacity-10 bg-gradient-primary pointer-events-none" />
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <PlatformIcon className="w-10 h-10" />

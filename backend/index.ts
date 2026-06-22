@@ -22,6 +22,7 @@ import notificationsRouter from './routes/notifications';
 import tagsRouter from './routes/tags';
 import shortlinksRouter from './routes/shortlinks';
 import webhooksRouter from './routes/webhooks';
+import uploadsRouter from './routes/uploads';
 import analyticsRouter from './routes/analytics';
 import { requireAuth } from './middlewares/auth';
 import { startRecoverySweep } from './utils/queue';
@@ -147,6 +148,7 @@ app.use('/api/tags', tagsRouter);
 app.use('/api/shortlinks', shortlinksRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/webhooks', webhooksRouter);
+app.use('/api/uploads', uploadsRouter);
 
 app.get('/api/user/me', requireAuth, async (req: any, res: any) => {
   try {

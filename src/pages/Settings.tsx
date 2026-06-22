@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -32,6 +32,8 @@ export const Settings = () => {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [avatarUploading, setAvatarUploading] = useState(false)
+  const avatarInputRef = useRef<HTMLInputElement>(null)
 
   const [profile, setProfile] = useState({ 
     name: '', 
@@ -271,6 +273,36 @@ export const Settings = () => {
     }
   }
 
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setAvatarUploading(true)
+    try {
+      const token = await getToken()
+      const presignedRes = await apiFetch('/api/media/presigned-url', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName: file.name, fileType: file.type, fileSize: file.size })
+      })
+      if (!presignedRes.ok) throw new Error('Failed to get upload URL')
+      const { uploadUrl, fileUrl } = await presignedRes.json()
+
+      await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file })
+
+      await apiFetch('/api/media/register', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName: file.name, fileUrl, fileType: file.type, fileSize: file.size })
+      })
+
+      setProfile(prev => ({ ...prev, avatarUrl: fileUrl }))
+    } catch (err) {
+      console.error('Avatar upload failed', err)
+    } finally {
+      setAvatarUploading(false)
+    }
+  }
+
   const handleSave = async () => {
     setSaving(true)
     try {
@@ -335,10 +367,21 @@ export const Settings = () => {
                         </div>
                       )}
                     </div>
-                    <button className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-[#141218] border border-white/10 flex items-center justify-center hover:bg-white/5 transition-colors">
-                      <Camera className="w-3.5 h-3.5 text-white" />
+                    <button
+                      onClick={(e) => { e.stopPropagation(); avatarInputRef.current?.click() }}
+                      className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-[#141218] border border-white/10 flex items-center justify-center hover:bg-white/5 transition-colors"
+                      disabled={avatarUploading}
+                    >
+                      {avatarUploading ? <Loader2 className="w-3.5 h-3.5 text-white animate-spin" /> : <Camera className="w-3.5 h-3.5 text-white" />}
                     </button>
                   </div>
+                  <input
+                    type="file"
+                    ref={avatarInputRef}
+                    className="hidden"
+                    accept="image/*"
+                    onChange={handleAvatarUpload}
+                  />
                 </div>
 
                 {/* Form Fields */}
@@ -361,14 +404,6 @@ export const Settings = () => {
                       rows={3}
                       placeholder="Tell us about yourself..."
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-purple-500/50 resize-none leading-relaxed"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Avatar URL</label>
-                    <Input 
-                      value={profile.avatarUrl} 
-                      onChange={(e) => setProfile({ ...profile, avatarUrl: e.target.value })}
-                      placeholder="https://..."
                     />
                   </div>
                 </div>

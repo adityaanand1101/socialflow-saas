@@ -44,18 +44,18 @@ router.get('/', requireAuth, async (req: any, res: any) => {
     // 2. Fetch analytics for each account in parallel (decrypting tokens first)
     const validAccounts = socialAccounts.filter(acct => acct.accessToken);
     const platformResults = await Promise.allSettled(
-      validAccounts.map(acct => {
-        let token = acct.accessToken!;
-        try { token = decryptToken(token, ENCRYPTION_KEY); } catch { /* use raw token if decryption fails */ }
-        return fetchAnalyticsForAccount(
-          acct.platform.toLowerCase(),
-          token,
-          acct.platformAccountId!,
-          acct.username,
-          acct.displayName || undefined,
-          acct.avatarUrl || undefined,
-        );
-      }),
+        validAccounts.map(acct => {
+          let token: string = acct.accessToken!;
+          try { token = decryptToken(token, ENCRYPTION_KEY); } catch { /* use raw token if decryption fails */ }
+          return fetchAnalyticsForAccount(
+            acct.platform.toLowerCase(),
+            token,
+            acct.platformAccountId!,
+            acct.username,
+            acct.displayName || undefined,
+            acct.avatarUrl || undefined,
+          );
+        }),
     );
 
     const platforms: any[] = [];

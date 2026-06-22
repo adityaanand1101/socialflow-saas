@@ -24,7 +24,7 @@ import {
   Image as ImageIcon,
   X,
   Check,
-  AlertCircle
+  AlertCircle,
 } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { useAuth } from '@clerk/react'
@@ -77,6 +77,12 @@ export const MediaLibrary = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deletingTargets, setDeletingTargets] = useState<{ type: 'asset' | 'assets'; ids: string[] } | null>(null)
+
+  // Google Drive Import
+  const [showDriveModal, setShowDriveModal] = useState(false)
+  const [driveImporting, setDriveImporting] = useState(false)
+  const [driveFileId, setDriveFileId] = useState('')
+  const [driveFileName, setDriveFileName] = useState('')
 
   // Asset Rename Modal
   const [isRenameModalOpen, setIsRenameModalOpen] = useState(false)
@@ -357,6 +363,36 @@ export const MediaLibrary = () => {
     }
   }
 
+  const handleDriveImportFromUrl = async () => {
+    if (!driveFileId.trim()) return
+    setDriveImporting(true)
+    try {
+      const token = await getToken()
+      const fileId = driveFileId.trim()
+      // Extract file ID from a full Google Drive URL if pasted
+      const urlMatch = fileId.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || fileId.match(/id=([a-zA-Z0-9_-]+)/)
+      const resolvedId = urlMatch ? urlMatch[1] : fileId
+      const res = await apiFetch('/api/uploads/google-drive', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileId: resolvedId, fileName: driveFileName || undefined, folderId: currentFolderId })
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Import failed')
+      }
+      queryClient.invalidateQueries({ queryKey: ['media'] })
+      showToast('success', 'Imported from Google Drive')
+      setShowDriveModal(false)
+      setDriveFileId('')
+      setDriveFileName('')
+    } catch (err: any) {
+      showToast('error', err.message || 'Failed to import from Google Drive')
+    } finally {
+      setDriveImporting(false)
+    }
+  }
+
   const currentFolderName = useMemo(() => {
     if (!currentFolderId) return 'Root'
     return folders.find((f: any) => f.id === currentFolderId)?.name || 'Folder'
@@ -508,6 +544,73 @@ export const MediaLibrary = () => {
         </div>
       )}
 
+      {/* Google Drive Import Modal */}
+      {showDriveModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4" onClick={() => { if (!driveImporting) setShowDriveModal(false) }}>
+          <div className="bg-[#141218] border border-white/10 rounded-2xl w-full max-w-md p-6 space-y-5" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M9.5 2L3 14h6.5L12 8l2.5 6H21L14.5 2H9.5z" />
+                    <path d="M3 16l3 4h12l3-4" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Import from Google Drive</h3>
+                  <p className="text-sm text-muted-foreground">Paste a shareable link or file ID</p>
+                </div>
+              </div>
+              <button onClick={() => { if (!driveImporting) setShowDriveModal(false) }} className="text-muted-foreground hover:text-white transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Google Drive File ID or URL</label>
+                <Input
+                  value={driveFileId}
+                  onChange={(e) => setDriveFileId(e.target.value)}
+                  placeholder="e.g. 1ABCxyz... or https://drive.google.com/file/d/..."
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">File Name (optional)</label>
+                <Input
+                  value={driveFileName}
+                  onChange={(e) => setDriveFileName(e.target.value)}
+                  placeholder="Leave blank to use the original name"
+                />
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              The file must be publicly accessible (shareable with link). We'll download and import it into your media library.
+            </p>
+
+            <div className="flex gap-3 pt-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => { setShowDriveModal(false); setDriveFileId(''); setDriveFileName('') }}
+                disabled={driveImporting}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="flex-1 gap-2"
+                onClick={handleDriveImportFromUrl}
+                disabled={!driveFileId.trim() || driveImporting}
+              >
+                {driveImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                {driveImporting ? 'Importing...' : 'Import'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Drag & Drop Overlay */}
       {isDragging && !draggedAssetId && (
         <div className="absolute inset-0 z-50 bg-purple-500/10 backdrop-blur-sm border-2 border-dashed border-purple-500 rounded-2xl flex flex-col items-center justify-center pointer-events-none transition-all">
@@ -553,6 +656,13 @@ export const MediaLibrary = () => {
           >
             <Upload className="w-4 h-4" />
             Import Assets
+          </Button>
+          <Button variant="outline" className="gap-2" onClick={() => setShowDriveModal(true)}>
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M9.5 2L3 14h6.5L12 8l2.5 6H21L14.5 2H9.5z" />
+              <path d="M3 16l3 4h12l3-4" />
+            </svg>
+            Google Drive
           </Button>
         </div>
       </div>
@@ -756,7 +866,7 @@ export const MediaLibrary = () => {
                 setPreviewAsset(item)
               }}
               className={cn(
-                "group relative overflow-hidden bg-white/5 hover:border-white/20 transition-all border-white/10",
+                "group relative bg-white/5 hover:border-white/20 transition-all border-white/10",
                 !selectMode && "cursor-pointer",
                 selectMode && selectedIds.has(item.id) && "ring-2 ring-purple-500"
               )}
@@ -857,7 +967,7 @@ export const MediaLibrary = () => {
           ))}
         </div>
       ) : (
-        <div className="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+        <div className="bg-white/5 rounded-xl border border-white/10">
           <table className="w-full text-left">
             <thead>
               <tr className="border-b border-white/10 bg-white/5">

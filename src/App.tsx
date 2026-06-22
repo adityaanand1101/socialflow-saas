@@ -1,21 +1,33 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { Show } from '@clerk/react'
 import { Layout } from './components/layout/Layout'
-import { Dashboard } from './pages/Dashboard'
-import { Compose } from './pages/Compose'
-import { Analytics } from './pages/Analytics'
-import { MediaLibrary } from './pages/MediaLibrary'
-import { AIStudio } from './pages/AIStudio'
-import { Channels } from './pages/Channels'
-import { Calendar } from './pages/Calendar'
-import { Team } from './pages/Team'
+import { LandingPage } from './pages/Landing'
+import { AuthPage } from './pages/Auth'
 import { AcceptInvite } from './pages/AcceptInvite'
-import { Settings } from './pages/Settings'
 import { PrivacyPolicy } from './pages/PrivacyPolicy'
 import { TermsOfService } from './pages/TermsOfService'
-import { AuthPage } from './pages/Auth'
+import { lazy, Suspense } from 'react'
 
-import { LandingPage } from './pages/Landing'
+const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })))
+const Compose = lazy(() => import('./pages/Compose').then(m => ({ default: m.Compose })))
+const Analytics = lazy(() => import('./pages/Analytics').then(m => ({ default: m.Analytics })))
+const MediaLibrary = lazy(() => import('./pages/MediaLibrary').then(m => ({ default: m.MediaLibrary })))
+const AIStudio = lazy(() => import('./pages/AIStudio').then(m => ({ default: m.AIStudio })))
+const Channels = lazy(() => import('./pages/Channels').then(m => ({ default: m.Channels })))
+const Calendar = lazy(() => import('./pages/Calendar').then(m => ({ default: m.Calendar })))
+const Team = lazy(() => import('./pages/Team').then(m => ({ default: m.Team })))
+const Settings = lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings })))
+
+function LoadingFallback() {
+  return (
+    <div className="flex items-center justify-center h-64">
+      <svg className="animate-spin h-8 w-8 text-purple-500" viewBox="0 0 24 24">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+      </svg>
+    </div>
+  )
+}
 
 function App() {
   return (
@@ -50,15 +62,51 @@ function App() {
             </Show>
           </>
         }>
-          <Route path="" element={<Dashboard />} />
-          <Route path="calendar" element={<Calendar />} />
-          <Route path="compose" element={<Compose />} />
-          <Route path="media" element={<MediaLibrary />} />
-          <Route path="analytics" element={<Analytics />} />
-          <Route path="channels" element={<Channels />} />
-          <Route path="ai-studio" element={<AIStudio />} />
-          <Route path="team" element={<Team />} />
-          <Route path="settings" element={<Settings />} />
+          <Route path="" element={
+            <Suspense fallback={<LoadingFallback />}>
+              <Dashboard />
+            </Suspense>
+          } />
+          <Route path="calendar" element={
+            <Suspense fallback={<LoadingFallback />}>
+              <Calendar />
+            </Suspense>
+          } />
+          <Route path="compose" element={
+            <Suspense fallback={<LoadingFallback />}>
+              <Compose />
+            </Suspense>
+          } />
+          <Route path="media" element={
+            <Suspense fallback={<LoadingFallback />}>
+              <MediaLibrary />
+            </Suspense>
+          } />
+          <Route path="analytics" element={
+            <Suspense fallback={<LoadingFallback />}>
+              <Analytics />
+            </Suspense>
+          } />
+          <Route path="channels" element={
+            <Suspense fallback={<LoadingFallback />}>
+              <Channels />
+            </Suspense>
+          } />
+          <Route path="ai-studio" element={
+            <Suspense fallback={<LoadingFallback />}>
+              <AIStudio />
+            </Suspense>
+          } />
+          <Route path="team" element={
+            <Suspense fallback={<LoadingFallback />}>
+              <Team />
+            </Suspense>
+          } />
+          <Route path="settings" element={
+            <Suspense fallback={<LoadingFallback />}>
+              <Settings />
+            </Suspense>
+          } />
         </Route>
       </Routes>
     </Router>

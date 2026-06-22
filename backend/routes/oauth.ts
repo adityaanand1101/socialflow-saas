@@ -489,7 +489,10 @@ router.get('/:platform/callback', async (req: any, res) => {
     if (platform === 'instagram') {
       // Instagram Login API returns user profile directly with account_type
       // No Facebook Pages lookup needed
-      console.log(`[${platform}] Using Instagram Login API - fetching profile from ${finalProfileUrl}`);
+      // Instagram Basic Display API requires access_token as URL query param, not Authorization header
+      finalProfileUrl += `&access_token=${accessToken}`;
+      finalProfileHeaders = {};
+      console.log(`[${platform}] Using Instagram Login API - fetching profile`);
     }
 
     let profileData: any = {};

@@ -18,6 +18,7 @@ const platformColors: Record<string, string> = {
   slack: 'from-purple-700 to-purple-500',
   pinterest: 'from-red-600 to-red-500',
   reddit: 'from-orange-600 to-orange-400',
+  rss: 'from-orange-500 to-yellow-500',
 };
 
 export function ChannelAvatar({

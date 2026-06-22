@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Search, Bell, Plus, ExternalLink } from 'lucide-react'
+import { Search, Bell, Plus, ExternalLink, Settings, LogOut, User } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { useUser, UserButton, useAuth } from '@clerk/react'
+import { useUser, useAuth } from '@clerk/react'
 import { useNavigate } from 'react-router-dom'
 import { apiFetch } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -19,12 +19,14 @@ interface Notification {
 
 export const Topbar = () => {
   const { user } = useUser()
-  const { getToken } = useAuth()
+  const { getToken, signOut } = useAuth()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const userMenuRef = useRef<HTMLDivElement>(null)
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -53,6 +55,9 @@ export const Topbar = () => {
     const handleClick = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setOpen(false)
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false)
       }
     }
     document.addEventListener('mousedown', handleClick)
@@ -185,12 +190,42 @@ export const Topbar = () => {
           )}
         </div>
 
-        <div className="flex items-center gap-3 pl-4 border-l border-white/10">
+        <div className="flex items-center gap-3 pl-4 border-l border-white/10" ref={userMenuRef}>
           <div className="hidden lg:block text-right">
             <p className="text-xs font-semibold text-white truncate max-w-[150px]">{user?.fullName || user?.username || 'User'}</p>
             <p className="text-[10px] text-muted-foreground">Workspace Admin</p>
           </div>
-          <UserButton />
+          <button
+            onClick={() => setUserMenuOpen(!userMenuOpen)}
+            className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-sm font-bold text-white shrink-0 hover:ring-2 hover:ring-white/20 transition-all"
+          >
+            {(user?.fullName || user?.username || 'U')[0].toUpperCase()}
+          </button>
+
+          {userMenuOpen && (
+            <div className="absolute top-16 right-8 w-48 bg-[#1c1824] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+              <div className="px-4 py-3 border-b border-white/10">
+                <p className="text-sm font-semibold text-white truncate">{user?.fullName || user?.username || 'User'}</p>
+                <p className="text-xs text-muted-foreground truncate">{user?.primaryEmailAddress?.emailAddress}</p>
+              </div>
+              <div className="py-1">
+                <button
+                  onClick={() => { navigate('/app/settings'); setUserMenuOpen(false) }}
+                  className="w-full text-left px-4 py-2.5 text-sm text-muted-foreground hover:text-white hover:bg-white/5 flex items-center gap-3 transition-colors"
+                >
+                  <Settings className="w-4 h-4" />
+                  Settings
+                </button>
+                <button
+                  onClick={() => { signOut(); setUserMenuOpen(false) }}
+                  className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-3 transition-colors"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Sign Out
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </header>

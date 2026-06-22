@@ -129,6 +129,7 @@ enum PlatformType {
   DISCORD
   TELEGRAM
   TUMBLR
+  RSS
 }
 
 enum PostStatus {

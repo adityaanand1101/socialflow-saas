@@ -5,6 +5,7 @@ import { requireAuth } from '../middlewares/auth';
 import fetch from 'node-fetch';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
+import Parser from 'rss-parser';
 
 dotenv.config();
 
@@ -695,12 +696,32 @@ router.post('/:platform/manual-connect', requireAuth, async (req: any, res: any)
     if (!/^[a-zA-Z0-9._]{1,30}$/.test(handle)) {
       return res.status(400).json({ error: 'Invalid Instagram handle format' });
     }
+  } else if (platform === 'rss') {
+    // RSS: identifier = feed URL, no password needed
+    if (!identifier) {
+      return res.status(400).json({ error: 'RSS feed URL is required' });
+    }
+    try {
+      new URL(identifier);
+    } catch {
+      return res.status(400).json({ error: 'Invalid RSS feed URL format' });
+    }
+    // Try parsing the feed to validate it
+    const parser = new Parser();
+    try {
+      const feed = await parser.parseURL(identifier);
+      if (feed.title) {
+        req.feedTitle = feed.title;
+      }
+    } catch {
+      return res.status(400).json({ error: 'Could not fetch or parse RSS feed. Check the URL and try again.' });
+    }
   } else {
     if (!identifier || !password) {
       return res.status(400).json({ error: 'Missing required credentials' });
     }
     if (platform !== 'bluesky' && platform !== 'telegram') {
-      return res.status(400).json({ error: 'Manual connect is only supported for Bluesky, Telegram, and Instagram' });
+      return res.status(400).json({ error: 'Manual connect is only supported for Bluesky, Telegram, Instagram, and RSS' });
     }
   }
 
@@ -726,6 +747,10 @@ router.post('/:platform/manual-connect', requireAuth, async (req: any, res: any)
     if (platform === 'instagram') {
       // For Instagram manual: store handle in manualHandle, no tokens
       profileId = `manual_${identifier.startsWith('@') ? identifier.slice(1) : identifier}`;
+    } else if (platform === 'rss') {
+      profileId = `rss_${identifier}`;
+      // Use parsed feed title if available
+      finalDisplayName = (req as any).feedTitle || identifier;
     } else {
       // Bluesky/Telegram: store credentials in token fields
     }
@@ -758,6 +783,36 @@ router.post('/:platform/manual-connect', requireAuth, async (req: any, res: any)
           avatarUrl: finalAvatarUrl,
           connectionType,
           igAccountSubtype,
+          manualHandle: identifier,
+          manualDisplayName: finalDisplayName,
+          manualAvatarUrl: finalAvatarUrl,
+          tokenExpiresAt: null
+        }
+      });
+    } else if (platform === 'rss') {
+      await prisma.socialAccount.upsert({
+        where: {
+          workspaceId_platform_platformAccountId: {
+            workspaceId,
+            platform: mappedPlatform,
+            platformAccountId: profileId
+          }
+        },
+        update: {
+          manualHandle: identifier,
+          manualDisplayName: finalDisplayName,
+          manualAvatarUrl: finalAvatarUrl,
+          connectionType,
+          updatedAt: new Date(),
+        },
+        create: {
+          workspaceId,
+          platform: mappedPlatform,
+          platformAccountId: profileId,
+          username: identifier,
+          displayName: finalDisplayName,
+          avatarUrl: finalAvatarUrl,
+          connectionType,
           manualHandle: identifier,
           manualDisplayName: finalDisplayName,
           manualAvatarUrl: finalAvatarUrl,

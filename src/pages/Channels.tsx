@@ -170,7 +170,8 @@ export const Channels = () => {
     }
   }
 
-  const availablePlatforms = ALL_PLATFORMS
+  const availablePlatforms = ALL_PLATFORMS.filter(p => p.id !== 'rss')
+  const socialChannels = channels.filter((c: any) => c.platform !== 'rss')
 
   return (
     <div className="space-y-8 pb-10">
@@ -203,7 +204,7 @@ export const Channels = () => {
         {!loading && (
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10">
             <div className="w-2 h-2 rounded-full bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.5)]" />
-            <span className="text-xs font-bold text-white">{channels.length} Connected</span>
+            <span className="text-xs font-bold text-white">{socialChannels.length} Connected</span>
           </div>
         )}
       </div>
@@ -466,11 +467,11 @@ export const Channels = () => {
       )}
 
       {/* Connected Channels */}
-      {!loading && channels.length > 0 && (
+      {!loading && socialChannels.length > 0 && (
         <div>
           <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-4">Connected Accounts</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {channels.map((channel: any) => {
+            {socialChannels.map((channel: any) => {
               const platform = ALL_PLATFORMS.find(p => p.id === channel.platform)
               const PlatformIcon = platform?.icon || Instagram
               const hasStats = channel.followers != null || channel.engagementRate != null || channel.reach != null
@@ -554,7 +555,7 @@ export const Channels = () => {
       {!loading && availablePlatforms.length > 0 && (
         <div>
           <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-4">
-            {channels.length > 0 ? 'Add More Channels' : 'Connect a Channel'}
+            {socialChannels.length > 0 ? 'Add More Channels' : 'Connect a Channel'}
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {availablePlatforms.map((platform) => (
@@ -563,20 +564,15 @@ export const Channels = () => {
                 className={cn("cursor-pointer transition-all border-dashed border-2 border-white/10 bg-transparent group", platform.bgHover)}
               >
                 <CardContent className="flex flex-col items-center justify-center gap-3 py-8 text-center">
-                  {platform.id !== 'pinterest' && platform.id !== 'reddit' && (
-                    <div className="flex items-center gap-2 absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setShowInfoModal(platform.id) }}
-                        className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
-                        title={`About ${platform.label}`}
-                      >
-                        <Info className="w-3.5 h-3.5 text-muted-foreground" />
-                      </button>
-                    </div>
-                  )}
-                  {platform.id === 'pinterest' || platform.id === 'reddit' ? (
-                    <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 absolute top-3 right-3">Under Development</span>
-                  ) : null}
+                  <div className="flex items-center gap-2 absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setShowInfoModal(platform.id) }}
+                      className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+                      title={`About ${platform.label}`}
+                    >
+                      <Info className="w-3.5 h-3.5 text-muted-foreground" />
+                    </button>
+                  </div>
                   {connecting === platform.id ? (
                     <Loader2 className={cn("w-8 h-8 animate-spin", platform.color)} />
                   ) : (
@@ -591,12 +587,9 @@ export const Channels = () => {
                     variant="outline"
                     className="text-xs mt-1"
                     onClick={() => handleConnect(platform.id)}
-                    disabled={connecting === platform.id || platform.id === 'pinterest' || platform.id === 'reddit'}
+                    disabled={connecting === platform.id}
                   >
-                    {platform.id === 'pinterest' || platform.id === 'reddit'
-                      ? 'Under Development'
-                      : connecting === platform.id ? 'Connecting...' : 'Connect'
-                    }
+                    {connecting === platform.id ? 'Connecting...' : 'Connect'}
                   </Button>
                 </CardContent>
               </Card>
@@ -606,7 +599,7 @@ export const Channels = () => {
       )}
 
       {/* Empty state */}
-      {!loading && channels.length === 0 && !fetchError && (
+      {!loading && socialChannels.length === 0 && !fetchError && (
         <div className="mt-4 p-6 rounded-xl bg-white/5 border border-white/10 text-center">
           <p className="text-muted-foreground text-sm">Connect a social media channel above to get started. Your accounts will appear here once connected.</p>
         </div>

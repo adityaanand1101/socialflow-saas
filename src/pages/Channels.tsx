@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { ChannelAvatar } from '@/components/ChannelAvatar'
 import { 
   MoreVertical, RefreshCw, Unplug, TrendingUp, Users, Eye, Info, X, Loader2, Check, AlertCircle
 } from 'lucide-react'
@@ -503,21 +503,12 @@ export const Channels = () => {
                   </CardHeader>
                   <CardContent className="pt-4">
                     <div className="flex items-center gap-4">
-                      <Avatar className="w-14 h-14 border-2 border-white/10">
-                        {channel.avatar && !channel.avatar.includes('shadcn.png') ? (
-                          <AvatarImage src={channel.avatar} />
-                        ) : null}
-                        <AvatarFallback>{channel.name?.[0]?.toUpperCase()}</AvatarFallback>
-                      </Avatar>
+                      <ChannelAvatar src={channel.avatar} name={channel.name} platform={channel.platform} className="w-14 h-14 border-2 border-white/10" />
                       <div>
                         <h3 className="font-bold text-white">{channel.name}</h3>
                         <div className="flex items-center gap-2 mt-0.5">
                           <p className="text-xs text-muted-foreground capitalize">{channel.platform}</p>
-                          {channel.connectionType === 'MANUAL' ? (
-                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">Manual</span>
-                          ) : (
-                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-green-500/20 text-green-400 border border-green-500/30">API</span>
-                          )}
+
                         </div>
                       </div>
                     </div>
@@ -572,15 +563,20 @@ export const Channels = () => {
                 className={cn("cursor-pointer transition-all border-dashed border-2 border-white/10 bg-transparent group", platform.bgHover)}
               >
                 <CardContent className="flex flex-col items-center justify-center gap-3 py-8 text-center">
-                  <div className="flex items-center gap-2 absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setShowInfoModal(platform.id) }}
-                      className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
-                      title={`About ${platform.label}`}
-                    >
-                      <Info className="w-3.5 h-3.5 text-muted-foreground" />
-                    </button>
-                  </div>
+                  {platform.id !== 'pinterest' && platform.id !== 'reddit' && (
+                    <div className="flex items-center gap-2 absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setShowInfoModal(platform.id) }}
+                        className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+                        title={`About ${platform.label}`}
+                      >
+                        <Info className="w-3.5 h-3.5 text-muted-foreground" />
+                      </button>
+                    </div>
+                  )}
+                  {platform.id === 'pinterest' || platform.id === 'reddit' ? (
+                    <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 absolute top-3 right-3">Under Development</span>
+                  ) : null}
                   {connecting === platform.id ? (
                     <Loader2 className={cn("w-8 h-8 animate-spin", platform.color)} />
                   ) : (
@@ -595,9 +591,12 @@ export const Channels = () => {
                     variant="outline"
                     className="text-xs mt-1"
                     onClick={() => handleConnect(platform.id)}
-                    disabled={connecting === platform.id}
+                    disabled={connecting === platform.id || platform.id === 'pinterest' || platform.id === 'reddit'}
                   >
-                    {connecting === platform.id ? 'Connecting...' : 'Connect'}
+                    {platform.id === 'pinterest' || platform.id === 'reddit'
+                      ? 'Under Development'
+                      : connecting === platform.id ? 'Connecting...' : 'Connect'
+                    }
                   </Button>
                 </CardContent>
               </Card>

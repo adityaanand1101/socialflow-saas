@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { ChannelAvatar } from '@/components/ChannelAvatar'
 import { 
   TrendingUp, Users, MessageSquare, Eye, 
   Calendar as CalendarIcon, Plus, Clock, CheckCircle2, AlertCircle, Zap
@@ -192,10 +192,7 @@ export const Dashboard = () => {
                 <div key={channel.id} className="space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <Avatar className="w-10 h-10 border border-white/10">
-                        <AvatarImage src={channel.avatar} />
-                        <AvatarFallback>{channel.name[0]}</AvatarFallback>
-                      </Avatar>
+                      <ChannelAvatar src={channel.avatar} name={channel.name} platform={channel.platform} className="w-10 h-10 border border-white/10" />
                       <div>
                         <p className="text-sm font-semibold text-white">{channel.name}</p>
                         <p className="text-xs text-muted-foreground">{channel.followers.toLocaleString()} followers</p>

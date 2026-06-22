@@ -336,7 +336,7 @@ router.get('/:platform/callback', async (req: any, res) => {
     // Execute the real OAuth code exchange flow
     let redirectUri = getRedirectUri(platform);
     // Meta Dashboard may add trailing slash to redirect URIs — detect from request URL
-    if (platform === 'threads' && req.originalUrl?.startsWith(getRedirectUri(platform) + '/')) {
+    if ((platform === 'threads' || platform === 'instagram') && req.originalUrl?.startsWith(getRedirectUri(platform) + '/')) {
       redirectUri = getRedirectUri(platform) + '/';
       console.log(`[${platform}] Request URL has trailing slash, adjusting redirect_uri to match Dashboard`);
     }

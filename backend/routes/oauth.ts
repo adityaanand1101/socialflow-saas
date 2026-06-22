@@ -444,6 +444,33 @@ router.get('/:platform/callback', async (req: any, res) => {
       }
     }
 
+    // Instagram: Exchange short-lived token (1 hour) for long-lived token (60 days)
+    if (platform === 'instagram') {
+      try {
+        const qs = new URLSearchParams({
+          grant_type: 'ig_exchange_token',
+          client_secret: provider.clientSecret,
+          access_token: accessToken,
+        });
+        const longLivedUrl = `https://graph.instagram.com/access_token?${qs.toString()}`;
+        console.log(`[instagram] Exchanging short-lived token for long-lived token`);
+        const longLivedRes = await fetch(longLivedUrl);
+        if (longLivedRes.ok) {
+          const longLivedData = await longLivedRes.json() as any;
+          if (longLivedData.access_token) {
+            accessToken = longLivedData.access_token;
+            tokenExpiresIn = longLivedData.expires_in || 5184000; // 60 days default
+            console.log(`[instagram] Long-lived token obtained, expires_in: ${tokenExpiresIn}s`);
+          }
+        } else {
+          const errText = await longLivedRes.text();
+          console.warn(`[instagram] Long-lived exchange failed, using short-lived token: ${errText}`);
+        }
+      } catch (e) {
+        console.warn(`[instagram] Long-lived exchange error, using short-lived token:`, e);
+      }
+    }
+
     // Fetch user profile info from the platform
     const profileHeaders: Record<string, string> = {
       'Authorization': `Bearer ${accessToken}`

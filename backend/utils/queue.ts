@@ -58,6 +58,35 @@ async function refreshSocialAccountToken(account: any) {
     }
   }
 
+  // Instagram uses ig_refresh_token (no separate refresh_token returned by the API).
+  if (platformKey === 'instagram') {
+    if (!account.tokenExpiresAt) return decryptToken(account.accessToken, ENCRYPTION_KEY);
+    const expiresAt = new Date(account.tokenExpiresAt);
+    const sevenDaysFromNow = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    if (expiresAt > sevenDaysFromNow) return decryptToken(account.accessToken, ENCRYPTION_KEY);
+
+    try {
+      const currentToken = decryptToken(account.accessToken, ENCRYPTION_KEY);
+      const refreshUrl = `https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=${encodeURIComponent(currentToken)}`;
+      const res = await fetch(refreshUrl);
+      if (!res.ok) throw new Error(`Instagram token refresh failed: ${await res.text()}`);
+      const data = await res.json() as any;
+      const newToken = data.access_token;
+      if (!newToken) throw new Error('No access_token in Instagram refresh response');
+      const expiresIn = data.expires_in || 5184000;
+      const encrypted = encryptToken(newToken, ENCRYPTION_KEY);
+      const newExpiresAt = new Date(Date.now() + expiresIn * 1000);
+      await prisma.socialAccount.update({
+        where: { id: account.id },
+        data: { accessToken: encrypted, tokenExpiresAt: newExpiresAt }
+      });
+      return newToken;
+    } catch (err) {
+      console.error(`Error refreshing Instagram token:`, err);
+      return decryptToken(account.accessToken, ENCRYPTION_KEY);
+    }
+  }
+
   if (!account.refreshToken || !account.tokenExpiresAt || new Date(account.tokenExpiresAt) > new Date()) {
     return decryptToken(account.accessToken, ENCRYPTION_KEY);
   }

@@ -83,7 +83,6 @@ export const MediaLibrary = () => {
   const [driveImporting, setDriveImporting] = useState(false)
   const [driveFiles, setDriveFiles] = useState<{ id: string; name: string; mimeType: string; size: string }[]>([])
   const [driveAccessToken, setDriveAccessToken] = useState<string | null>(null)
-  const pickerLoaded = useRef(false)
   const driveAuthInProgress = useRef(false)
 
   // Asset Rename Modal
@@ -378,19 +377,6 @@ export const MediaLibrary = () => {
       script.onerror = () => reject(new Error('Failed to load Google API'))
       document.head.appendChild(script)
     })
-  }
-
-  const initializePicker = async () => {
-    try {
-      await loadGapi()
-      await new Promise<void>((resolve, reject) => {
-        (window as any).gapi.load('picker', { callback: resolve, onerror: reject })
-      })
-      pickerLoaded.current = true
-    } catch (e) {
-      console.error('Failed to initialize Google Picker:', e)
-      showToast('error', 'Failed to load Google Drive picker')
-    }
   }
 
   const handleDriveAuth = async () => {

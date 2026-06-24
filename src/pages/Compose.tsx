@@ -1,12 +1,11 @@
 import { useRef, useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 import {
   Image as ImageIcon, Hash, Send, Calendar,
-  Save, Sparkles, Smartphone, Monitor, Loader2, X, Clock, Upload,
+  Save, Sparkles, Loader2, X, Clock, Upload,
   AlertTriangle, Trash2, Lock, Plus, GripVertical, Link2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -19,35 +18,14 @@ import { ALL_PLATFORMS } from '@/lib/platforms'
 import { getPlatformConstraint, PLATFORM_CONSTRAINTS, getPlatformWarnings, getContentTypes, getContentType, getDefaultContentType } from '@/lib/platformConstraints'
 import { RichTextEditor } from '@/components/editor/RichTextEditor'
 import { stripHtml, wrapPlainText } from '@/lib/htmlUtils'
-
-const toneOptions = ['Professional', 'Casual', 'Funny', 'Inspirational', 'Urgent']
-
-const PLATFORM_ORDER = ['instagram', 'facebook', 'x', 'linkedin', 'threads', 'youtube', 'pinterest', 'bluesky', 'mastodon', 'reddit', 'wordpress', 'discord', 'telegram', 'tumblr', 'slack', 'gmb']
-
-const SORTED_PLATFORMS = [...ALL_PLATFORMS].sort((a, b) => PLATFORM_ORDER.indexOf(a.id) - PLATFORM_ORDER.indexOf(b.id))
-
-const ASPECT_CLASSES: Record<string, string> = {
-  '1:1': 'aspect-square',
-  '4:5': 'aspect-[4/5]',
-  '16:9': 'aspect-video',
-  '9:16': 'aspect-[9/16]',
-  '4:3': 'aspect-[4/3]',
-  '2:3': 'aspect-[2/3]',
-  '3:2': 'aspect-[3/2]',
-  '1:3.5': 'aspect-[1/3.5]',
-  '*': 'aspect-video',
-}
-
-function guessMediaType(url: string, typesMap?: Record<string, string>): 'image' | 'video' {
-  if (typesMap?.[url]) {
-    const t = typesMap[url]
-    if (t.startsWith('video/')) return 'video'
-    if (t.startsWith('image/')) return 'image'
-  }
-  const ext = url.split('?')[0].split('/').pop()?.toLowerCase() || ''
-  if (['mp4', 'webm', 'mov', 'avi', 'mkv', 'm4v'].some(e => ext.endsWith(e) || ext === e)) return 'video'
-  return 'image'
-}
+import { toastStore } from '@/lib/toast/store'
+import {
+  PlatformSelector,
+  ContentEditor,
+  PreviewPanel,
+  WarningModal,
+  SchedulerPanel
+} from '@/components/compose'
 
 export const Compose = () => {
   const [searchParams] = useSearchParams()
@@ -136,13 +114,12 @@ export const Compose = () => {
     if (t.structuredContent) setStructuredContent(t.structuredContent)
     setShowTemplateModal(false)
   }
-  
+
   const { addPost, updatePost, uploadMedia, channels } = useStore()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const { getToken } = useAuth()
 
-  // Fetch connected social accounts for account ID resolution
   const { data: accountsData } = useQuery({
     queryKey: ['accounts'],
     queryFn: async () => {
@@ -168,17 +145,19 @@ export const Compose = () => {
 
   const connectedPlatformIds = useMemo(() => new Set(Object.keys(platformToAccountIds)), [platformToAccountIds])
 
+  const SORTED_PLATFORMS = useMemo(() =>
+    [...ALL_PLATFORMS].sort((a, b) => ['instagram', 'facebook', 'x', 'linkedin', 'threads', 'youtube', 'pinterest', 'bluesky', 'mastodon', 'reddit', 'wordpress', 'discord', 'telegram', 'tumblr', 'slack', 'gmb'].indexOf(a.id) - ['instagram', 'facebook', 'x', 'linkedin', 'threads', 'youtube', 'pinterest', 'bluesky', 'mastodon', 'reddit', 'wordpress', 'discord', 'telegram', 'tumblr', 'slack', 'gmb'].indexOf(b.id)),
+  [])
+
   const availablePlatforms = useMemo(
     () => SORTED_PLATFORMS.filter(p => connectedPlatformIds.has(p.id)),
     [connectedPlatformIds],
   )
 
-  // Deselect platforms that are no longer connected
   useEffect(() => {
     setSelectedPlatforms(prev => prev.filter(p => connectedPlatformIds.has(p)))
   }, [connectedPlatformIds])
 
-  // --- React Query for Media ---
   const { data: mediaData } = useQuery({
     queryKey: ['media', 'root'],
     queryFn: async () => {
@@ -189,7 +168,6 @@ export const Compose = () => {
     staleTime: 1000 * 60 * 5,
   })
 
-  // Pre-fill caption from AI Studio
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const captionParam = params.get('caption')
@@ -199,7 +177,6 @@ export const Compose = () => {
     }
   }, [])
 
-  // --- Fetch Post if editing ---
   useEffect(() => {
     const fetchPost = async () => {
       if (editingPostId) {
@@ -212,6 +189,10 @@ export const Compose = () => {
           setSelectedPlatforms(platforms)
           setActivePreviewPlatform(platforms[0])
           setMediaFiles(post.mediaUrls || post.media || [])
+          if (post.structuredContent) setStructuredContent(post.structuredContent)
+          if (post.thread || post.threadPosts) setThreadPosts(post.thread || post.threadPosts || [])
+          if (post.postTypes) setPostTypes(post.postTypes)
+          if (post.platformCaptions) setPlatformCaptions(post.platformCaptions)
           if (post.scheduledAt || post.scheduledTime) {
             setScheduledDate(format(new Date(post.scheduledAt || post.scheduledTime), "yyyy-MM-dd'T'HH:mm"))
             setShowScheduler(true)
@@ -222,7 +203,6 @@ export const Compose = () => {
     fetchPost()
   }, [editingPostId])
 
-  // --- Draft auto-save ---
   useEffect(() => {
     if (editingPostId) return
     if (!caption && mediaFiles.length === 0 && threadPosts.length === 0) return
@@ -230,7 +210,6 @@ export const Compose = () => {
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)) } catch {}
   }, [caption, selectedPlatforms, mediaFiles, mediaTypes, platformCaptions, postTypes, structuredContent, scheduledDate, showScheduler, threadPosts, editingPostId])
 
-  // --- Check for saved draft on mount ---
   useEffect(() => {
     if (editingPostId) return
     const raw = localStorage.getItem(DRAFT_KEY)
@@ -243,6 +222,16 @@ export const Compose = () => {
       } catch {}
     }
   }, [editingPostId])
+
+  useEffect(() => {
+    if (!caption && mediaFiles.length === 0) return
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [caption, mediaFiles])
 
   const restoreDraft = () => {
     const raw = localStorage.getItem(DRAFT_KEY)
@@ -346,7 +335,6 @@ export const Compose = () => {
 
   const libraryMedia = mediaData?.assets || []
 
-  // --- Hashtag helpers ---
   const generateHashtags = async () => {
     if (!hashtagNiche.trim()) return
     setHashtagLoading(true)
@@ -381,12 +369,12 @@ export const Compose = () => {
     try {
       const token = await getToken()
       if (!token) return
-      
+
       const res = await apiFetch('/api/shortlinks/auto', {
         method: 'POST',
-        headers: { 
-          Authorization: `Bearer ${token}`, 
-          'Content-Type': 'application/json' 
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           content: caption,
@@ -395,7 +383,7 @@ export const Compose = () => {
           domain: shortlinkDomain || undefined
         }),
       })
-      
+
       if (res.ok) {
         const data = await res.json()
         if (data.shortenedContent) {
@@ -413,16 +401,15 @@ export const Compose = () => {
     setIsUploadingMedia(true)
     try {
       const token = await getToken()
-      if (!token) return null
+      if (!token) throw new Error('No auth token')
       const asset = await uploadMedia(token, file)
-      if (asset) {
-        setMediaFiles(prev => [...prev, asset.fileUrl])
-        setMediaTypes(prev => ({ ...prev, [asset.fileUrl]: asset.fileType || file.type }))
-        queryClient.invalidateQueries({ queryKey: ['media'] })
-      }
+      setMediaFiles(prev => [...prev, asset.fileUrl])
+      setMediaTypes(prev => ({ ...prev, [asset.fileUrl]: asset.fileType || file.type }))
+      queryClient.invalidateQueries({ queryKey: ['media'] })
       return asset
     } catch (error) {
       console.error('Upload failed:', error)
+      toastStore.error('Media upload failed')
       return null
     }
   }
@@ -473,7 +460,7 @@ export const Compose = () => {
   }
 
   const toggleLibraryMedia = (url: string, fileType?: string) => {
-    setMediaFiles(prev => 
+    setMediaFiles(prev =>
       prev.includes(url) ? prev.filter(u => u !== url) : [...prev, url]
     )
     if (fileType) {
@@ -514,7 +501,6 @@ export const Compose = () => {
     }
   }
 
-  // Rich text editor ref counter for external content reloads
   const [editorReloadKey, setEditorReloadKey] = useState(0)
 
   const reloadEditor = useCallback((newCaption: string) => {
@@ -540,7 +526,17 @@ export const Compose = () => {
     if (removed) setMediaTypes(prev => { const n = { ...prev }; delete n[removed]; return n })
   }
 
-  // Per-platform warnings
+  function guessMediaType(url: string, typesMap?: Record<string, string>): 'image' | 'video' {
+    if (typesMap?.[url]) {
+      const t = typesMap[url]
+      if (t.startsWith('video/')) return 'video'
+      if (t.startsWith('image/')) return 'image'
+    }
+    const ext = url.split('?')[0].split('/').pop()?.toLowerCase() || ''
+    if (['mp4', 'webm', 'mov', 'avi', 'mkv', 'm4v'].some(e => ext.endsWith(e) || ext === e)) return 'video'
+    return 'image'
+  }
+
   const mediaInfo = useMemo(() => mediaFiles.map(url => ({ url, type: guessMediaType(url, mediaTypes) })), [mediaFiles, mediaTypes])
 
   const allWarnings = useMemo(() => {
@@ -560,16 +556,7 @@ export const Compose = () => {
     ? activePreviewPlatform
     : selectedPlatforms[0] || 'instagram'
 
-  const activeConstraints = getPlatformConstraint(activePlatform)
-
   const currentEditorCaption = activeEditorPlatform === 'master' ? caption : getCaptionForPlatform(activeEditorPlatform)
-
-  // --- Link/URL detection ---
-  const detectedUrls = useMemo(() => {
-    const urlRegex = /(https?:\/\/[^\s]+)/g
-    const matches = stripHtml(currentEditorCaption).match(urlRegex)
-    return matches || []
-  }, [currentEditorCaption])
 
   const handlePost = async (status: 'published' | 'draft' | 'scheduled', force = false) => {
     if (status !== 'draft' && hasWarnings && !showWarnings && !force) {
@@ -577,7 +564,7 @@ export const Compose = () => {
       return
     }
     if (!stripHtml(caption).trim() && status !== 'draft') return
-    
+
     setIsSubmitting(true)
     try {
       const token = await getToken()
@@ -586,7 +573,6 @@ export const Compose = () => {
 
       const plainCaption = stripHtml(caption)
 
-      // Resolve platform IDs to connected social account IDs
       const accountIds: string[] = []
       for (const pid of selectedPlatforms) {
         const ids = platformToAccountIds[pid] || []
@@ -625,24 +611,15 @@ export const Compose = () => {
       clearDraft()
     } catch (error) {
       console.error('Failed to save post:', error)
+      toastStore.error('Failed to save post')
     } finally {
       setIsSubmitting(false)
       setShowWarnings(false)
     }
   }
 
-  const previewRatio = activeConstraints.imageRatios.includes('*')
-    ? 'aspect-video'
-    : ASPECT_CLASSES[activeConstraints.imageRatios[0]] || 'aspect-square'
-
-  const previewIsVideo = mediaInfo.length > 0 && mediaInfo[0].type === 'video'
-  const previewRatioClass = previewIsVideo && activeConstraints.videoRatios.length > 0 && activeConstraints.videoRatios[0] !== '*'
-    ? ASPECT_CLASSES[activeConstraints.videoRatios[0]] || 'aspect-video'
-    : previewRatio
-
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 pb-10">
-      {/* Editor Panel */}
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-white tracking-tight">Compose Post</h1>
@@ -657,7 +634,6 @@ export const Compose = () => {
           </div>
         </div>
 
-        {/* Draft restore banner */}
         {showDraftRestore && (
           <div className="flex items-center justify-between p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-sm">
             <div className="flex items-center gap-2">
@@ -671,916 +647,127 @@ export const Compose = () => {
           </div>
         )}
 
-        {/* Platform Selector */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Select Platforms</CardTitle>
-            <CardDescription>Choose where you want to publish this post.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {availablePlatforms.length === 0 ? (
-              <div className="text-center py-6">
-                <p className="text-sm text-muted-foreground mb-3">No channels connected yet.</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navigate('/channels')}
-                  className="text-xs"
-                >
-                  Connect a Channel
-                </Button>
-              </div>
-            ) : (
-            <div className="flex flex-wrap gap-2">
-              {availablePlatforms.map((p: any) => {
-                const c = PLATFORM_CONSTRAINTS[p.id]
-                const selected = selectedPlatforms.includes(p.id)
-                return (
-                  <button
-                    key={p.id}
-                    onClick={() => togglePlatform(p.id)}
-                    className={cn(
-                      "group relative flex flex-col items-start px-3 py-2 rounded-lg border transition-all text-left",
-                      selected
-                        ? "bg-gradient-primary border-transparent text-white shadow-glow"
-                        : "bg-white/5 border-white/10 text-muted-foreground hover:border-white/20"
-                    )}
-                  >
-                    {selected && p.id in platformCaptions && (
-                      <div className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-purple-400 border-2 border-[#0F1117] flex items-center justify-center">
-                        <div className="w-1.5 h-1.5 rounded-full bg-white" />
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2">
-                      <p.icon className={cn("w-4 h-4", !selected && p.color)} />
-                      <span className="text-sm font-medium whitespace-nowrap">{p.label}</span>
-                    </div>
-                    {c && (
-                      <div className="flex items-center gap-1.5 mt-1">
-                        <span className={cn("text-[9px] uppercase font-bold tracking-wider", selected ? "text-white/70" : "text-muted-foreground/60")}>
-                          {c.maxChars < 10000 ? `${c.maxChars}c` : '∞'}
-                        </span>
-                        <span className={cn("text-[9px]", selected ? "text-white/50" : "text-muted-foreground/40")}>·</span>
-                        <span className={cn("text-[9px] uppercase font-bold tracking-wider", selected ? "text-white/70" : "text-muted-foreground/60")}>
-                          {c.mediaType === 'none' ? 'No media' : c.mediaType === 'video' ? 'Video only' : c.mediaType === 'image' ? 'Image' : 'Media'}
-                        </span>
-                        {c.allowCarousel && (
-                          <>
-                            <span className={cn("text-[9px]", selected ? "text-white/50" : "text-muted-foreground/40")}>·</span>
-                            <span className={cn("text-[9px] uppercase font-bold tracking-wider", selected ? "text-white/70" : "text-muted-foreground/60")}>
-                              Carousel
-                            </span>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-            )}
-          </CardContent>
-        </Card>
+        <PlatformSelector
+          availablePlatforms={availablePlatforms}
+          selectedPlatforms={selectedPlatforms}
+          togglePlatform={togglePlatform}
+          navigate={navigate}
+          isCustomized={isCustomized}
+        />
 
-        {/* Content Editor */}
-        <Card className="flex flex-col">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-lg">Content Editor</CardTitle>
-            <div className="flex items-center gap-2">
-              <select
-                value={selectedTone}
-                onChange={(e) => setSelectedTone(e.target.value)}
-                className="text-xs bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-white focus:outline-none focus:border-purple-500/50"
-              >
-                {toneOptions.map(t => <option key={t} value={t} className="bg-[#0F1117]">{t}</option>)}
-              </select>
-              <Button 
-                variant="ghost" size="sm" 
-                className="text-purple-400 gap-2 hover:bg-purple-500/10"
-                onClick={handleRewrite}
-                disabled={isRewriting || !currentEditorCaption}
-              >
-                {isRewriting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                AI Rewrite
-              </Button>
-            </div>
-          </CardHeader>
-            <CardContent className="flex-1 flex flex-col space-y-4">
-              {/* Per-platform editor tabs */}
-              <div className="flex gap-1 p-0.5 bg-white/5 rounded-lg border border-white/10 overflow-x-auto">
-                  <button
-                    onClick={() => setActiveEditorPlatform('master')}
-                    className={cn(
-                      "px-3 py-1.5 rounded-md text-xs font-bold whitespace-nowrap transition-all",
-                      activeEditorPlatform === 'master' ? "bg-purple-500/20 text-white" : "text-muted-foreground hover:text-white"
-                    )}
-                  >
-                    Global
-                  </button>
-                {selectedPlatforms.map(pid => {
-                  const p = ALL_PLATFORMS.find(x => x.id === pid)
-                  if (!p) return null
-                  const hasCustom = isCustomized(pid)
-                  const Icon = p.icon
-                  return (
-                    <button
-                      key={pid}
-                      onClick={() => setActiveEditorPlatform(pid)}
-                      className={cn(
-                        "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold whitespace-nowrap transition-all",
-                        activeEditorPlatform === pid ? "bg-purple-500/20 text-white" : "text-muted-foreground hover:text-white"
-                      )}
-                    >
-                      <Icon className="w-3 h-3" />
-                      {p.label}
-                      {hasCustom && <div className="w-1.5 h-1.5 rounded-full bg-purple-400" />}
-                    </button>
-                  )
-                })}
-              </div>
-
-              <div className="relative flex-1 space-y-3">
-                {activeEditorPlatform !== 'master' && !isCustomized(activeEditorPlatform) ? (
-                  <div
-                    onClick={() => breakoutPlatform(activeEditorPlatform)}
-                    className="relative min-h-[200px] rounded-xl border-2 border-dashed border-white/10 bg-white/[0.02] flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-purple-500/40 hover:bg-purple-500/5 transition-all group"
-                  >
-                    <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-purple-500/20 transition-all">
-                      <Lock className="w-5 h-5 text-white/40 group-hover:text-purple-400" />
-                    </div>
-                    <div className="text-center">
-                      <p className="text-sm font-bold text-white/60 group-hover:text-white transition-colors">Using global content</p>
-                      <p className="text-[11px] text-white/30 mt-1">Click to customize content for this platform</p>
-                    </div>
-                  </div>
-                ) : activeEditorPlatform !== 'master' ? (() => {
-                  const types = getContentTypes(activeEditorPlatform)
-                  const currentType = postTypes[activeEditorPlatform] || types[0]?.id || ''
-                  return (
-                    <>
-                      {types.length > 1 && (
-                        <div className="flex gap-1 p-0.5 bg-white/5 rounded-lg border border-white/10">
-                          {types.map(t => (
-                            <button key={t.id} onClick={() => setContentType(activeEditorPlatform, t.id)}
-                              className={cn("px-2.5 py-1 rounded-md text-[10px] font-bold whitespace-nowrap transition-all", currentType === t.id ? "bg-purple-500/20 text-white" : "text-muted-foreground hover:text-white")}>
-                              {t.label}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => resetToGlobal(activeEditorPlatform)}
-                          className="text-[10px] text-muted-foreground hover:text-amber-400 transition-colors flex items-center gap-1"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
-                          Reset to global
-                        </button>
-                      </div>
-                      {(() => {
-                        const ct = getPlatformContentType(activeEditorPlatform)
-                        if (!ct || ct.fields.length === 0) {
-                          return <p className="text-xs text-muted-foreground py-8 text-center">This content type has no text fields (media-only).</p>
-                        }
-                        return (
-                          <div className="space-y-3">
-                            {ct.fields.map(field => (
-                              <div key={field.key}>
-                                <div className="flex items-center justify-between mb-1">
-                                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                                    {field.label}
-                                    {!field.required && <span className="text-[9px] font-normal text-white/30 ml-1">(optional)</span>}
-                                  </label>
-                                  {field.maxLength && (
-                                    <span className="text-[10px] text-muted-foreground">
-                                      {getFieldValue(activeEditorPlatform, field.key).length} / {field.maxLength}
-                                    </span>
-                                  )}
-                                </div>
-                                {field.type === 'textarea' ? (
-                                  <textarea
-                                    value={getFieldValue(activeEditorPlatform, field.key)}
-                                    onChange={e => setFieldValue(activeEditorPlatform, field.key, e.target.value)}
-                                    placeholder={field.placeholder}
-                                    maxLength={field.maxLength}
-                                    className="w-full min-h-[120px] bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-white/20 resize-none text-sm focus:outline-none focus:border-purple-500/50"
-                                  />
-                                ) : field.type === 'multiline-list' ? (
-                                  <textarea
-                                    value={getFieldValue(activeEditorPlatform, field.key)}
-                                    onChange={e => setFieldValue(activeEditorPlatform, field.key, e.target.value)}
-                                    placeholder={field.placeholder}
-                                    className="w-full min-h-[100px] bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-white/20 resize-none text-sm focus:outline-none focus:border-purple-500/50 font-mono"
-                                  />
-                                ) : field.type === 'select' ? (
-                                  <select
-                                    value={getFieldValue(activeEditorPlatform, field.key)}
-                                    onChange={e => setFieldValue(activeEditorPlatform, field.key, e.target.value)}
-                                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500/50"
-                                  >
-                                    {(Array.isArray(field.options) ? field.options : []).map((opt, oi) => {
-                                      const val = typeof opt === 'string' ? opt : opt.value
-                                      const lbl = typeof opt === 'string' ? opt : opt.label
-                                      return (
-                                        <option key={oi} value={val} className="bg-gray-800 text-white">{lbl}</option>
-                                      )
-                                    })}
-                                  </select>
-                                ) : field.type === 'number' || field.type === 'date' ? (
-                                  <input
-                                    type={field.type}
-                                    value={getFieldValue(activeEditorPlatform, field.key)}
-                                    onChange={e => setFieldValue(activeEditorPlatform, field.key, e.target.value)}
-                                    placeholder={field.placeholder}
-                                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-white/20 text-sm focus:outline-none focus:border-purple-500/50"
-                                  />
-                                ) : (
-                                  <input
-                                    type={field.type === 'url' ? 'url' : 'text'}
-                                    value={getFieldValue(activeEditorPlatform, field.key)}
-                                    onChange={e => setFieldValue(activeEditorPlatform, field.key, e.target.value)}
-                                    placeholder={field.placeholder}
-                                    maxLength={field.maxLength}
-                                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-white/20 text-sm focus:outline-none focus:border-purple-500/50"
-                                  />
-                                )}
-                                {field.fieldNote && (
-                                  <p className="text-[9px] text-muted-foreground/60 mt-1 leading-relaxed">{field.fieldNote}</p>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )
-                      })()}
-                    </>
-                  )
-                })() : (
-                  <RichTextEditor
-                    key={editorReloadKey}
-                    value={caption}
-                    onChange={setCaption}
-                    placeholder="What's on your mind? Type your post here..."
-                    minHeight="180px"
-                  />
-                )}
-              </div>
-
-            {/* Per-platform character bars */}
-            {selectedPlatforms.length > 1 && (
-              <div className="space-y-1">
-                {selectedPlatforms.map(pid => {
-                  const raw = getCaptionForPlatform(pid)
-                  const content = stripHtml(raw)
-                  const ct = getPlatformContentType(pid)
-                  const c = getPlatformConstraint(pid)
-                  const maxChars = ct?.maxChars || c.maxChars
-                  const pct = Math.min((content.length / maxChars) * 100, 100)
-                  const over = content.length > maxChars
-                  return (
-                    <div key={pid} className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold text-muted-foreground uppercase w-16 truncate shrink-0">{pid}</span>
-                      <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
-                        <div className={cn("h-full rounded-full transition-all", over ? "bg-red-500" : "bg-purple-500/60")} style={{ width: `${pct}%` }} />
-                      </div>
-                      <span className={cn("text-[10px] w-12 text-right shrink-0", over ? "text-red-400 font-bold" : "text-muted-foreground")}>
-                        {content.length}/{maxChars < 10000 ? maxChars : '∞'}
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-
-            {/* Thread Editor */}
-            {showThreadEditor && (
-              <div className="space-y-2 p-3 rounded-xl bg-white/[0.02] border border-white/10">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold text-white uppercase tracking-wider">Thread Posts</span>
-                    <span className="text-[10px] text-muted-foreground">{threadPosts.length + 1} total (1 main + {threadPosts.length} thread)</span>
-                  </div>
-                  <button
-                    onClick={() => setShowThreadEditor(false)}
-                    className="text-[10px] text-muted-foreground hover:text-white transition-colors"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-                <div className="space-y-2">
-                  {threadPosts.map((tp, idx) => (
-                    <div key={tp.id} className="flex gap-2 items-start group">
-                      <div className="flex flex-col items-center gap-1 pt-2 shrink-0">
-                        <GripVertical className="w-3.5 h-3.5 text-white/20" />
-                        <div className="w-5 h-5 rounded-full bg-purple-500/20 flex items-center justify-center">
-                          <span className="text-[8px] font-bold text-purple-400">#{idx + 2}</span>
-                        </div>
-                      </div>
-                      <div className="flex-1 space-y-1.5">
-                        <textarea
-                          value={tp.content}
-                          onChange={e => updateThreadPost(tp.id, { content: e.target.value })}
-                          placeholder="Additional post in this thread..."
-                          className="w-full min-h-[60px] bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-white placeholder:text-white/20 resize-none text-xs focus:outline-none focus:border-purple-500/50"
-                        />
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[9px] text-muted-foreground">Delay after previous:</span>
-                            <select
-                              value={tp.delayMinutes}
-                              onChange={e => updateThreadPost(tp.id, { delayMinutes: Number(e.target.value) })}
-                              className="text-[10px] bg-white/5 border border-white/10 rounded px-1.5 py-0.5 text-white focus:outline-none"
-                            >
-                              {[0, 1, 2, 5, 10, 15, 30, 60, 120, 360, 720, 1440].map(m => (
-                                <option key={m} value={m} className="bg-gray-800">
-                                  {m === 0 ? 'Immediately' : m < 60 ? `${m}m` : m < 1440 ? `${m / 60}h` : `${m / 1440}d`}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <button
-                            onClick={() => removeThreadPost(tp.id)}
-                            className="opacity-0 group-hover:opacity-100 text-[10px] text-red-400 hover:text-red-300 transition-all"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <button
-                  onClick={addThreadPost}
-                  className="w-full py-1.5 rounded-lg border border-dashed border-white/10 text-[11px] text-muted-foreground hover:text-white hover:border-purple-500/40 transition-all flex items-center justify-center gap-1"
-                >
-                  <Plus className="w-3 h-3" />
-                  Add thread post
-                </button>
-              </div>
-            )}
-
-            {/* Media Previews */}
-            {mediaFiles.length > 0 && (
-              <div className="flex gap-2 flex-wrap">
-                {mediaFiles.map((url, i) => (
-                  <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden group">
-                    {guessMediaType(url, mediaTypes) === 'video' ? (
-                      <video src={url} className="w-full h-full object-cover" muted />
-                    ) : (
-                      <img src={url} alt="" className="w-full h-full object-cover" />
-                    )}
-                    <button onClick={() => removeMedia(i)} className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                      <X className="w-4 h-4 text-white" />
-                    </button>
-                    <div className="absolute top-0.5 right-0.5 px-1 py-0.5 rounded bg-black/60 text-[8px] font-bold text-white uppercase">
-                      {guessMediaType(url, mediaTypes)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Link Preview */}
-            {detectedUrls.length > 0 && (
-              <div className="space-y-1.5">
-                {detectedUrls.slice(0, 1).map((url, i) => (
-                  <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-blue-500/5 border border-blue-500/20">
-                    <div className="w-6 h-6 rounded bg-blue-500/10 flex items-center justify-center shrink-0">
-                      <span className="text-[10px]">🔗</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[11px] text-blue-300 truncate">{url}</p>
-                      <p className="text-[9px] text-muted-foreground">Link will be included in post</p>
-                    </div>
-                  </div>
-                ))}
-                {detectedUrls.length > 1 && (
-                  <p className="text-[10px] text-muted-foreground">+{detectedUrls.length - 1} more URL{detectedUrls.length > 2 ? 's' : ''} detected</p>
-                )}
-              </div>
-            )}
-
-            {/* Warnings */}
-            {hasWarnings && (
-              <div className="space-y-1.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
-                <div className="flex items-center gap-2 text-amber-400 text-xs font-bold">
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  Platform warnings
-                </div>
-                {Object.entries(allWarnings).map(([pid, warnings]) =>
-                  warnings.map((w, i) => (
-                    <p key={`${pid}-${i}`} className="text-[11px] text-amber-300/80 ml-5">{pid}: {w}</p>
-                  ))
-                )}
-              </div>
-            )}
-
-            <div className="flex items-center justify-between pt-4 border-t border-white/10">
-              <div className="flex items-center gap-1">
-                <input type="file" className="hidden" ref={fileInputRef} accept="*/*" multiple onChange={onFileChange} />
-                <Button 
-                  variant="ghost" size="icon" 
-                  className={cn("text-muted-foreground hover:text-white", isUploadingMedia && "animate-pulse")}
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isUploadingMedia}
-                  title="Upload media files"
-                >
-                  {isUploadingMedia ? <span className="text-[10px] font-bold text-purple-400">{uploadProgress}%</span> : <Upload className="w-5 h-5" />}
-                </Button>
-                <Button 
-                  variant="ghost" size="icon" 
-                  className="text-muted-foreground hover:text-white"
-                  onClick={() => setShowMediaLibrary(true)}
-                >
-                  <ImageIcon className="w-5 h-5" />
-                </Button>
-
-                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-white relative" onClick={() => { setHashtagNiche(''); setHashtagSuggestions([]); setShowHashtagModal(true) }} title="Hashtag suggestions">
-                  <Hash className="w-5 h-5" />
-                  {(() => {
-                    const count = (caption.match(/#\w+/g) || []).length
-                    if (count > 0) return <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-purple-500 text-[7px] font-bold text-white flex items-center justify-center">{count}</span>
-                    return null
-                  })()}
-                </Button>
-                <Button
-                  variant="ghost" size="icon"
-                  className={cn("text-muted-foreground hover:text-white", showThreadEditor && "text-purple-400")}
-                  onClick={() => setShowThreadEditor(!showThreadEditor)}
-                  title="Thread posts"
-                >
-                  <GripVertical className="w-5 h-5" />
-                </Button>
-                <Button
-                  variant="ghost" size="icon"
-                  className={cn("text-muted-foreground hover:text-white", showShortlinkModal && "text-purple-400")}
-                  onClick={() => setShowShortlinkModal(true)}
-                  title="Shorten links"
-                >
-                  <Link2 className="w-5 h-5" />
-                </Button>
-                <div className="w-px h-6 bg-white/10" />
-                <Button
-                  variant="ghost" size="sm"
-                  className="text-muted-foreground hover:text-white text-xs gap-1"
-                  onClick={() => { loadTemplates(); setShowTemplateModal(true) }}
-                >
-                  <Save className="w-3.5 h-3.5" />
-                  Templates
-                </Button>
-              </div>
-
-              {/* Media Selection Modal */}
-              {showMediaLibrary && (
-                <div 
-                  className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
-                  onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                  onDragLeave={() => setIsDragging(false)}
-                  onDrop={onDrop}
-                >
-                  <div className="bg-[#141218] border border-white/10 rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden relative">
-                    {isDragging && (
-                      <div className="absolute inset-0 z-[120] bg-purple-500/20 backdrop-blur-md border-4 border-dashed border-purple-500 rounded-2xl flex flex-col items-center justify-center pointer-events-none">
-                        <Upload className="w-12 h-12 text-white animate-bounce mb-4" />
-                        <h3 className="text-2xl font-bold text-white">Drop to Upload & Attach</h3>
-                      </div>
-                    )}
-                    <div className="p-4 border-b border-white/10 flex items-center justify-between bg-white/5">
-                      <h3 className="font-bold text-white">Media Library</h3>
-                      <button onClick={() => setShowMediaLibrary(false)} className="text-muted-foreground hover:text-white">
-                        <X className="w-5 h-5" />
-                      </button>
-                    </div>
-                    <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-                      {libraryMedia.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
-                          <ImageIcon className="w-12 h-12 mb-2 opacity-20" />
-                          <p>Your library is empty. Drag a file here!</p>
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-4">
-                          {libraryMedia.map((item: any) => (
-                            <button
-                              key={item.id}
-                              onClick={() => toggleLibraryMedia(item.fileUrl, item.fileType)}
-                              className={cn(
-                                "relative aspect-square rounded-lg overflow-hidden border-2 transition-all",
-                                mediaFiles.includes(item.fileUrl) ? "border-purple-500 ring-2 ring-purple-500/20" : "border-transparent hover:border-white/20"
-                              )}
-                            >
-                              <img src={item.fileUrl} alt="" className="w-full h-full object-cover" />
-                              {mediaFiles.includes(item.fileUrl) && (
-                                <div className="absolute inset-0 bg-purple-500/20 flex items-center justify-center">
-                                  <div className="bg-purple-500 rounded-full p-1">
-                                    <ImageIcon className="w-4 h-4 text-white" />
-                                  </div>
-                                </div>
-                              )}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <div className="p-4 border-t border-white/10 bg-white/5 flex justify-end">
-                      <Button onClick={() => setShowMediaLibrary(false)}>Done</Button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Hashtag Modal */}
-              {showHashtagModal && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[310] flex items-center justify-center p-4" onClick={() => setShowHashtagModal(false)}>
-                  <div className="bg-[#141218] border border-white/10 rounded-2xl w-full max-w-lg max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
-                    <div className="p-4 border-b border-white/10 flex items-center justify-between">
-                      <h3 className="font-bold text-white">Hashtag Suggestions</h3>
-                      <button onClick={() => setShowHashtagModal(false)} className="text-muted-foreground hover:text-white">
-                        <X className="w-5 h-5" />
-                      </button>
-                    </div>
-                    <div className="p-4 border-b border-white/10 flex items-center gap-2">
-                      <input
-                        value={hashtagNiche}
-                        onChange={e => setHashtagNiche(e.target.value)}
-                        placeholder="e.g. marketing, tech, food..."
-                        className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50"
-                        onKeyDown={e => { if (e.key === 'Enter') generateHashtags() }}
-                      />
-                      <Button size="sm" onClick={generateHashtags} disabled={hashtagLoading || !hashtagNiche.trim()}>
-                        {hashtagLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                        {hashtagLoading ? '...' : 'Generate'}
-                      </Button>
-                    </div>
-                    <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-                      {hashtagSuggestions.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center h-40 text-muted-foreground text-center">
-                          <Hash className="w-10 h-10 mb-2 opacity-20" />
-                          <p className="text-sm">Enter a niche above to generate hashtag ideas.</p>
-                          <p className="text-xs mt-1">Click a hashtag to insert it into your caption.</p>
-                        </div>
-                      ) : (
-                        <div className="flex flex-wrap gap-2">
-                          {hashtagSuggestions.map((tag, i) => (
-                            <button
-                              key={i}
-                              onClick={() => insertHashtag(tag)}
-                              className="px-3 py-1.5 bg-white/5 hover:bg-purple-500/20 border border-white/10 hover:border-purple-500/50 rounded-full text-sm text-purple-400 transition-all"
-                            >
-                              {tag}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <div className="p-4 border-t border-white/10 flex items-center justify-between text-xs text-muted-foreground">
-                      <span>Click a hashtag to add it to your caption.</span>
-                      <Button variant="ghost" size="sm" onClick={() => setShowHashtagModal(false)}>Done</Button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Template Modal */}
-              {showTemplateModal && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[300] flex items-center justify-center p-4" onClick={() => setShowTemplateModal(false)}>
-                  <div className="bg-[#141218] border border-white/10 rounded-2xl w-full max-w-lg max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
-                    <div className="p-4 border-b border-white/10 flex items-center justify-between">
-                      <h3 className="font-bold text-white">Post Templates</h3>
-                      <button onClick={() => setShowTemplateModal(false)} className="text-muted-foreground hover:text-white">
-                        <X className="w-5 h-5" />
-                      </button>
-                    </div>
-                    <div className="p-4 border-b border-white/10 flex items-center gap-2">
-                      <input
-                        value={newTemplateName}
-                        onChange={e => setNewTemplateName(e.target.value)}
-                        placeholder="Template name..."
-                        className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50"
-                        onKeyDown={e => { if (e.key === 'Enter' && newTemplateName.trim()) { saveTemplate(newTemplateName.trim()) } }}
-                      />
-                      <Button size="sm" disabled={!newTemplateName.trim() || !caption} onClick={() => { if (newTemplateName.trim()) saveTemplate(newTemplateName.trim()) }}>
-                        Save Current
-                      </Button>
-                    </div>
-                    <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
-                      {templates.length === 0 ? (
-                        <p className="text-sm text-muted-foreground text-center py-8">No saved templates yet.</p>
-                      ) : templates.map(t => (
-                        <div key={t.id} className="flex items-center gap-3 p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-bold text-white truncate">{t.name}</p>
-                            <p className="text-[11px] text-muted-foreground truncate">
-                              {t.caption?.slice(0, 80) || 'No caption'} · {t.platforms?.length || 0} platforms
-                            </p>
-                          </div>
-                          <button onClick={() => applyTemplate(t)} className="text-xs text-purple-400 hover:text-purple-300 shrink-0 px-2 py-1 rounded hover:bg-purple-500/10">
-                            Load
-                          </button>
-                          <button onClick={() => deleteTemplate(t.id)} className="text-xs text-red-400 hover:text-red-300 shrink-0 px-2 py-1 rounded hover:bg-red-500/10">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Shortlink Modal */}
-              {showShortlinkModal && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[300] flex items-center justify-center p-4" onClick={() => setShowShortlinkModal(false)}>
-                  <div className="bg-[#141218] border border-white/10 rounded-2xl w-full max-w-lg max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
-                    <div className="p-4 border-b border-white/10 flex items-center justify-between">
-                      <h3 className="font-bold text-white">Shorten Links</h3>
-                      <button onClick={() => setShowShortlinkModal(false)} className="text-muted-foreground hover:text-white">
-                        <X className="w-5 h-5" />
-                      </button>
-                    </div>
-                    <div className="p-4 border-b border-white/10 space-y-3">
-                      <div className="flex items-center gap-2">
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider w-20 shrink-0">Provider</label>
-                        <select
-                          value={shortlinkProvider}
-                          onChange={e => setShortlinkProvider(e.target.value as any)}
-                          className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50"
-                        >
-                          <option value="dub">Dub.co</option>
-                          <option value="shortio">Short.io</option>
-                          <option value="kutt">Kutt.it</option>
-                          <option value="linkdrip">LinkDrip</option>
-                        </select>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider w-20 shrink-0">API Key</label>
-                        <input
-                          type="password"
-                          value={shortlinkApiKey}
-                          onChange={e => setShortlinkApiKey(e.target.value)}
-                          placeholder="Enter API key..."
-                          className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50"
-                        />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider w-20 shrink-0">Domain</label>
-                        <input
-                          type="text"
-                          value={shortlinkDomain}
-                          onChange={e => setShortlinkDomain(e.target.value)}
-                          placeholder="Optional custom domain..."
-                          className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50"
-                        />
-                      </div>
-                    </div>
-                    <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-                      <div className="text-center text-muted-foreground py-8">
-                        <Link2 className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                        <p className="text-sm">Enter provider details above, then click Shorten to auto-replace links in your caption.</p>
-                        <p className="text-xs mt-1">All https:// URLs will be shortened using the selected provider.</p>
-                      </div>
-                    </div>
-                    <div className="p-4 border-t border-white/10 flex items-center justify-between">
-                      <Button variant="ghost" size="sm" onClick={() => setShowShortlinkModal(false)}>Cancel</Button>
-                      <Button size="sm" onClick={handleShortenLinks} disabled={shortlinkLoading || !shortlinkApiKey.trim()}>
-                        {shortlinkLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}
-                        {shortlinkLoading ? '...' : 'Shorten Links'}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="outline"
-                  className="gap-2"
-                  onClick={() => setShowScheduler(!showScheduler)}
-                >
-                  <Clock className="w-4 h-4" />
-                  Schedule
-                </Button>
-                <Button 
-                  className="gap-2 px-6"
-                  onClick={() => handlePost('published')}
-                  disabled={isSubmitting || !caption || selectedPlatforms.length === 0}
-                >
-                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  Post Now
-                </Button>
-              </div>
-            </div>
-
-            {/* Warning Confirm Modal */}
-            {showWarnings && hasWarnings && (
-              <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4" onClick={() => setShowWarnings(false)}>
-                <div className="bg-[#141218] border border-white/10 rounded-2xl w-full max-w-md p-6 space-y-4" onClick={e => e.stopPropagation()}>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
-                      <AlertTriangle className="w-5 h-5 text-amber-400" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-white">Post with warnings?</h3>
-                      <p className="text-sm text-muted-foreground">Some platforms may not display your content correctly.</p>
-                    </div>
-                  </div>
-                  <div className="space-y-1 max-h-40 overflow-y-auto">
-                    {Object.entries(allWarnings).map(([pid, warnings]) =>
-                      warnings.map((w, i) => (
-                        <p key={`${pid}-${i}`} className="text-xs text-amber-300/80 ml-1">{pid}: {w}</p>
-                      ))
-                    )}
-                  </div>
-                  <div className="flex gap-3 pt-2">
-                    <Button variant="outline" className="flex-1" onClick={() => setShowWarnings(false)}>Review</Button>
-                    <Button className="flex-1 bg-amber-500 hover:bg-amber-600 text-white" onClick={() => { setShowWarnings(false); handlePost('published', true) }}>
-                      Post Anyway
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Scheduler Panel */}
-            {showScheduler && (
-              <div className="mt-2 p-4 rounded-xl bg-white/5 border border-white/10 animate-in fade-in slide-in-from-top-2 space-y-4">
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-purple-400" />
-                  <span className="text-sm font-bold text-white">Schedule for Later</span>
-                </div>
-                <div className="flex gap-3 items-center">
-                  <input
-                    type="datetime-local"
-                    value={scheduledDate}
-                    onChange={(e) => setScheduledDate(e.target.value)}
-                    min={format(new Date(Date.now() + 10 * 60 * 1000), "yyyy-MM-dd'T'HH:mm")}
-                    className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500/50"
-                  />
-                  <Button 
-                    className="gap-2"
-                    onClick={() => { handlePost('scheduled'); setShowScheduler(false) }}
-                    disabled={isSubmitting || !caption}
-                  >
-                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Clock className="w-4 h-4" />}
-                    Confirm
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Will publish on {format(new Date(scheduledDate), 'MMMM d, yyyy at h:mm a')}
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <ContentEditor
+          caption={caption}
+          setCaption={setCaption}
+          selectedPlatforms={selectedPlatforms}
+          activeEditorPlatform={activeEditorPlatform}
+          setActiveEditorPlatform={setActiveEditorPlatform}
+          selectedTone={selectedTone}
+          setSelectedTone={setSelectedTone}
+          isRewriting={isRewriting}
+          handleRewrite={handleRewrite}
+          platformCaptions={platformCaptions}
+          postTypes={postTypes}
+          structuredContent={structuredContent}
+          brokenOutPlatforms={brokenOutPlatforms}
+          setContentType={setContentType}
+          setFieldValue={setFieldValue}
+          getFieldValue={getFieldValue}
+          getStructuredContent={getStructuredContent}
+          getCaptionForPlatform={getCaptionForPlatform}
+          setCaptionForPlatform={setCaptionForPlatform}
+          isCustomized={isCustomized}
+          breakoutPlatform={breakoutPlatform}
+          resetToGlobal={resetToGlobal}
+          showThreadEditor={showThreadEditor}
+          setShowThreadEditor={setShowThreadEditor}
+          threadPosts={threadPosts}
+          addThreadPost={addThreadPost}
+          removeThreadPost={removeThreadPost}
+          updateThreadPost={updateThreadPost}
+          mediaFiles={mediaFiles}
+          mediaTypes={mediaTypes}
+          removeMedia={removeMedia}
+          isUploadingMedia={isUploadingMedia}
+          uploadProgress={uploadProgress}
+          isDragging={isDragging}
+          setIsDragging={setIsDragging}
+          fileInputRef={fileInputRef}
+          onFileChange={onFileChange}
+          onDrop={onDrop}
+          showMediaLibrary={showMediaLibrary}
+          setShowMediaLibrary={setShowMediaLibrary}
+          libraryMedia={libraryMedia}
+          toggleLibraryMedia={toggleLibraryMedia}
+          showHashtagModal={showHashtagModal}
+          setShowHashtagModal={setShowHashtagModal}
+          hashtagSuggestions={hashtagSuggestions}
+          hashtagNiche={hashtagNiche}
+          setHashtagNiche={setHashtagNiche}
+          hashtagLoading={hashtagLoading}
+          generateHashtags={generateHashtags}
+          insertHashtag={insertHashtag}
+          showShortlinkModal={showShortlinkModal}
+          setShowShortlinkModal={setShowShortlinkModal}
+          shortlinkProvider={shortlinkProvider}
+          setShortlinkProvider={setShortlinkProvider}
+          shortlinkApiKey={shortlinkApiKey}
+          setShortlinkApiKey={setShortlinkApiKey}
+          shortlinkDomain={shortlinkDomain}
+          setShortlinkDomain={setShortlinkDomain}
+          shortlinkLoading={shortlinkLoading}
+          handleShortenLinks={handleShortenLinks}
+          showTemplateModal={showTemplateModal}
+          setShowTemplateModal={setShowTemplateModal}
+          templates={templates}
+          loadTemplates={loadTemplates}
+          saveTemplate={saveTemplate}
+          deleteTemplate={deleteTemplate}
+          applyTemplate={applyTemplate}
+          newTemplateName={newTemplateName}
+          setNewTemplateName={setNewTemplateName}
+          editorReloadKey={editorReloadKey}
+          showScheduler={showScheduler}
+          setShowScheduler={setShowScheduler}
+          handlePost={handlePost}
+          isSubmitting={isSubmitting}
+        />
       </div>
 
-      {/* Preview Panel */}
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-white">Live Preview</h2>
-          <div className="flex items-center gap-2">
-            {/* Per-platform preview tabs — scrollable, no cap */}
-            {selectedPlatforms.length > 1 && (
-              <div className="flex gap-0.5 p-0.5 bg-white/5 rounded-lg border border-white/10 overflow-x-auto max-w-[260px] scrollbar-thin">
-                {selectedPlatforms.map(pid => {
-                  const p = ALL_PLATFORMS.find(x => x.id === pid)
-                  if (!p) return null
-                  const Icon = p.icon
-                  return (
-                    <button
-                      key={pid}
-                      onClick={() => setActivePreviewPlatform(pid)}
-                      className={cn(
-                        "p-1.5 rounded-md transition-all shrink-0",
-                        activePreviewPlatform === pid ? "bg-white/10 text-white" : "text-muted-foreground hover:text-white"
-                      )}
-                      title={p.label}
-                    >
-                      <Icon className="w-4 h-4" />
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-            <div className="flex p-1 bg-white/5 rounded-lg border border-white/10">
-              <button
-                onClick={() => setPreviewDevice('mobile')}
-                className={cn("p-1.5 rounded-md transition-all", previewDevice === 'mobile' ? "bg-white/10 text-white" : "text-muted-foreground hover:text-white")}
-              >
-                <Smartphone className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setPreviewDevice('desktop')}
-                className={cn("p-1.5 rounded-md transition-all", previewDevice === 'desktop' ? "bg-white/10 text-white" : "text-muted-foreground hover:text-white")}
-              >
-                <Monitor className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Platform info bar */}
-        <div className="flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg border border-white/10">
-          {(() => {
-            const p = ALL_PLATFORMS.find(x => x.id === activePlatform)
-            if (!p) return null
-            const Icon = p.icon
-            const c = activeConstraints
-            return (
-              <>
-                <Icon className={cn("w-4 h-4", p.color)} />
-                <span className="text-sm font-bold text-white">{p.label}</span>
-                <span className="text-xs text-muted-foreground">·</span>
-                <span className="text-[11px] text-muted-foreground">{c.maxChars < 10000 ? `${c.maxChars} char limit` : 'Unlimited chars'}</span>
-                <span className="text-xs text-muted-foreground">·</span>
-                <span className="text-[11px] text-muted-foreground">
-                  {c.mediaType === 'none' ? 'No media' :
-                   c.mediaType === 'video' ? 'Video only' :
-                   c.mediaType === 'image' ? 'Image only' :
-                   `Up to ${c.maxImages} images, ${c.maxVideos} video`}
-                </span>
-              </>
-            )
-          })()}
-        </div>
-
-        <div className="flex justify-center items-start pt-8 bg-navy-800/50 rounded-2xl border border-white/5 min-h-[580px] overflow-hidden relative">
-          <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none opacity-20">
-            <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-purple-500 blur-[120px] rounded-full" />
-            <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-pink-500 blur-[120px] rounded-full" />
-          </div>
-
-          <div className={cn("z-10 w-full", previewDevice === 'mobile' ? 'max-w-[330px]' : 'max-w-[500px]')}>
-            {(() => {
-              const PreviewComponent = getPlatformPreview(activePlatform)
-              return <PreviewComponent
-                caption={getCaptionForPlatform(activePlatform)}
-                mediaUrls={mediaFiles}
-                mediaTypes={mediaTypes}
-                mediaInfo={mediaInfo}
-                isMobile={previewDevice === 'mobile'}
-                getRatioClass={() => previewRatioClass}
-                structuredContent={getStructuredContent(activePlatform)}
-                contentTypeId={postTypes[activePlatform] || getDefaultContentType(activePlatform)}
-              />
-            })()}
-          </div>
-        </div>
-
-        {/* Media compatibility table */}
-        {mediaFiles.length > 0 && selectedPlatforms.length > 1 && (
-          <div className="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
-            <div className="px-4 py-2 border-b border-white/10 bg-white/5">
-              <p className="text-xs font-bold text-white uppercase tracking-wider">Media compatibility</p>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-[11px]">
-                <thead>
-                  <tr className="border-b border-white/10">
-                    <th className="p-2 text-left text-muted-foreground font-bold uppercase tracking-wider">Platform</th>
-                    {mediaFiles.map((_, i) => (
-                      <th key={i} className="p-2 text-center text-muted-foreground font-bold uppercase tracking-wider">#{i + 1}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedPlatforms.map(pid => {
-                    const c = getPlatformConstraint(pid)
-                    let imageIdx = 0
-                    let videoIdx = 0
-                    return (
-                      <tr key={pid} className="border-b border-white/5 last:border-none">
-                        <td className="p-2 text-white font-medium">{pid}</td>
-                        {mediaFiles.map((url, i) => {
-                          const type = guessMediaType(url, mediaTypes)
-                          let ok = true
-                          let ratio = ''
-                          if (type === 'image') {
-                            if (c.mediaType === 'video') ok = false
-                            else if (imageIdx >= c.maxImages) ok = false
-                            else ratio = c.imageRatios[0] === '*' ? 'Any' : c.imageRatios[0]
-                            imageIdx++
-                          } else {
-                            if (c.mediaType === 'image') ok = false
-                            else if (c.maxVideos === 0) ok = false
-                            else if (videoIdx >= c.maxVideos) ok = false
-                            else ratio = c.videoRatios[0] === '*' ? 'Any' : c.videoRatios[0]
-                            videoIdx++
-                          }
-                          return (
-                            <td key={i} className="p-2 text-center">
-                              <span className={cn("text-[10px] font-bold uppercase", ok ? "text-green-400" : "text-red-400")}>
-                                {ok ? `✓ ${ratio}` : '✗'}
-                              </span>
-                            </td>
-                          )
-                        })}
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+        <PreviewPanel
+          selectedPlatforms={selectedPlatforms}
+          activePreviewPlatform={activePreviewPlatform}
+          setActivePreviewPlatform={setActivePreviewPlatform}
+          previewDevice={previewDevice}
+          setPreviewDevice={setPreviewDevice}
+          activePlatform={activePlatform}
+          getCaptionForPlatform={getCaptionForPlatform}
+          mediaFiles={mediaFiles}
+          mediaTypes={mediaTypes}
+          mediaInfo={mediaInfo}
+          getStructuredContent={getStructuredContent}
+          postTypes={postTypes}
+          guessMediaType={guessMediaType}
+        />
       </div>
+
+      <WarningModal
+        showWarnings={showWarnings}
+        setShowWarnings={setShowWarnings}
+        allWarnings={allWarnings}
+        hasWarnings={hasWarnings}
+        handlePost={handlePost}
+      />
+
+      <SchedulerPanel
+        showScheduler={showScheduler}
+        scheduledDate={scheduledDate}
+        setScheduledDate={setScheduledDate}
+        isSubmitting={isSubmitting}
+        caption={caption}
+        handlePost={handlePost}
+        setShowScheduler={setShowScheduler}
+      />
     </div>
   )
 }

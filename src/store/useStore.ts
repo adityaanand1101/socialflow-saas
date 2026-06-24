@@ -173,9 +173,12 @@ export const useStore = create<SocialFlowStore>((set) => ({
       if (res.ok) {
         const data = await res.json()
         set((state) => ({ posts: [data as any, ...state.posts] }))
+      } else {
+        throw new Error(`Failed to add post: ${res.status}`)
       }
     } catch (e) {
       console.error("Failed to add post", e)
+      throw e
     }
   },
 
@@ -187,9 +190,12 @@ export const useStore = create<SocialFlowStore>((set) => ({
       })
       if (res.ok) {
         set((state) => ({ posts: state.posts.filter((p) => p.id !== id) }))
+      } else {
+        throw new Error(`Failed to remove post: ${res.status}`)
       }
     } catch (e) {
       console.error("Failed to remove post", e)
+      throw e
     }
   },
 
@@ -206,10 +212,10 @@ export const useStore = create<SocialFlowStore>((set) => ({
       if (updates.thread !== undefined) payload.thread = updates.thread;
       if (updates.platforms !== undefined) payload.platforms = updates.platforms;
       if (updates.tags !== undefined) payload.tags = updates.tags;
-      
+
       const res = await apiFetch(`/api/posts/${id}`, {
         method: 'PATCH',
-        headers: { 
+        headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
@@ -218,16 +224,33 @@ export const useStore = create<SocialFlowStore>((set) => ({
       if (res.ok) {
         const data = await res.json()
         set((state) => ({
-          posts: state.posts.map((p) => p.id === id ? { ...p, ...updates, id: data.id } : p)
+          posts: state.posts.map((p) => p.id === id ? {
+            ...p,
+            scheduledTime: data.scheduledAt || data.scheduledTime || updates.scheduledTime,
+            scheduledAt: data.scheduledAt || data.scheduledTime || updates.scheduledTime,
+            caption: data.content || data.caption || updates.caption,
+            content: data.content || data.caption || updates.caption,
+            media: data.mediaUrls || data.media || updates.media,
+            status: data.status?.toLowerCase() || updates.status,
+            platforms: data.platforms || updates.platforms,
+            structuredContent: data.structuredContent || updates.structuredContent,
+            postTypes: data.postTypes || updates.postTypes,
+            thread: data.thread || updates.thread,
+            socialAccountIds: data.socialAccountIds || updates.socialAccountIds,
+            tags: data.tags || updates.tags,
+            id: data.id || id
+          } : p)
         }))
+      } else {
+        throw new Error(`Failed to update post: ${res.status}`)
       }
     } catch (e) {
       console.error("Failed to update post", e)
+      throw e
     }
   },
 
   uploadMedia: async (token: string, file: File, folderId?: string | null) => {
-    // 1. Create Optimistic Preview
     const optimisticId = Math.random().toString(36).substring(7);
     const localPreviewUrl = URL.createObjectURL(file);
     const optimisticAsset = {
@@ -240,13 +263,12 @@ export const useStore = create<SocialFlowStore>((set) => ({
       optimistic: true
     };
 
-    // Add to UI immediately
     set((state) => ({ media: [optimisticAsset, ...state.media] }))
 
     try {
       const presignedRes = await apiFetch('/api/media/presigned-url', {
         method: 'POST',
-        headers: { 
+        headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
@@ -268,7 +290,7 @@ export const useStore = create<SocialFlowStore>((set) => ({
         if (uploadRes.ok) {
           const registerRes = await apiFetch('/api/media/register', {
             method: 'POST',
-            headers: { 
+            headers: {
               Authorization: `Bearer ${token}`,
               'Content-Type': 'application/json'
             },
@@ -284,21 +306,27 @@ export const useStore = create<SocialFlowStore>((set) => ({
 
           if (registerRes.ok) {
             const data = await registerRes.json();
-            // Replace optimistic asset with real data
-            set((state) => ({ 
-              media: state.media.map(m => m.id === optimisticId ? data : m) 
+            URL.revokeObjectURL(localPreviewUrl)
+            set((state) => ({
+              media: state.media.map(m => m.id === optimisticId ? data : m)
             }))
             return data;
+          } else {
+            throw new Error('Failed to register media')
           }
+        } else {
+          throw new Error('Failed to upload file to storage')
         }
+      } else {
+        throw new Error('Failed to get presigned URL')
       }
     } catch (error) {
       console.error("Failed to upload media", error);
     }
-    
-    // If failed, remove optimistic asset
+
+    URL.revokeObjectURL(localPreviewUrl)
     set((state) => ({ media: state.media.filter(m => m.id !== optimisticId) }))
-    return null;
+    throw new Error('Media upload failed')
   },
 
   removeMedia: async (token: string, id: string) => {

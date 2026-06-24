@@ -1,14 +1,14 @@
 import { useState, useMemo } from 'react'
-import { 
-  format, 
-  startOfMonth, 
-  endOfMonth, 
-  startOfWeek, 
-  endOfWeek, 
-  eachDayOfInterval, 
-  isSameMonth, 
-  isSameDay, 
-  addMonths, 
+import {
+  format,
+  startOfMonth,
+  endOfMonth,
+  startOfWeek,
+  endOfWeek,
+  eachDayOfInterval,
+  isSameMonth,
+  isSameDay,
+  addMonths,
   subMonths,
   addWeeks,
   subWeeks,
@@ -22,22 +22,26 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  Plus, 
+import {
+  ChevronLeft,
+  ChevronRight,
+  Plus,
   Clock,
   Trash2,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Loader2,
+  AlertTriangle
 } from 'lucide-react'
-import { 
-  Instagram, Linkedin, Twitter, Youtube, Facebook, Threads, Bluesky, 
-  Slack, Pinterest, Mastodon, Reddit, Discord, Telegram, GMB, Tumblr 
+import {
+  Instagram, Linkedin, Twitter, Youtube, Facebook, Threads, Bluesky,
+  Slack, Pinterest, Mastodon, Reddit, Discord, Telegram, GMB, Tumblr
 } from '@/components/icons'
 import { cn } from '@/lib/utils'
 import { useStore } from '@/store/useStore'
 import { useAuth } from '@clerk/react'
 import { apiFetch } from '@/lib/api'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { toastStore } from '@/lib/toast/store'
 
 type ViewMode = 'month' | 'week' | 'day'
 
@@ -63,13 +67,13 @@ const platformIcons: Record<string, any> = {
 export const Calendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [viewMode, setViewMode] = useState<ViewMode>('month')
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const { updatePost, removePost } = useStore()
   const { getToken } = useAuth()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
-  // --- React Query for Posts ---
-  const { data: postsData } = useQuery({
+  const { data: postsData, isLoading, isError, refetch } = useQuery({
     queryKey: ['posts'],
     queryFn: async () => {
       const token = await getToken()
@@ -85,7 +89,6 @@ export const Calendar = () => {
     return []
   }, [postsData])
 
-  // --- Navigation Logic ---
   const next = () => {
     if (viewMode === 'month') setCurrentDate(addMonths(currentDate, 1))
     else if (viewMode === 'week') setCurrentDate(addWeeks(currentDate, 1))
@@ -100,7 +103,6 @@ export const Calendar = () => {
 
   const goToToday = () => setCurrentDate(new Date())
 
-  // --- Date Range Calculation ---
   const calendarDays = useMemo(() => {
     let start, end;
     if (viewMode === 'month') {
@@ -115,11 +117,9 @@ export const Calendar = () => {
       start = startOfDay(currentDate)
       end = endOfDay(currentDate)
     }
-
     return eachDayOfInterval({ start, end })
   }, [currentDate, viewMode])
 
-  // --- Drag & Drop ---
   const handleDragStart = (e: React.DragEvent, postId: string) => {
     e.dataTransfer.setData('postId', postId)
     e.dataTransfer.effectAllowed = 'move'
@@ -132,20 +132,23 @@ export const Calendar = () => {
 
     try {
       const token = await getToken()
-      if (!token) return
-      
+      if (!token) {
+        toastStore.error('Authentication required')
+        return
+      }
+
       const post = posts.find((p: any) => p.id === postId)
       if (!post) return
 
       const existingDate = new Date(post.scheduledAt || post.scheduledTime || new Date())
       const newDate = new Date(targetDate)
-      newDate.setHours(existingDate.getHours())
-      newDate.setMinutes(existingDate.getMinutes())
+      newDate.setHours(existingDate.getHours(), existingDate.getMinutes())
 
       await updatePost(token, postId, { scheduledTime: newDate.toISOString() })
       queryClient.invalidateQueries({ queryKey: ['posts'] })
+      toastStore.success('Post rescheduled')
     } catch (error) {
-      console.error('Failed to reschedule post', error)
+      toastStore.error('Failed to reschedule post')
     }
   }
 
@@ -155,26 +158,26 @@ export const Calendar = () => {
     navigate(`/app/compose?date=${encodeURIComponent(dateStr)}`)
   }
 
-  const handleDeletePost = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation()
-    if (!confirm('Are you sure you want to delete this scheduled post?')) return
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return
     const token = await getToken()
     if (token) {
-      await removePost(token, id)
+      await removePost(token, deleteTarget)
       queryClient.invalidateQueries({ queryKey: ['posts'] })
+      toastStore.success('Post deleted')
     }
+    setDeleteTarget(null)
   }
 
   return (
     <div className="space-y-6 pb-10">
-      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white tracking-tight">Content Calendar</h1>
           <p className="text-muted-foreground mt-1">Visualize and manage your multi-platform strategy.</p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" className="gap-2" onClick={() => queryClient.invalidateQueries({ queryKey: ['posts'] })}>
+          <Button variant="outline" className="gap-2" onClick={() => refetch()}>
             <Clock className="w-4 h-4" /> Refresh
           </Button>
           <Button className="gap-2 bg-gradient-primary border-none shadow-glow hover:scale-105 transition-transform" onClick={() => handleAddPost()}>
@@ -184,7 +187,6 @@ export const Calendar = () => {
       </div>
 
       <Card className="flex flex-col border-white/10 bg-white/5 backdrop-blur-sm">
-        {/* Toolbar */}
         <div className="p-4 border-b border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white/2 sticky top-0 z-30">
           <div className="flex items-center gap-4">
             <div className="flex items-center bg-black/40 rounded-xl p-1 border border-white/10">
@@ -196,13 +198,13 @@ export const Calendar = () => {
               {format(currentDate, viewMode === 'month' ? 'MMMM yyyy' : 'MMM d, yyyy')}
             </h2>
           </div>
-          
+
           <div className="flex p-1 bg-black/40 rounded-xl border border-white/10">
             {(['month', 'week', 'day'] as ViewMode[]).map((mode) => (
-              <Button 
+              <Button
                 key={mode}
-                variant="ghost" 
-                size="sm" 
+                variant="ghost"
+                size="sm"
                 className={cn(
                   "h-8 px-4 rounded-lg transition-all capitalize font-medium",
                   viewMode === mode ? "text-white bg-purple-500/20 shadow-inner" : "text-muted-foreground hover:text-white"
@@ -215,12 +217,27 @@ export const Calendar = () => {
           </div>
         </div>
 
+        {isLoading ? (
+          <div className="flex items-center justify-center min-h-[400px]">
+            <div className="flex flex-col items-center gap-3">
+              <Loader2 className="w-8 h-8 animate-spin text-purple-400" />
+              <p className="text-sm text-muted-foreground">Loading calendar...</p>
+            </div>
+          </div>
+        ) : isError ? (
+          <div className="flex items-center justify-center min-h-[400px]">
+            <div className="flex flex-col items-center gap-3 text-center">
+              <AlertTriangle className="w-8 h-8 text-red-400" />
+              <p className="text-sm text-red-300">Failed to load posts</p>
+              <Button variant="outline" size="sm" onClick={() => refetch()}>Retry</Button>
+            </div>
+          </div>
+        ) : (
         <div className="">
-          {/* Day Headers */}
           <div className="grid grid-cols-7 border-b border-white/10 bg-[#16141a] sticky top-[73px] sm:top-[73px] z-[40] shadow-md">
             {(viewMode === 'day' ? [currentDate] : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']).map((day, idx) => (
-              <div 
-                key={typeof day === 'string' ? day : idx} 
+              <div
+                key={typeof day === 'string' ? day : idx}
                 className={cn(
                   "p-3 text-center text-[10px] font-bold text-muted-foreground uppercase tracking-widest border-r border-white/10 last:border-r-0",
                   viewMode === 'day' && "col-span-7"
@@ -231,7 +248,6 @@ export const Calendar = () => {
             ))}
           </div>
 
-          {/* Grid */}
           <div className={cn(
             "grid flex-1 min-h-[700px]",
             viewMode === 'day' ? "grid-cols-1" : "grid-cols-7"
@@ -243,10 +259,10 @@ export const Calendar = () => {
               }).sort((a: any, b: any) => new Date(a.scheduledAt || a.scheduledTime).getTime() - new Date(b.scheduledAt || b.scheduledTime).getTime());
 
               const isCurrentMonth = isSameMonth(day, currentDate)
-              
+
               return (
-                <div 
-                  key={i} 
+                <div
+                  key={i}
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => handleDrop(e, day)}
                   className={cn(
@@ -258,12 +274,12 @@ export const Calendar = () => {
                   <div className="flex items-center justify-between mb-1">
                     <span className={cn(
                       "text-[10px] sm:text-xs font-bold transition-all",
-                      isToday(day) ? "w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-gradient-primary flex items-center justify-center text-white shadow-glow rotate-3" : 
+                      isToday(day) ? "w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-gradient-primary flex items-center justify-center text-white shadow-glow rotate-3" :
                       isCurrentMonth ? "text-white/80" : "text-white/20"
                     )}>
                       {format(day, 'd')}
                     </span>
-                    <button 
+                    <button
                       onClick={() => handleAddPost(day)}
                       className="p-1 rounded-md hover:bg-white/10 text-muted-foreground hover:text-white opacity-0 group-hover:opacity-100 transition-all"
                     >
@@ -273,8 +289,8 @@ export const Calendar = () => {
 
                   <div className="space-y-1 pr-1">
                     {dayPosts.map((post: any) => (
-                      <div 
-                        key={post.id} 
+                      <div
+                        key={post.id}
                         draggable
                         onDragStart={(e) => handleDragStart(e, post.id)}
                         onClick={() => navigate(`/app/compose?postId=${post.id}`)}
@@ -300,9 +316,8 @@ export const Calendar = () => {
                            {post.caption || post.content || 'No caption'}
                          </p>
 
-                         {/* Quick Actions Hover */}
                          <div className="absolute top-0 right-0 p-0.5 sm:p-1 opacity-0 group-hover/post:opacity-100 transition-opacity">
-                            <button onClick={(e) => handleDeletePost(e, post.id)} className="p-0.5 sm:p-1 rounded bg-black/60 text-red-400 hover:text-red-300">
+                            <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(post.id) }} className="p-0.5 sm:p-1 rounded bg-black/60 text-red-400 hover:text-red-300">
                               <Trash2 className="w-2 h-2 sm:w-2.5 sm:h-2.5" />
                             </button>
                          </div>
@@ -314,8 +329,8 @@ export const Calendar = () => {
             })}
           </div>
         </div>
+        )}
 
-        {/* Footer info */}
         <div className="p-3 border-t border-white/10 bg-black/40 flex items-center gap-6 justify-center">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-green-500" />
@@ -331,7 +346,16 @@ export const Calendar = () => {
             </div>
         </div>
       </Card>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete Post"
+        message="Are you sure you want to delete this scheduled post?"
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   )
 }
-

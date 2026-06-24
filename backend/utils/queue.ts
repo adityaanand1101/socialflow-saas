@@ -4,6 +4,7 @@ import { PrismaClient } from '@prisma/client';
 import { decryptToken, encryptToken } from './crypto';
 import fetch from 'node-fetch';
 import { triggerWebhooks } from './webhooks';
+import { dispatchIntegrations } from '../services/integrationDispatcher';
 import { checkRateLimit, publishWithTokenRefresh } from './publishers/common';
 
 const redisUrl = process.env.REDIS_URL;
@@ -344,6 +345,22 @@ try {
       } else {
         await triggerWebhooks(post.workspaceId, 'post.failed', { postId, failureCount });
       }
+
+      // Dispatch plugin integrations (Slack, Discord, Zapier, Segment, GA, etc.)
+      const integrationPayload = {
+        postId: post.id,
+        content: post.content,
+        scheduledAt: post.scheduledAt?.toISOString(),
+        workspaceId: post.workspaceId,
+        successCount: post.accounts.length - failureCount,
+        failureCount,
+        errorMessage: post.accounts
+          .filter((a: any) => a.status === 'FAILED')
+          .map((a: any) => a.errorMessage)
+          .filter(Boolean)
+          .join('; '),
+      };
+      dispatchIntegrations(post.workspaceId, postStatus === 'PUBLISHED' ? 'post.published' : 'post.failed', integrationPayload);
 
     } catch (error) {
       console.error(`Queue job execution crashed for post ${postId}:`, error);

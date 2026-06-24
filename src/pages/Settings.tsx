@@ -70,7 +70,7 @@ export const Settings = () => {
     { id: 'mailchimp', name: 'Mailchimp', description: 'Email marketing and audience management', icon: LinkIcon, fields: [{ key: 'apiKey', label: 'API Key', placeholder: 'xxxxxxxxxx-usxx', secret: true }] },
     { id: 'slack-webhook', name: 'Slack Webhooks', description: 'Post notifications to Slack channels', icon: LinkIcon, fields: [{ key: 'webhookUrl', label: 'Webhook URL', placeholder: 'https://hooks.slack.com/services/...', secret: false }] },
     { id: 'zapier', name: 'Zapier', description: 'Connect with 5,000+ apps via automation', icon: ExternalLink, fields: [{ key: 'webhookUrl', label: 'Webhook URL', placeholder: 'https://hooks.zapier.com/...', secret: false }] },
-    { id: 'ga', name: 'Google Analytics', description: 'Track content performance metrics', icon: Globe, fields: [{ key: 'trackingId', label: 'Tracking ID', placeholder: 'G-XXXXXXXXXX', secret: false }] },
+    { id: 'ga', name: 'Google Analytics', description: 'Track content performance metrics', icon: Globe, fields: [{ key: 'trackingId', label: 'Measurement ID', placeholder: 'G-XXXXXXXXXX', secret: false }, { key: 'apiSecret', label: 'API Secret', placeholder: 'Created in GA4 Admin > Data Streams', secret: true }] },
     { id: 'hubspot', name: 'HubSpot', description: 'CRM and marketing automation', icon: LinkIcon, fields: [{ key: 'apiKey', label: 'Private App Token', placeholder: 'pat-...', secret: true }] },
     { id: 'discord-webhook', name: 'Discord Webhooks', description: 'Send notifications to Discord', icon: LinkIcon, fields: [{ key: 'webhookUrl', label: 'Webhook URL', placeholder: 'https://discord.com/api/webhooks/...', secret: false }] },
     { id: 'segment', name: 'Segment', description: 'Customer data platform and analytics', icon: Globe, fields: [{ key: 'writeKey', label: 'Write Key', placeholder: 'xxxxxxxxxx', secret: true }] },
@@ -83,6 +83,7 @@ export const Settings = () => {
   const [configuringPlugin, setConfiguringPlugin] = useState<string | null>(null)
   const [pluginFormData, setPluginFormData] = useState<Record<string, string>>({})
   const [savingPlugin, setSavingPlugin] = useState(false)
+  const [generatingKey, setGeneratingKey] = useState(false)
 
   const [openclawKey, setOpenclawKey] = useState<string | null>(null)
   const [openclawConnected, setOpenclawConnected] = useState(false)
@@ -156,6 +157,7 @@ export const Settings = () => {
 
   const handleGenerateApiKey = async () => {
     try {
+      setGeneratingKey(true)
       const token = await getToken()
       const res = await apiFetch('/api/integrations/keys', {
         method: 'POST',
@@ -165,8 +167,16 @@ export const Settings = () => {
       if (res.ok) {
         const newKey = await res.json()
         setApiKeys([newKey, ...apiKeys])
+        showToast('success', 'API key generated')
+      } else {
+        const err = await res.text()
+        showToast('error', err || 'Failed to generate API key')
       }
-    } catch (e) { console.error(e) }
+    } catch (e) {
+      showToast('error', 'Failed to generate API key')
+    } finally {
+      setGeneratingKey(false)
+    }
   }
 
   const handleRevokeApiKey = async (id: string) => {
@@ -961,8 +971,8 @@ export const Settings = () => {
                   <CardTitle>API Keys</CardTitle>
                   <CardDescription>Manage credentials for Zapier, Make, or custom integrations.</CardDescription>
                 </div>
-                <Button size="sm" className="gap-2" onClick={handleGenerateApiKey} disabled={saving}>
-                  {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Key className="w-3.5 h-3.5" />} 
+                <Button size="sm" className="gap-2" onClick={handleGenerateApiKey} disabled={generatingKey}>
+                  {generatingKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Key className="w-3.5 h-3.5" />} 
                   Generate New Key
                 </Button>
               </CardHeader>

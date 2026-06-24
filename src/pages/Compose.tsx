@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
-import { Save, Loader2 } from 'lucide-react'
+import { Save, Loader2, Clock, Send, Trash2 } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import type { SocialPlatform } from '@/store/useStore'
 import { useAuth } from '@clerk/react'
@@ -12,6 +12,7 @@ import { ALL_PLATFORMS } from '@/lib/platforms'
 import { getPlatformWarnings, getContentType, getDefaultContentType } from '@/lib/platformConstraints'
 import { stripHtml, wrapPlainText } from '@/lib/htmlUtils'
 import { toastStore } from '@/lib/toast/store'
+import { cn } from '@/lib/utils'
 import {
   PlatformSelector,
   ContentEditor,
@@ -611,148 +612,200 @@ export const Compose = () => {
     }
   }
 
+  const clearAll = () => {
+    setCaption('')
+    setSelectedPlatforms(['instagram'])
+    setMediaFiles([])
+    setMediaTypes({})
+    setPlatformCaptions({})
+    setActivePreviewPlatform('instagram')
+    setActiveEditorPlatform('master')
+    setShowWarnings(false)
+    clearDraft()
+  }
+
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 pb-10">
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-white tracking-tight">Compose Post</h1>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" className="text-muted-foreground hover:text-white" onClick={() => { setCaption(''); setSelectedPlatforms(['instagram']); setMediaFiles([]); setMediaTypes({}); setPlatformCaptions({}); setActivePreviewPlatform('instagram'); setActiveEditorPlatform('master'); setShowWarnings(false); clearDraft() }}>
-              Clear
+    <div className="relative min-h-[calc(100vh-4rem)] pb-24">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+        {/* Left column */}
+        <div className="space-y-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-white tracking-tight">Compose Post</h1>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {editingPostId ? 'Editing existing post' : 'Create a new social media post'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" className="text-muted-foreground hover:text-white gap-1.5 h-8 text-xs" onClick={clearAll}>
+                <Trash2 className="w-3.5 h-3.5" />
+                Clear
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2 h-8 text-xs"
+                onClick={() => handlePost('draft')}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                Draft
+              </Button>
+            </div>
+          </div>
+
+          {showDraftRestore && (
+            <div className="flex items-center justify-between p-3 rounded-xl bg-purple-500/[0.08] border border-purple-500/15">
+              <div className="flex items-center gap-2">
+                <Save className="w-4 h-4 text-purple-400" />
+                <span className="text-sm text-purple-200">You have an unsaved draft.</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" className="text-xs" onClick={clearDraft}>Discard</Button>
+                <Button size="sm" className="text-xs" onClick={restoreDraft}>Restore</Button>
+              </div>
+            </div>
+          )}
+
+          <PlatformSelector
+            availablePlatforms={availablePlatforms}
+            selectedPlatforms={selectedPlatforms}
+            togglePlatform={togglePlatform}
+            navigate={navigate}
+            isCustomized={isCustomized}
+          />
+
+          <ContentEditor
+            caption={caption}
+            setCaption={setCaption}
+            selectedPlatforms={selectedPlatforms}
+            activeEditorPlatform={activeEditorPlatform}
+            setActiveEditorPlatform={setActiveEditorPlatform}
+            selectedTone={selectedTone}
+            setSelectedTone={setSelectedTone}
+            isRewriting={isRewriting}
+            handleRewrite={handleRewrite}
+            platformCaptions={platformCaptions}
+            postTypes={postTypes}
+            structuredContent={structuredContent}
+            brokenOutPlatforms={brokenOutPlatforms}
+            setContentType={setContentType}
+            setFieldValue={setFieldValue}
+            getFieldValue={getFieldValue}
+            getStructuredContent={getStructuredContent}
+            getCaptionForPlatform={getCaptionForPlatform}
+            setCaptionForPlatform={setCaptionForPlatform}
+            isCustomized={isCustomized}
+            breakoutPlatform={breakoutPlatform}
+            resetToGlobal={resetToGlobal}
+            showThreadEditor={showThreadEditor}
+            setShowThreadEditor={setShowThreadEditor}
+            threadPosts={threadPosts}
+            addThreadPost={addThreadPost}
+            removeThreadPost={removeThreadPost}
+            updateThreadPost={updateThreadPost}
+            mediaFiles={mediaFiles}
+            mediaTypes={mediaTypes}
+            removeMedia={removeMedia}
+            isUploadingMedia={isUploadingMedia}
+            uploadProgress={uploadProgress}
+            isDragging={isDragging}
+            setIsDragging={setIsDragging}
+            fileInputRef={fileInputRef}
+            onFileChange={onFileChange}
+            onDrop={onDrop}
+            showMediaLibrary={showMediaLibrary}
+            setShowMediaLibrary={setShowMediaLibrary}
+            libraryMedia={libraryMedia}
+            toggleLibraryMedia={toggleLibraryMedia}
+            showHashtagModal={showHashtagModal}
+            setShowHashtagModal={setShowHashtagModal}
+            hashtagSuggestions={hashtagSuggestions}
+            hashtagNiche={hashtagNiche}
+            setHashtagNiche={setHashtagNiche}
+            hashtagLoading={hashtagLoading}
+            generateHashtags={generateHashtags}
+            insertHashtag={insertHashtag}
+            showShortlinkModal={showShortlinkModal}
+            setShowShortlinkModal={setShowShortlinkModal}
+            shortlinkProvider={shortlinkProvider}
+            setShortlinkProvider={setShortlinkProvider}
+            shortlinkApiKey={shortlinkApiKey}
+            setShortlinkApiKey={setShortlinkApiKey}
+            shortlinkDomain={shortlinkDomain}
+            setShortlinkDomain={setShortlinkDomain}
+            shortlinkLoading={shortlinkLoading}
+            handleShortenLinks={handleShortenLinks}
+            showTemplateModal={showTemplateModal}
+            setShowTemplateModal={setShowTemplateModal}
+            templates={templates}
+            loadTemplates={loadTemplates}
+            saveTemplate={saveTemplate}
+            deleteTemplate={deleteTemplate}
+            applyTemplate={applyTemplate}
+            newTemplateName={newTemplateName}
+            setNewTemplateName={setNewTemplateName}
+            editorReloadKey={editorReloadKey}
+          />
+        </div>
+
+        {/* Right column */}
+        <div className="xl:sticky xl:top-6 self-start space-y-5">
+          <PreviewPanel
+            selectedPlatforms={selectedPlatforms}
+            activePreviewPlatform={activePreviewPlatform}
+            setActivePreviewPlatform={setActivePreviewPlatform}
+            previewDevice={previewDevice}
+            setPreviewDevice={setPreviewDevice}
+            activePlatform={activePlatform}
+            getCaptionForPlatform={getCaptionForPlatform}
+            mediaFiles={mediaFiles}
+            mediaTypes={mediaTypes}
+            mediaInfo={mediaInfo}
+            getStructuredContent={getStructuredContent}
+            postTypes={postTypes}
+            getDefaultContentType={getDefaultContentType}
+            guessMediaType={guessMediaType}
+          />
+        </div>
+      </div>
+
+      {/* Bottom action bar */}
+      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-white/[0.06] bg-[#0F1117]/95 backdrop-blur-xl">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
+          <div className="text-sm text-muted-foreground">
+            {selectedPlatforms.length > 0 ? (
+              <span>
+                Publishing to <span className="text-white font-medium">{selectedPlatforms.length}</span> platform{selectedPlatforms.length > 1 ? 's' : ''}
+              </span>
+            ) : (
+              <span>No platforms selected</span>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              className={cn("gap-2", showScheduler && "border-purple-500/40 text-purple-400")}
+              onClick={() => setShowScheduler(!showScheduler)}
+            >
+              <Clock className="w-4 h-4" />
+              Schedule
             </Button>
-            <Button variant="outline" className="gap-2" onClick={() => handlePost('draft')} disabled={isSubmitting}>
-              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              Save Draft
+            <Button
+              size="sm"
+              className="gap-2 px-6 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white shadow-lg shadow-purple-500/20"
+              onClick={() => handlePost('published')}
+              disabled={isSubmitting || !caption || selectedPlatforms.length === 0}
+            >
+              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              Post Now
             </Button>
           </div>
         </div>
-
-        {showDraftRestore && (
-          <div className="flex items-center justify-between p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-sm">
-            <div className="flex items-center gap-2">
-              <Save className="w-4 h-4 text-purple-400" />
-              <span className="text-purple-200">You have an unsaved draft.</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" className="text-xs" onClick={clearDraft}>Discard</Button>
-              <Button size="sm" className="text-xs" onClick={restoreDraft}>Restore</Button>
-            </div>
-          </div>
-        )}
-
-        <PlatformSelector
-          availablePlatforms={availablePlatforms}
-          selectedPlatforms={selectedPlatforms}
-          togglePlatform={togglePlatform}
-          navigate={navigate}
-          isCustomized={isCustomized}
-        />
-
-        <ContentEditor
-          caption={caption}
-          setCaption={setCaption}
-          selectedPlatforms={selectedPlatforms}
-          activeEditorPlatform={activeEditorPlatform}
-          setActiveEditorPlatform={setActiveEditorPlatform}
-          selectedTone={selectedTone}
-          setSelectedTone={setSelectedTone}
-          isRewriting={isRewriting}
-          handleRewrite={handleRewrite}
-          platformCaptions={platformCaptions}
-          postTypes={postTypes}
-          structuredContent={structuredContent}
-          brokenOutPlatforms={brokenOutPlatforms}
-          setContentType={setContentType}
-          setFieldValue={setFieldValue}
-          getFieldValue={getFieldValue}
-          getStructuredContent={getStructuredContent}
-          getCaptionForPlatform={getCaptionForPlatform}
-          setCaptionForPlatform={setCaptionForPlatform}
-          isCustomized={isCustomized}
-          breakoutPlatform={breakoutPlatform}
-          resetToGlobal={resetToGlobal}
-          showThreadEditor={showThreadEditor}
-          setShowThreadEditor={setShowThreadEditor}
-          threadPosts={threadPosts}
-          addThreadPost={addThreadPost}
-          removeThreadPost={removeThreadPost}
-          updateThreadPost={updateThreadPost}
-          mediaFiles={mediaFiles}
-          mediaTypes={mediaTypes}
-          removeMedia={removeMedia}
-          isUploadingMedia={isUploadingMedia}
-          uploadProgress={uploadProgress}
-          isDragging={isDragging}
-          setIsDragging={setIsDragging}
-          fileInputRef={fileInputRef}
-          onFileChange={onFileChange}
-          onDrop={onDrop}
-          showMediaLibrary={showMediaLibrary}
-          setShowMediaLibrary={setShowMediaLibrary}
-          libraryMedia={libraryMedia}
-          toggleLibraryMedia={toggleLibraryMedia}
-          showHashtagModal={showHashtagModal}
-          setShowHashtagModal={setShowHashtagModal}
-          hashtagSuggestions={hashtagSuggestions}
-          hashtagNiche={hashtagNiche}
-          setHashtagNiche={setHashtagNiche}
-          hashtagLoading={hashtagLoading}
-          generateHashtags={generateHashtags}
-          insertHashtag={insertHashtag}
-          showShortlinkModal={showShortlinkModal}
-          setShowShortlinkModal={setShowShortlinkModal}
-          shortlinkProvider={shortlinkProvider}
-          setShortlinkProvider={setShortlinkProvider}
-          shortlinkApiKey={shortlinkApiKey}
-          setShortlinkApiKey={setShortlinkApiKey}
-          shortlinkDomain={shortlinkDomain}
-          setShortlinkDomain={setShortlinkDomain}
-          shortlinkLoading={shortlinkLoading}
-          handleShortenLinks={handleShortenLinks}
-          showTemplateModal={showTemplateModal}
-          setShowTemplateModal={setShowTemplateModal}
-          templates={templates}
-          loadTemplates={loadTemplates}
-          saveTemplate={saveTemplate}
-          deleteTemplate={deleteTemplate}
-          applyTemplate={applyTemplate}
-          newTemplateName={newTemplateName}
-          setNewTemplateName={setNewTemplateName}
-          editorReloadKey={editorReloadKey}
-          showScheduler={showScheduler}
-          setShowScheduler={setShowScheduler}
-          handlePost={handlePost}
-          isSubmitting={isSubmitting}
-        />
       </div>
 
-      <div className="space-y-6">
-        <PreviewPanel
-          selectedPlatforms={selectedPlatforms}
-          activePreviewPlatform={activePreviewPlatform}
-          setActivePreviewPlatform={setActivePreviewPlatform}
-          previewDevice={previewDevice}
-          setPreviewDevice={setPreviewDevice}
-          activePlatform={activePlatform}
-          getCaptionForPlatform={getCaptionForPlatform}
-          mediaFiles={mediaFiles}
-          mediaTypes={mediaTypes}
-          mediaInfo={mediaInfo}
-          getStructuredContent={getStructuredContent}
-          postTypes={postTypes}
-          getDefaultContentType={getDefaultContentType}
-          guessMediaType={guessMediaType}
-        />
-      </div>
-
-      <WarningModal
-        showWarnings={showWarnings}
-        setShowWarnings={setShowWarnings}
-        allWarnings={allWarnings}
-        hasWarnings={hasWarnings}
-        handlePost={handlePost}
-      />
-
+      {/* Scheduler panel - floats above bottom bar */}
       <SchedulerPanel
         showScheduler={showScheduler}
         scheduledDate={scheduledDate}
@@ -761,6 +814,15 @@ export const Compose = () => {
         caption={caption}
         handlePost={handlePost}
         setShowScheduler={setShowScheduler}
+      />
+
+      {/* Warning modal */}
+      <WarningModal
+        showWarnings={showWarnings}
+        setShowWarnings={setShowWarnings}
+        allWarnings={allWarnings}
+        hasWarnings={hasWarnings}
+        handlePost={handlePost}
       />
     </div>
   )

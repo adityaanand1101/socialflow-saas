@@ -1,4 +1,4 @@
-import { Smartphone, Monitor } from 'lucide-react'
+import { Smartphone, Monitor, Check, X as XIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { SocialPlatform } from '@/store/useStore'
 import { ALL_PLATFORMS } from '@/lib/platforms'
@@ -50,11 +50,10 @@ export default function PreviewPanel({
   guessMediaType,
 }: PreviewPanelProps) {
   const activeConstraints = getPlatformConstraint(activePlatform)
+  const previewIsVideo = mediaInfo.length > 0 && mediaInfo[0].type === 'video'
   const previewRatio = activeConstraints.imageRatios.includes('*')
     ? 'aspect-video'
     : ASPECT_CLASSES[activeConstraints.imageRatios[0]] || 'aspect-square'
-
-  const previewIsVideo = mediaInfo.length > 0 && mediaInfo[0].type === 'video'
   const previewRatioClass = previewIsVideo && activeConstraints.videoRatios.length > 0 && activeConstraints.videoRatios[0] !== '*'
     ? ASPECT_CLASSES[activeConstraints.videoRatios[0]] || 'aspect-video'
     : previewRatio
@@ -62,12 +61,12 @@ export default function PreviewPanel({
   const p = ALL_PLATFORMS.find(x => x.id === activePlatform)
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-white">Live Preview</h2>
+        <h2 className="text-base font-semibold text-white">Preview</h2>
         <div className="flex items-center gap-2">
           {selectedPlatforms.length > 1 && (
-            <div className="flex gap-0.5 p-0.5 bg-white/5 rounded-lg border border-white/10 overflow-x-auto max-w-[260px] scrollbar-thin">
+            <div className="flex gap-0.5 p-0.5 bg-white/[0.03] rounded-lg border border-white/[0.06] overflow-x-auto max-w-[240px] scrollbar-thin">
               {selectedPlatforms.map(pid => {
                 const pl = ALL_PLATFORMS.find(x => x.id === pid)
                 if (!pl) return null
@@ -88,7 +87,7 @@ export default function PreviewPanel({
               })}
             </div>
           )}
-          <div className="flex p-1 bg-white/5 rounded-lg border border-white/10">
+          <div className="flex p-0.5 bg-white/[0.03] rounded-lg border border-white/[0.06]">
             <button
               onClick={() => setPreviewDevice('mobile')}
               className={cn("p-1.5 rounded-md transition-all", previewDevice === 'mobile' ? "bg-white/10 text-white" : "text-muted-foreground hover:text-white")}
@@ -105,14 +104,14 @@ export default function PreviewPanel({
         </div>
       </div>
 
-      <div className="flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg border border-white/10">
+      <div className="flex items-center gap-2 px-3 py-2 bg-white/[0.03] rounded-lg border border-white/[0.06]">
         {p && (() => {
           const Icon = p.icon
           const c = activeConstraints
           return (
             <>
               <Icon className={cn("w-4 h-4", p.color)} />
-              <span className="text-sm font-bold text-white">{p.label}</span>
+              <span className="text-sm font-medium text-white">{p.label}</span>
               <span className="text-xs text-muted-foreground">·</span>
               <span className="text-[11px] text-muted-foreground">{c.maxChars < 10000 ? `${c.maxChars} char limit` : 'Unlimited chars'}</span>
               <span className="text-xs text-muted-foreground">·</span>
@@ -120,50 +119,69 @@ export default function PreviewPanel({
                 {c.mediaType === 'none' ? 'No media' :
                  c.mediaType === 'video' ? 'Video only' :
                  c.mediaType === 'image' ? 'Image only' :
-                 `Up to ${c.maxImages} images, ${c.maxVideos} video`}
+                 `Up to ${c.maxImages} images`}
               </span>
             </>
           )
         })()}
       </div>
 
-      <div className="flex justify-center items-start pt-8 bg-navy-800/50 rounded-2xl border border-white/5 min-h-[580px] overflow-hidden relative">
-        <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none opacity-20">
+      <div className={cn(
+        "flex justify-center items-start bg-white/[0.02] rounded-2xl border border-white/[0.05] overflow-hidden relative",
+        previewDevice === 'mobile' ? 'py-8 px-4' : 'py-6 px-4'
+      )}>
+        <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none opacity-[0.08]">
           <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-purple-500 blur-[120px] rounded-full" />
           <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-pink-500 blur-[120px] rounded-full" />
         </div>
 
-        <div className={cn("z-10 w-full", previewDevice === 'mobile' ? 'max-w-[330px]' : 'max-w-[500px]')}>
-          {(() => {
-            const PreviewComponent = getPlatformPreview(activePlatform)
-            return (
-              <PreviewComponent
-                caption={getCaptionForPlatform(activePlatform)}
-                mediaUrls={mediaFiles}
-                mediaTypes={mediaTypes}
-                mediaInfo={mediaInfo}
-                isMobile={previewDevice === 'mobile'}
-                getRatioClass={() => previewRatioClass}
-                structuredContent={getStructuredContent(activePlatform)}
-                contentTypeId={postTypes[activePlatform] || getDefaultContentType(activePlatform)}
-              />
-            )
-          })()}
+        <div className={cn(
+          "z-10",
+          previewDevice === 'mobile'
+            ? 'bg-black rounded-[2.5rem] border-[3px] border-[#222] shadow-2xl overflow-hidden relative'
+            : 'w-full max-w-[520px]'
+        )}>
+          {previewDevice === 'mobile' && (
+            <>
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-28 h-5 bg-[#222] rounded-b-xl z-20" />
+              <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-28 h-1 bg-white/20 rounded-full z-20" />
+            </>
+          )}
+
+          <div className={cn(
+            previewDevice === 'mobile' ? 'px-3 pt-10 pb-6' : 'px-4 py-3'
+          )}>
+            {(() => {
+              const PreviewComponent = getPlatformPreview(activePlatform)
+              return (
+                <PreviewComponent
+                  caption={getCaptionForPlatform(activePlatform)}
+                  mediaUrls={mediaFiles}
+                  mediaTypes={mediaTypes}
+                  mediaInfo={mediaInfo}
+                  isMobile={previewDevice === 'mobile'}
+                  getRatioClass={() => previewRatioClass}
+                  structuredContent={getStructuredContent(activePlatform)}
+                  contentTypeId={postTypes[activePlatform] || getDefaultContentType(activePlatform)}
+                />
+              )
+            })()}
+          </div>
         </div>
       </div>
 
       {mediaFiles.length > 0 && selectedPlatforms.length > 1 && (
-        <div className="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
-          <div className="px-4 py-2 border-b border-white/10 bg-white/5">
-            <p className="text-xs font-bold text-white uppercase tracking-wider">Media compatibility</p>
+        <div className="bg-white/[0.02] rounded-xl border border-white/[0.06] overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-white/[0.06]">
+            <p className="text-[11px] font-semibold text-white uppercase tracking-wider">Media compatibility</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-[11px]">
               <thead>
-                <tr className="border-b border-white/10">
-                  <th className="p-2 text-left text-muted-foreground font-bold uppercase tracking-wider">Platform</th>
+                <tr className="border-b border-white/[0.06]">
+                  <th className="p-2.5 text-left text-muted-foreground font-semibold uppercase tracking-wider text-[10px]">Platform</th>
                   {mediaFiles.map((_, i) => (
-                    <th key={i} className="p-2 text-center text-muted-foreground font-bold uppercase tracking-wider">#{i + 1}</th>
+                    <th key={i} className="p-2.5 text-center text-muted-foreground font-semibold uppercase tracking-wider text-[10px]">#{i + 1}</th>
                   ))}
                 </tr>
               </thead>
@@ -173,8 +191,8 @@ export default function PreviewPanel({
                   let imageIdx = 0
                   let videoIdx = 0
                   return (
-                    <tr key={pid} className="border-b border-white/5 last:border-none">
-                      <td className="p-2 text-white font-medium">{pid}</td>
+                    <tr key={pid} className="border-b border-white/[0.04] last:border-none">
+                      <td className="p-2.5 text-white font-medium">{pid}</td>
                       {mediaFiles.map((url, i) => {
                         const type = guessMediaType(url, mediaTypes)
                         let ok = true
@@ -192,10 +210,17 @@ export default function PreviewPanel({
                           videoIdx++
                         }
                         return (
-                          <td key={i} className="p-2 text-center">
-                            <span className={cn("text-[10px] font-bold uppercase", ok ? "text-green-400" : "text-red-400")}>
-                              {ok ? `\u2713 ${ratio}` : '\u2717'}
-                            </span>
+                          <td key={i} className="p-2.5 text-center">
+                            {ok ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-green-400">
+                                <Check className="w-3 h-3" />
+                                {ratio}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-red-400">
+                                <XIcon className="w-3 h-3" />
+                              </span>
+                            )}
                           </td>
                         )
                       })}

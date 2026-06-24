@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { SocialPlatform } from '@/store/useStore'
 import { PLATFORM_CONSTRAINTS } from '@/lib/platformConstraints'
+import { Circle } from 'lucide-react'
 
 interface PlatformSelectorProps {
   availablePlatforms: any[]
@@ -20,20 +21,35 @@ export default function PlatformSelector({
   isCustomized,
 }: PlatformSelectorProps) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-lg">Select Platforms</CardTitle>
-        <CardDescription>Choose where you want to publish this post.</CardDescription>
+    <Card className="border-white/[0.07] shadow-sm">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-base font-semibold text-white">Platforms</CardTitle>
+            <CardDescription className="text-xs text-muted-foreground mt-0.5">
+              {selectedPlatforms.length === 0
+                ? 'Select where to publish'
+                : `${selectedPlatforms.length} selected`}
+            </CardDescription>
+          </div>
+          {selectedPlatforms.length > 0 && (
+            <span className="text-[10px] font-bold text-purple-400 bg-purple-500/10 px-2 py-1 rounded-full">
+              {selectedPlatforms.length} / {availablePlatforms.length}
+            </span>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         {availablePlatforms.length === 0 ? (
-          <div className="text-center py-6">
+          <div className="text-center py-8 mesh-gradient rounded-xl">
+            <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-white/5 flex items-center justify-center">
+              <Circle className="w-5 h-5 text-muted-foreground" />
+            </div>
             <p className="text-sm text-muted-foreground mb-3">No channels connected yet.</p>
             <Button
               variant="outline"
               size="sm"
               onClick={() => navigate('/channels')}
-              className="text-xs"
             >
               Connect a Channel
             </Button>
@@ -43,44 +59,32 @@ export default function PlatformSelector({
             {availablePlatforms.map((p: any) => {
               const c = PLATFORM_CONSTRAINTS[p.id]
               const selected = selectedPlatforms.includes(p.id)
+              const custom = isCustomized(p.id)
               return (
                 <button
                   key={p.id}
                   onClick={() => togglePlatform(p.id)}
                   className={cn(
-                    "group relative flex flex-col items-start px-3 py-2 rounded-lg border transition-all text-left",
+                    "group relative flex items-center gap-2.5 px-3 py-2 rounded-xl border transition-all duration-200",
                     selected
-                      ? "bg-gradient-primary border-transparent text-white shadow-glow"
-                      : "bg-white/5 border-white/10 text-muted-foreground hover:border-white/20"
+                      ? "border-purple-500/30 bg-purple-500/10 shadow-sm"
+                      : "border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12] hover:bg-white/[0.04]"
                   )}
                 >
-                  {selected && isCustomized(p.id) && (
-                    <div className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-purple-400 border-2 border-[#0F1117] flex items-center justify-center">
-                      <div className="w-1.5 h-1.5 rounded-full bg-white" />
-                    </div>
+                  {custom && (
+                    <div className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-amber-400 border-2 border-[#0F1117]" />
                   )}
-                  <div className="flex items-center gap-2">
-                    <p.icon className={cn("w-4 h-4", !selected && p.color)} />
-                    <span className="text-sm font-medium whitespace-nowrap">{p.label}</span>
-                  </div>
-                  {c && (
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <span className={cn("text-[9px] uppercase font-bold tracking-wider", selected ? "text-white/70" : "text-muted-foreground/60")}>
-                        {c.maxChars < 10000 ? `${c.maxChars}c` : '\u221E'}
-                      </span>
-                      <span className={cn("text-[9px]", selected ? "text-white/50" : "text-muted-foreground/40")}>·</span>
-                        <span className={cn("text-[9px] uppercase font-bold tracking-wider", selected ? "text-white/70" : "text-muted-foreground/60")}>
-                          {c.mediaType === 'none' ? 'No media' : c.mediaType === 'video' ? 'Video only' : c.mediaType === 'image' ? 'Image' : 'Media'}
-                        </span>
-                        {c.allowCarousel && (
-                          <>
-                            <span className={cn("text-[9px]", selected ? "text-white/50" : "text-muted-foreground/40")}>·</span>
-                          <span className={cn("text-[9px] uppercase font-bold tracking-wider", selected ? "text-white/70" : "text-muted-foreground/60")}>
-                            Carousel
-                          </span>
-                        </>
-                      )}
-                    </div>
+                  <p.icon className={cn("w-4 h-4 shrink-0", selected ? "text-white" : p.color)} />
+                  <span className={cn(
+                    "text-sm font-medium whitespace-nowrap transition-colors",
+                    selected ? "text-white" : "text-muted-foreground"
+                  )}>
+                    {p.label}
+                  </span>
+                  {selected && c && (
+                    <span className="text-[9px] font-bold text-white/50 bg-white/[0.06] px-1.5 py-0.5 rounded-md ml-0.5">
+                      {c.maxChars < 10000 ? `${c.maxChars}c` : '\u221E'}
+                    </span>
                   )}
                 </button>
               )

@@ -2,8 +2,8 @@ import { useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
-  Image as ImageIcon, Hash, Send, Save, Sparkles, Clock, Upload,
-  AlertTriangle, Trash2, Lock, Plus, GripVertical, Link2, X, Loader2
+  Image as ImageIcon, Hash, Sparkles, Upload,
+  AlertTriangle, Trash2, Lock, Plus, GripVertical, Link2, X, Loader2, FileText, Wand2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { SocialPlatform } from '@/store/useStore'
@@ -99,10 +99,6 @@ interface ContentEditorProps {
   newTemplateName: string
   setNewTemplateName: (v: string) => void
   editorReloadKey: number
-  showScheduler: boolean
-  setShowScheduler: (v: boolean) => void
-  handlePost: (status: 'published' | 'draft' | 'scheduled', force?: boolean) => void
-  isSubmitting: boolean
 }
 
 export default function ContentEditor(props: ContentEditorProps) {
@@ -124,7 +120,6 @@ export default function ContentEditor(props: ContentEditorProps) {
     shortlinkLoading, handleShortenLinks,
     showTemplateModal, setShowTemplateModal, templates, loadTemplates, saveTemplate, deleteTemplate, applyTemplate,
     newTemplateName, setNewTemplateName, editorReloadKey,
-    showScheduler, setShowScheduler, handlePost, isSubmitting,
   } = props
 
   const currentEditorCaption = activeEditorPlatform === 'master' ? caption : getCaptionForPlatform(activeEditorPlatform)
@@ -151,35 +146,37 @@ export default function ContentEditor(props: ContentEditorProps) {
   const hasWarnings = Object.keys(allWarnings).length > 0
 
   return (
-    <Card className="flex flex-col">
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-lg">Content Editor</CardTitle>
-        <div className="flex items-center gap-2">
-          <select
-            value={selectedTone}
-            onChange={(e) => setSelectedTone(e.target.value)}
-            className="text-xs bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-white focus:outline-none focus:border-purple-500/50"
-          >
-            {toneOptions.map(t => <option key={t} value={t} className="bg-[#0F1117]">{t}</option>)}
-          </select>
-          <Button
-            variant="ghost" size="sm"
-            className="text-purple-400 gap-2 hover:bg-purple-500/10"
-            onClick={handleRewrite}
-            disabled={isRewriting || !currentEditorCaption}
-          >
-            {isRewriting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-            AI Rewrite
-          </Button>
+    <Card className="flex flex-col border-white/[0.07] shadow-sm">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base font-semibold text-white">Content</CardTitle>
+          <div className="flex items-center gap-2">
+            <select
+              value={selectedTone}
+              onChange={(e) => setSelectedTone(e.target.value)}
+              className="text-[11px] bg-white/[0.04] border border-white/[0.08] rounded-lg px-2 py-1.5 text-white/70 focus:outline-none focus:border-purple-500/50"
+            >
+              {toneOptions.map(t => <option key={t} value={t} className="bg-[#0F1117]">{t}</option>)}
+            </select>
+            <Button
+              variant="ghost" size="sm"
+              className="text-purple-400 gap-1.5 hover:bg-purple-500/10 h-8"
+              onClick={handleRewrite}
+              disabled={isRewriting || !currentEditorCaption}
+            >
+              {isRewriting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+              <span className="text-xs">Rewrite</span>
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="flex-1 flex flex-col space-y-4">
-        <div className="flex gap-1 p-0.5 bg-white/5 rounded-lg border border-white/10 overflow-x-auto">
+        <div className="flex gap-1 p-0.5 bg-white/[0.03] rounded-lg border border-white/[0.06] overflow-x-auto">
           <button
             onClick={() => setActiveEditorPlatform('master')}
             className={cn(
-              "px-3 py-1.5 rounded-md text-xs font-bold whitespace-nowrap transition-all",
-              activeEditorPlatform === 'master' ? "bg-purple-500/20 text-white" : "text-muted-foreground hover:text-white"
+              "px-3 py-1.5 rounded-md text-[11px] font-semibold whitespace-nowrap transition-all",
+              activeEditorPlatform === 'master' ? "bg-purple-500/15 text-white" : "text-muted-foreground hover:text-white"
             )}
           >
             Global
@@ -194,13 +191,13 @@ export default function ContentEditor(props: ContentEditorProps) {
                 key={pid}
                 onClick={() => setActiveEditorPlatform(pid)}
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold whitespace-nowrap transition-all",
-                  activeEditorPlatform === pid ? "bg-purple-500/20 text-white" : "text-muted-foreground hover:text-white"
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-semibold whitespace-nowrap transition-all",
+                  activeEditorPlatform === pid ? "bg-purple-500/15 text-white" : "text-muted-foreground hover:text-white"
                 )}
               >
                 <Icon className="w-3 h-3" />
                 {p.label}
-                {hasCustom && <div className="w-1.5 h-1.5 rounded-full bg-purple-400" />}
+                {hasCustom && <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />}
               </button>
             )
           })}
@@ -210,14 +207,14 @@ export default function ContentEditor(props: ContentEditorProps) {
           {activeEditorPlatform !== 'master' && !isCustomized(activeEditorPlatform) ? (
             <div
               onClick={() => breakoutPlatform(activeEditorPlatform)}
-              className="relative min-h-[200px] rounded-xl border-2 border-dashed border-white/10 bg-white/[0.02] flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-purple-500/40 hover:bg-purple-500/5 transition-all group"
+              className="relative min-h-[180px] rounded-xl border-2 border-dashed border-white/[0.06] bg-white/[0.01] flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-purple-500/30 hover:bg-purple-500/[0.03] transition-all group"
             >
-              <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-purple-500/20 transition-all">
-                <Lock className="w-5 h-5 text-white/40 group-hover:text-purple-400" />
+              <div className="w-10 h-10 rounded-full bg-white/[0.04] flex items-center justify-center group-hover:bg-purple-500/15 transition-all">
+                <Lock className="w-4 h-4 text-white/30 group-hover:text-purple-400" />
               </div>
               <div className="text-center">
-                <p className="text-sm font-bold text-white/60 group-hover:text-white transition-colors">Using global content</p>
-                <p className="text-[11px] text-white/30 mt-1">Click to customize content for this platform</p>
+                <p className="text-sm font-medium text-white/50 group-hover:text-white/80 transition-colors">Using global content</p>
+                <p className="text-[11px] text-white/20 mt-0.5">Click to customize for this platform</p>
               </div>
             </div>
           ) : activeEditorPlatform !== 'master' ? (() => {
@@ -226,10 +223,10 @@ export default function ContentEditor(props: ContentEditorProps) {
             return (
               <>
                 {types.length > 1 && (
-                  <div className="flex gap-1 p-0.5 bg-white/5 rounded-lg border border-white/10">
+                  <div className="flex gap-1 p-0.5 bg-white/[0.03] rounded-lg border border-white/[0.06]">
                     {types.map(t => (
                       <button key={t.id} onClick={() => setContentType(activeEditorPlatform, t.id)}
-                        className={cn("px-2.5 py-1 rounded-md text-[10px] font-bold whitespace-nowrap transition-all", currentType === t.id ? "bg-purple-500/20 text-white" : "text-muted-foreground hover:text-white")}>
+                        className={cn("px-2.5 py-1 rounded-md text-[10px] font-semibold whitespace-nowrap transition-all", currentType === t.id ? "bg-purple-500/15 text-white" : "text-muted-foreground hover:text-white")}>
                         {t.label}
                       </button>
                     ))}
@@ -254,9 +251,9 @@ export default function ContentEditor(props: ContentEditorProps) {
                       {ct.fields.map(field => (
                         <div key={field.key}>
                           <div className="flex items-center justify-between mb-1">
-                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                            <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                               {field.label}
-                              {!field.required && <span className="text-[9px] font-normal text-white/30 ml-1">(optional)</span>}
+                              {!field.required && <span className="text-[9px] font-normal text-white/20 ml-1">(optional)</span>}
                             </label>
                             {field.maxLength && (
                               <span className="text-[10px] text-muted-foreground">
@@ -270,20 +267,20 @@ export default function ContentEditor(props: ContentEditorProps) {
                               onChange={e => setFieldValue(activeEditorPlatform, field.key, e.target.value)}
                               placeholder={field.placeholder}
                               maxLength={field.maxLength}
-                              className="w-full min-h-[120px] bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-white/20 resize-none text-sm focus:outline-none focus:border-purple-500/50"
+                              className="w-full min-h-[120px] bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-white placeholder:text-white/15 resize-none text-sm focus:outline-none focus:border-purple-500/40 transition-colors"
                             />
                           ) : field.type === 'multiline-list' ? (
                             <textarea
                               value={getFieldValue(activeEditorPlatform, field.key)}
                               onChange={e => setFieldValue(activeEditorPlatform, field.key, e.target.value)}
                               placeholder={field.placeholder}
-                              className="w-full min-h-[100px] bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-white/20 resize-none text-sm focus:outline-none focus:border-purple-500/50 font-mono"
+                              className="w-full min-h-[100px] bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-white placeholder:text-white/15 resize-none text-sm focus:outline-none focus:border-purple-500/40 font-mono transition-colors"
                             />
                           ) : field.type === 'select' ? (
                             <select
                               value={getFieldValue(activeEditorPlatform, field.key)}
                               onChange={e => setFieldValue(activeEditorPlatform, field.key, e.target.value)}
-                              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500/50"
+                              className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500/40 transition-colors"
                             >
                               {(Array.isArray(field.options) ? field.options : []).map((opt, oi) => {
                                 const val = typeof opt === 'string' ? opt : opt.value
@@ -299,7 +296,7 @@ export default function ContentEditor(props: ContentEditorProps) {
                               value={getFieldValue(activeEditorPlatform, field.key)}
                               onChange={e => setFieldValue(activeEditorPlatform, field.key, e.target.value)}
                               placeholder={field.placeholder}
-                              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-white/20 text-sm focus:outline-none focus:border-purple-500/50"
+                              className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-white placeholder:text-white/15 text-sm focus:outline-none focus:border-purple-500/40 transition-colors"
                             />
                           ) : (
                             <input
@@ -308,7 +305,7 @@ export default function ContentEditor(props: ContentEditorProps) {
                               onChange={e => setFieldValue(activeEditorPlatform, field.key, e.target.value)}
                               placeholder={field.placeholder}
                               maxLength={field.maxLength}
-                              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-white/20 text-sm focus:outline-none focus:border-purple-500/50"
+                              className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-white placeholder:text-white/15 text-sm focus:outline-none focus:border-purple-500/40 transition-colors"
                             />
                           )}
                           {field.fieldNote && (
@@ -332,8 +329,8 @@ export default function ContentEditor(props: ContentEditorProps) {
           )}
         </div>
 
-        {selectedPlatforms.length > 1 && (
-          <div className="space-y-1">
+        {selectedPlatforms.length >= 1 && (
+          <div className="space-y-1 pt-1">
             {selectedPlatforms.map(pid => {
               const raw = getCaptionForPlatform(pid)
               const content = stripHtml(raw)
@@ -342,14 +339,16 @@ export default function ContentEditor(props: ContentEditorProps) {
               const maxChars = ct?.maxChars || c.maxChars
               const pct = Math.min((content.length / maxChars) * 100, 100)
               const over = content.length > maxChars
+              const pl = ALL_PLATFORMS.find(x => x.id === pid)
               return (
                 <div key={pid} className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase w-16 truncate shrink-0">{pid}</span>
-                  <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
-                    <div className={cn("h-full rounded-full transition-all", over ? "bg-red-500" : "bg-purple-500/60")} style={{ width: `${pct}%` }} />
+                  {pl && <pl.icon className={cn("w-3 h-3 shrink-0", pl.color)} />}
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase w-16 truncate shrink-0">{pl?.label || pid}</span>
+                  <div className="flex-1 h-1.5 bg-white/[0.04] rounded-full overflow-hidden">
+                    <div className={cn("h-full rounded-full transition-all duration-300", over ? "bg-red-500" : "bg-gradient-to-r from-purple-500 to-pink-500")} style={{ width: `${Math.max(pct, 3)}%` }} />
                   </div>
-                  <span className={cn("text-[10px] w-12 text-right shrink-0", over ? "text-red-400 font-bold" : "text-muted-foreground")}>
-                    {content.length}/{maxChars < 10000 ? maxChars : '\u221E'}
+                  <span className={cn("text-[10px] w-14 text-right shrink-0 font-medium", over ? "text-red-400" : "text-muted-foreground")}>
+                    {content.length}{maxChars < 10000 ? `/${maxChars}` : ''}
                   </span>
                 </div>
               )
@@ -358,15 +357,15 @@ export default function ContentEditor(props: ContentEditorProps) {
         )}
 
         {showThreadEditor && (
-          <div className="space-y-2 p-3 rounded-xl bg-white/[0.02] border border-white/10">
+          <div className="space-y-2 p-3 rounded-xl bg-white/[0.02] border border-white/[0.06]">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold text-white uppercase tracking-wider">Thread Posts</span>
-                <span className="text-[10px] text-muted-foreground">{threadPosts.length + 1} total (1 main + {threadPosts.length} thread)</span>
+                <span className="text-[11px] font-semibold text-white">Thread Posts</span>
+                <span className="text-[10px] text-muted-foreground">{threadPosts.length + 1} total</span>
               </div>
               <button
                 onClick={() => setShowThreadEditor(false)}
-                className="text-[10px] text-muted-foreground hover:text-white transition-colors"
+                className="text-muted-foreground hover:text-white transition-colors"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -375,8 +374,8 @@ export default function ContentEditor(props: ContentEditorProps) {
               {threadPosts.map((tp, idx) => (
                 <div key={tp.id} className="flex gap-2 items-start group">
                   <div className="flex flex-col items-center gap-1 pt-2 shrink-0">
-                    <GripVertical className="w-3.5 h-3.5 text-white/20" />
-                    <div className="w-5 h-5 rounded-full bg-purple-500/20 flex items-center justify-center">
+                    <GripVertical className="w-3.5 h-3.5 text-white/15" />
+                    <div className="w-5 h-5 rounded-full bg-purple-500/15 flex items-center justify-center">
                       <span className="text-[8px] font-bold text-purple-400">#{idx + 2}</span>
                     </div>
                   </div>
@@ -385,19 +384,19 @@ export default function ContentEditor(props: ContentEditorProps) {
                       value={tp.content}
                       onChange={e => updateThreadPost(tp.id, { content: e.target.value })}
                       placeholder="Additional post in this thread..."
-                      className="w-full min-h-[60px] bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-white placeholder:text-white/20 resize-none text-xs focus:outline-none focus:border-purple-500/50"
+                      className="w-full min-h-[60px] bg-white/[0.03] border border-white/[0.08] rounded-lg px-2.5 py-1.5 text-white placeholder:text-white/15 resize-none text-xs focus:outline-none focus:border-purple-500/40 transition-colors"
                     />
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="text-[9px] text-muted-foreground">Delay after previous:</span>
+                        <span className="text-[9px] text-muted-foreground">Delay:</span>
                         <select
                           value={tp.delayMinutes}
                           onChange={e => updateThreadPost(tp.id, { delayMinutes: Number(e.target.value) })}
-                          className="text-[10px] bg-white/5 border border-white/10 rounded px-1.5 py-0.5 text-white focus:outline-none"
+                          className="text-[10px] bg-white/[0.04] border border-white/[0.08] rounded px-1.5 py-0.5 text-white focus:outline-none"
                         >
                           {[0, 1, 2, 5, 10, 15, 30, 60, 120, 360, 720, 1440].map(m => (
                             <option key={m} value={m} className="bg-gray-800">
-                              {m === 0 ? 'Immediately' : m < 60 ? `${m}m` : m < 1440 ? `${m / 60}h` : `${m / 1440}d`}
+                              {m === 0 ? 'Immediate' : m < 60 ? `${m}m` : m < 1440 ? `${m / 60}h` : `${m / 1440}d`}
                             </option>
                           ))}
                         </select>
@@ -415,7 +414,7 @@ export default function ContentEditor(props: ContentEditorProps) {
             </div>
             <button
               onClick={addThreadPost}
-              className="w-full py-1.5 rounded-lg border border-dashed border-white/10 text-[11px] text-muted-foreground hover:text-white hover:border-purple-500/40 transition-all flex items-center justify-center gap-1"
+              className="w-full py-1.5 rounded-lg border border-dashed border-white/[0.08] text-[11px] text-muted-foreground hover:text-white hover:border-purple-500/30 transition-all flex items-center justify-center gap-1"
             >
               <Plus className="w-3 h-3" />
               Add thread post
@@ -426,7 +425,7 @@ export default function ContentEditor(props: ContentEditorProps) {
         {mediaFiles.length > 0 && (
           <div className="flex gap-2 flex-wrap">
             {mediaFiles.map((url, i) => (
-              <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden group">
+              <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden group ring-1 ring-white/[0.06]">
                 {guessMediaType(url, mediaTypes) === 'video' ? (
                   <video src={url} className="w-full h-full object-cover" muted />
                 ) : (
@@ -446,9 +445,9 @@ export default function ContentEditor(props: ContentEditorProps) {
         {detectedUrls.length > 0 && (
           <div className="space-y-1.5">
             {detectedUrls.slice(0, 1).map((url, i) => (
-              <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-blue-500/5 border border-blue-500/20">
+              <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-blue-500/[0.05] border border-blue-500/15">
                 <div className="w-6 h-6 rounded bg-blue-500/10 flex items-center justify-center shrink-0">
-                  <span className="text-[10px]">{'\uD83D\uDD17'}</span>
+                  <Link2 className="w-3 h-3 text-blue-400" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-[11px] text-blue-300 truncate">{url}</p>
@@ -463,72 +462,78 @@ export default function ContentEditor(props: ContentEditorProps) {
         )}
 
         {hasWarnings && (
-          <div className="space-y-1.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
-            <div className="flex items-center gap-2 text-amber-400 text-xs font-bold">
+          <div className="space-y-1.5 p-3 rounded-xl bg-amber-500/[0.08] border border-amber-500/15">
+            <div className="flex items-center gap-2 text-amber-400 text-xs font-semibold">
               <AlertTriangle className="w-3.5 h-3.5" />
               Platform warnings
             </div>
             {Object.entries(allWarnings).map(([pid, warnings]) =>
               warnings.map((w, i) => (
-                <p key={`${pid}-${i}`} className="text-[11px] text-amber-300/80 ml-5">{pid}: {w}</p>
+                <p key={`${pid}-${i}`} className="text-[11px] text-amber-300/70 ml-5">{pid}: {w}</p>
               ))
             )}
           </div>
         )}
 
-        <div className="flex items-center justify-between pt-4 border-t border-white/10">
+        <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
           <div className="flex items-center gap-1">
             <input type="file" className="hidden" ref={fileInputRef} accept="*/*" multiple onChange={onFileChange} />
-            <Button
-              variant="ghost" size="icon"
-              className={cn("text-muted-foreground hover:text-white", isUploadingMedia && "animate-pulse")}
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploadingMedia}
-              title="Upload media files"
-            >
-              {isUploadingMedia ? <span className="text-[10px] font-bold text-purple-400">{uploadProgress}%</span> : <Upload className="w-5 h-5" />}
-            </Button>
-            <Button
-              variant="ghost" size="icon"
-              className="text-muted-foreground hover:text-white"
-              onClick={() => setShowMediaLibrary(true)}
-            >
-              <ImageIcon className="w-5 h-5" />
-            </Button>
-
-            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-white relative" onClick={() => {               setHashtagNiche(''); setShowHashtagModal(true) }} title="Hashtag suggestions">
-              <Hash className="w-5 h-5" />
-              {(() => {
-                const count = (caption.match(/#\w+/g) || []).length
-                if (count > 0) return <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-purple-500 text-[7px] font-bold text-white flex items-center justify-center">{count}</span>
-                return null
-              })()}
-            </Button>
-            <Button
-              variant="ghost" size="icon"
-              className={cn("text-muted-foreground hover:text-white", showThreadEditor && "text-purple-400")}
-              onClick={() => setShowThreadEditor(!showThreadEditor)}
-              title="Thread posts"
-            >
-              <GripVertical className="w-5 h-5" />
-            </Button>
-            <Button
-              variant="ghost" size="icon"
-              className={cn("text-muted-foreground hover:text-white", showShortlinkModal && "text-purple-400")}
-              onClick={() => setShowShortlinkModal(true)}
-              title="Shorten links"
-            >
-              <Link2 className="w-5 h-5" />
-            </Button>
-            <div className="w-px h-6 bg-white/10" />
-            <Button
-              variant="ghost" size="sm"
-              className="text-muted-foreground hover:text-white text-xs gap-1"
-              onClick={() => { loadTemplates(); setShowTemplateModal(true) }}
-            >
-              <Save className="w-3.5 h-3.5" />
-              Templates
-            </Button>
+            <div className="flex items-center gap-0.5">
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploadingMedia}
+                className="p-2 rounded-lg text-muted-foreground hover:text-white hover:bg-white/[0.04] transition-all disabled:opacity-50"
+                title="Upload media files"
+              >
+                {isUploadingMedia ? (
+                  <span className="text-[10px] font-bold text-purple-400 min-w-[24px] text-center inline-block">{uploadProgress}%</span>
+                ) : (
+                  <Upload className="w-4 h-4" />
+                )}
+              </button>
+              <button
+                onClick={() => setShowMediaLibrary(true)}
+                className="p-2 rounded-lg text-muted-foreground hover:text-white hover:bg-white/[0.04] transition-all"
+                title="Media library"
+              >
+                <ImageIcon className="w-4 h-4" />
+              </button>
+              <div className="w-px h-5 bg-white/[0.06] mx-1" />
+              <button
+                onClick={() => { setHashtagNiche(''); setShowHashtagModal(true) }}
+                className="p-2 rounded-lg text-muted-foreground hover:text-white hover:bg-white/[0.04] transition-all relative"
+                title="Hashtag suggestions"
+              >
+                <Hash className="w-4 h-4" />
+                {(() => {
+                  const count = (caption.match(/#\w+/g) || []).length
+                  if (count > 0) return <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-purple-500 text-[7px] font-bold text-white flex items-center justify-center">{count}</span>
+                  return null
+                })()}
+              </button>
+              <button
+                onClick={() => setShowThreadEditor(!showThreadEditor)}
+                className={cn("p-2 rounded-lg transition-all", showThreadEditor ? "text-purple-400 bg-purple-500/10" : "text-muted-foreground hover:text-white hover:bg-white/[0.04]")}
+                title="Thread posts"
+              >
+                <GripVertical className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setShowShortlinkModal(true)}
+                className="p-2 rounded-lg text-muted-foreground hover:text-white hover:bg-white/[0.04] transition-all"
+                title="Shorten links"
+              >
+                <Link2 className="w-4 h-4" />
+              </button>
+              <div className="w-px h-5 bg-white/[0.06] mx-1" />
+              <button
+                onClick={() => { loadTemplates(); setShowTemplateModal(true) }}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-muted-foreground hover:text-white hover:bg-white/[0.04] transition-all text-xs"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                Templates
+              </button>
+            </div>
           </div>
         </div>
 
@@ -551,19 +556,19 @@ export default function ContentEditor(props: ContentEditorProps) {
 
         {showHashtagModal && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[310] flex items-center justify-center p-4" onClick={() => setShowHashtagModal(false)}>
-            <div className="bg-[#141218] border border-white/10 rounded-2xl w-full max-w-lg max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
-              <div className="p-4 border-b border-white/10 flex items-center justify-between">
-                <h3 className="font-bold text-white">Hashtag Suggestions</h3>
-                <button onClick={() => setShowHashtagModal(false)} className="text-muted-foreground hover:text-white">
-                  <X className="w-5 h-5" />
+            <div className="bg-[#141218] border border-white/[0.08] rounded-2xl w-full max-w-lg max-h-[70vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
+              <div className="p-4 border-b border-white/[0.06] flex items-center justify-between">
+                <h3 className="font-semibold text-white text-sm">Hashtag Suggestions</h3>
+                <button onClick={() => setShowHashtagModal(false)} className="text-muted-foreground hover:text-white transition-colors p-1 rounded-lg hover:bg-white/[0.04]">
+                  <X className="w-4 h-4" />
                 </button>
               </div>
-              <div className="p-4 border-b border-white/10 flex items-center gap-2">
+              <div className="p-4 border-b border-white/[0.06] flex items-center gap-2">
                 <input
                   value={hashtagNiche}
                   onChange={e => setHashtagNiche(e.target.value)}
                   placeholder="e.g. marketing, tech, food..."
-                  className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50"
+                  className="flex-1 bg-black/30 border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-purple-500/40 transition-colors"
                   onKeyDown={e => { if (e.key === 'Enter') generateHashtags() }}
                 />
                 <Button size="sm" onClick={generateHashtags} disabled={hashtagLoading || !hashtagNiche.trim()}>
@@ -584,7 +589,7 @@ export default function ContentEditor(props: ContentEditorProps) {
                       <button
                         key={i}
                         onClick={() => insertHashtag(tag)}
-                        className="px-3 py-1.5 bg-white/5 hover:bg-purple-500/20 border border-white/10 hover:border-purple-500/50 rounded-full text-sm text-purple-400 transition-all"
+                        className="px-3 py-1.5 bg-white/[0.04] hover:bg-purple-500/15 border border-white/[0.08] hover:border-purple-500/40 rounded-full text-sm text-purple-400 transition-all"
                       >
                         {tag}
                       </button>
@@ -592,7 +597,7 @@ export default function ContentEditor(props: ContentEditorProps) {
                   </div>
                 )}
               </div>
-              <div className="p-4 border-t border-white/10 flex items-center justify-between text-xs text-muted-foreground">
+              <div className="p-4 border-t border-white/[0.06] flex items-center justify-between text-xs text-muted-foreground">
                 <span>Click a hashtag to add it to your caption.</span>
                 <Button variant="ghost" size="sm" onClick={() => setShowHashtagModal(false)}>Done</Button>
               </div>
@@ -602,19 +607,19 @@ export default function ContentEditor(props: ContentEditorProps) {
 
         {showTemplateModal && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[300] flex items-center justify-center p-4" onClick={() => setShowTemplateModal(false)}>
-            <div className="bg-[#141218] border border-white/10 rounded-2xl w-full max-w-lg max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
-              <div className="p-4 border-b border-white/10 flex items-center justify-between">
-                <h3 className="font-bold text-white">Post Templates</h3>
-                <button onClick={() => setShowTemplateModal(false)} className="text-muted-foreground hover:text-white">
-                  <X className="w-5 h-5" />
+            <div className="bg-[#141218] border border-white/[0.08] rounded-2xl w-full max-w-lg max-h-[70vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
+              <div className="p-4 border-b border-white/[0.06] flex items-center justify-between">
+                <h3 className="font-semibold text-white text-sm">Post Templates</h3>
+                <button onClick={() => setShowTemplateModal(false)} className="text-muted-foreground hover:text-white transition-colors p-1 rounded-lg hover:bg-white/[0.04]">
+                  <X className="w-4 h-4" />
                 </button>
               </div>
-              <div className="p-4 border-b border-white/10 flex items-center gap-2">
+              <div className="p-4 border-b border-white/[0.06] flex items-center gap-2">
                 <input
                   value={newTemplateName}
                   onChange={e => setNewTemplateName(e.target.value)}
                   placeholder="Template name..."
-                  className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50"
+                  className="flex-1 bg-black/30 border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-purple-500/40 transition-colors"
                   onKeyDown={e => { if (e.key === 'Enter' && newTemplateName.trim()) { saveTemplate(newTemplateName.trim()) } }}
                 />
                 <Button size="sm" disabled={!newTemplateName.trim() || !caption} onClick={() => { if (newTemplateName.trim()) saveTemplate(newTemplateName.trim()) }}>
@@ -625,17 +630,17 @@ export default function ContentEditor(props: ContentEditorProps) {
                 {templates.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-8">No saved templates yet.</p>
                 ) : templates.map(t => (
-                  <div key={t.id} className="flex items-center gap-3 p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors">
+                  <div key={t.id} className="flex items-center gap-3 p-3 bg-white/[0.03] rounded-lg hover:bg-white/[0.06] transition-colors">
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-white truncate">{t.name}</p>
+                      <p className="text-sm font-medium text-white truncate">{t.name}</p>
                       <p className="text-[11px] text-muted-foreground truncate">
                         {t.caption?.slice(0, 80) || 'No caption'} · {t.platforms?.length || 0} platforms
                       </p>
                     </div>
-                    <button onClick={() => applyTemplate(t)} className="text-xs text-purple-400 hover:text-purple-300 shrink-0 px-2 py-1 rounded hover:bg-purple-500/10">
+                    <button onClick={() => applyTemplate(t)} className="text-xs text-purple-400 hover:text-purple-300 shrink-0 px-2 py-1 rounded hover:bg-purple-500/10 transition-colors">
                       Load
                     </button>
-                    <button onClick={() => deleteTemplate(t.id)} className="text-xs text-red-400 hover:text-red-300 shrink-0 px-2 py-1 rounded hover:bg-red-500/10">
+                    <button onClick={() => deleteTemplate(t.id)} className="text-xs text-red-400 hover:text-red-300 shrink-0 px-2 py-1 rounded hover:bg-red-500/10 transition-colors">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -647,20 +652,20 @@ export default function ContentEditor(props: ContentEditorProps) {
 
         {showShortlinkModal && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[300] flex items-center justify-center p-4" onClick={() => setShowShortlinkModal(false)}>
-            <div className="bg-[#141218] border border-white/10 rounded-2xl w-full max-w-lg max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
-              <div className="p-4 border-b border-white/10 flex items-center justify-between">
-                <h3 className="font-bold text-white">Shorten Links</h3>
-                <button onClick={() => setShowShortlinkModal(false)} className="text-muted-foreground hover:text-white">
-                  <X className="w-5 h-5" />
+            <div className="bg-[#141218] border border-white/[0.08] rounded-2xl w-full max-w-lg max-h-[70vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
+              <div className="p-4 border-b border-white/[0.06] flex items-center justify-between">
+                <h3 className="font-semibold text-white text-sm">Shorten Links</h3>
+                <button onClick={() => setShowShortlinkModal(false)} className="text-muted-foreground hover:text-white transition-colors p-1 rounded-lg hover:bg-white/[0.04]">
+                  <X className="w-4 h-4" />
                 </button>
               </div>
-              <div className="p-4 border-b border-white/10 space-y-3">
+              <div className="p-4 border-b border-white/[0.06] space-y-3">
                 <div className="flex items-center gap-2">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider w-20 shrink-0">Provider</label>
+                  <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider w-20 shrink-0">Provider</label>
                   <select
                     value={shortlinkProvider}
                     onChange={e => setShortlinkProvider(e.target.value as any)}
-                    className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50"
+                    className="flex-1 bg-black/30 border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/40 transition-colors"
                   >
                     <option value="dub">Dub.co</option>
                     <option value="shortio">Short.io</option>
@@ -669,23 +674,23 @@ export default function ContentEditor(props: ContentEditorProps) {
                   </select>
                 </div>
                 <div className="flex items-center gap-2">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider w-20 shrink-0">API Key</label>
+                  <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider w-20 shrink-0">API Key</label>
                   <input
                     type="password"
                     value={shortlinkApiKey}
                     onChange={e => setShortlinkApiKey(e.target.value)}
                     placeholder="Enter API key..."
-                    className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50"
+                    className="flex-1 bg-black/30 border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-purple-500/40 transition-colors"
                   />
                 </div>
                 <div className="flex items-center gap-2">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider w-20 shrink-0">Domain</label>
+                  <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider w-20 shrink-0">Domain</label>
                   <input
                     type="text"
                     value={shortlinkDomain}
                     onChange={e => setShortlinkDomain(e.target.value)}
                     placeholder="Optional custom domain..."
-                    className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50"
+                    className="flex-1 bg-black/30 border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-purple-500/40 transition-colors"
                   />
                 </div>
               </div>
@@ -696,7 +701,7 @@ export default function ContentEditor(props: ContentEditorProps) {
                   <p className="text-xs mt-1">All https:// URLs will be shortened using the selected provider.</p>
                 </div>
               </div>
-              <div className="p-4 border-t border-white/10 flex items-center justify-between">
+              <div className="p-4 border-t border-white/[0.06] flex items-center justify-between">
                 <Button variant="ghost" size="sm" onClick={() => setShowShortlinkModal(false)}>Cancel</Button>
                 <Button size="sm" onClick={handleShortenLinks} disabled={shortlinkLoading || !shortlinkApiKey.trim()}>
                   {shortlinkLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}
@@ -706,25 +711,6 @@ export default function ContentEditor(props: ContentEditorProps) {
             </div>
           </div>
         )}
-
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={() => setShowScheduler(!showScheduler)}
-          >
-            <Clock className="w-4 h-4" />
-            Schedule
-          </Button>
-          <Button
-            className="gap-2 px-6"
-            onClick={() => handlePost('published')}
-            disabled={isSubmitting || !caption || selectedPlatforms.length === 0}
-          >
-            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            Post Now
-          </Button>
-        </div>
       </CardContent>
     </Card>
   )

@@ -88,6 +88,12 @@ export const Settings = () => {
   const [openclawKey, setOpenclawKey] = useState<string | null>(null)
   const [openclawConnected, setOpenclawConnected] = useState(false)
 
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const showToast = (type: 'success' | 'error', message: string) => {
+    setToast({ type, message })
+    setTimeout(() => setToast(null), 4000)
+  }
+
   useEffect(() => {
     const fetchSettings = async () => {
       try {
@@ -1054,6 +1060,12 @@ export const Settings = () => {
 
   return (
     <div className="space-y-8 pb-10">
+      {toast && (
+        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-xl border shadow-2xl backdrop-blur-md animate-in slide-in-from-right-2 duration-200 ${toast.type === 'success' ? 'bg-green-500/10 border-green-500/30' : 'bg-red-500/10 border-red-500/30'}`}>
+          {toast.type === 'success' ? <Check className="w-4 h-4 text-green-400" /> : <AlertTriangle className="w-4 h-4 text-red-400" />}
+          <p className="text-sm text-white">{toast.message}</p>
+        </div>
+      )}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white tracking-tight">Settings</h1>

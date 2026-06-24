@@ -22,7 +22,7 @@ export function ToastContainer() {
 
   useEffect(() => {
     const unsub = toastStore.subscribe(setItems)
-    return unsub
+    return () => unsub()
   }, [])
 
   if (items.length === 0) return null

@@ -3,20 +3,13 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
-import {
-  Image as ImageIcon, Hash, Send, Calendar,
-  Save, Sparkles, Loader2, X, Clock, Upload,
-  AlertTriangle, Trash2, Lock, Plus, GripVertical, Link2
-} from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { Save, Loader2 } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import type { SocialPlatform } from '@/store/useStore'
-import { getPlatformPreview } from '@/components/PlatformPreviews'
 import { useAuth } from '@clerk/react'
 import { format, addDays, isValid, parseISO } from 'date-fns'
 import { ALL_PLATFORMS } from '@/lib/platforms'
-import { getPlatformConstraint, PLATFORM_CONSTRAINTS, getPlatformWarnings, getContentTypes, getContentType, getDefaultContentType } from '@/lib/platformConstraints'
-import { RichTextEditor } from '@/components/editor/RichTextEditor'
+import { getPlatformWarnings, getContentType, getDefaultContentType } from '@/lib/platformConstraints'
 import { stripHtml, wrapPlainText } from '@/lib/htmlUtils'
 import { toastStore } from '@/lib/toast/store'
 import {
@@ -703,6 +696,7 @@ export const Compose = () => {
           hashtagSuggestions={hashtagSuggestions}
           hashtagNiche={hashtagNiche}
           setHashtagNiche={setHashtagNiche}
+          setHashtagSuggestions={setHashtagSuggestions}
           hashtagLoading={hashtagLoading}
           generateHashtags={generateHashtags}
           insertHashtag={insertHashtag}
@@ -747,6 +741,7 @@ export const Compose = () => {
           mediaInfo={mediaInfo}
           getStructuredContent={getStructuredContent}
           postTypes={postTypes}
+          getDefaultContentType={getDefaultContentType}
           guessMediaType={guessMediaType}
         />
       </div>

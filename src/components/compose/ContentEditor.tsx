@@ -9,13 +9,11 @@ import { cn } from '@/lib/utils'
 import type { SocialPlatform } from '@/store/useStore'
 import { ALL_PLATFORMS } from '@/lib/platforms'
 import {
-  getContentTypes, getContentType, getPlatformConstraint, getPlatformWarnings,
-  getDefaultContentType
+  getContentTypes, getContentType, getPlatformConstraint, getPlatformWarnings
 } from '@/lib/platformConstraints'
 import { RichTextEditor } from '@/components/editor/RichTextEditor'
 import { stripHtml } from '@/lib/htmlUtils'
-import { MediaSection } from './MediaSection'
-import type { MediaInfo } from '@/lib/platformConstraints'
+import MediaSection from './MediaSection'
 
 const toneOptions = ['Professional', 'Casual', 'Funny', 'Inspirational', 'Urgent']
 
@@ -76,6 +74,7 @@ interface ContentEditorProps {
   showHashtagModal: boolean
   setShowHashtagModal: (v: boolean) => void
   hashtagSuggestions: string[]
+  setHashtagSuggestions: (v: string[]) => void
   hashtagNiche: string
   setHashtagNiche: (v: string) => void
   hashtagLoading: boolean
@@ -112,14 +111,14 @@ export default function ContentEditor(props: ContentEditorProps) {
     caption, setCaption,
     selectedPlatforms, activeEditorPlatform, setActiveEditorPlatform,
     selectedTone, setSelectedTone, isRewriting, handleRewrite,
-    platformCaptions, postTypes, structuredContent, brokenOutPlatforms,
-    setContentType, setFieldValue, getFieldValue, getStructuredContent,
-    getCaptionForPlatform, setCaptionForPlatform, isCustomized, breakoutPlatform, resetToGlobal,
+    platformCaptions, postTypes,
+    setContentType, setFieldValue, getFieldValue,
+    getCaptionForPlatform, isCustomized, breakoutPlatform, resetToGlobal,
     showThreadEditor, setShowThreadEditor, threadPosts, addThreadPost, removeThreadPost, updateThreadPost,
     mediaFiles, mediaTypes, removeMedia, isUploadingMedia, uploadProgress,
     isDragging, setIsDragging, fileInputRef, onFileChange, onDrop,
     showMediaLibrary, setShowMediaLibrary, libraryMedia, toggleLibraryMedia,
-    showHashtagModal, setShowHashtagModal, hashtagSuggestions, hashtagNiche, setHashtagNiche,
+            showHashtagModal, setShowHashtagModal, hashtagSuggestions, hashtagNiche, setHashtagNiche, setHashtagSuggestions,
     hashtagLoading, generateHashtags, insertHashtag,
     showShortlinkModal, setShowShortlinkModal, shortlinkProvider, setShortlinkProvider,
     shortlinkApiKey, setShortlinkApiKey, shortlinkDomain, setShortlinkDomain,
@@ -498,7 +497,7 @@ export default function ContentEditor(props: ContentEditorProps) {
               <ImageIcon className="w-5 h-5" />
             </Button>
 
-            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-white relative" onClick={() => { setHashtagNiche(''); setHashtagSuggestions([]); setShowHashtagModal(true) }} title="Hashtag suggestions">
+            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-white relative" onClick={() => {               setHashtagNiche(''); setShowHashtagModal(true) }} title="Hashtag suggestions">
               <Hash className="w-5 h-5" />
               {(() => {
                 const count = (caption.match(/#\w+/g) || []).length

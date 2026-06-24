@@ -1,7 +1,6 @@
 import { Calendar, Clock, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { format, isValid } from 'date-fns'
-import { cn } from '@/lib/utils'
 
 interface SchedulerPanelProps {
   showScheduler: boolean

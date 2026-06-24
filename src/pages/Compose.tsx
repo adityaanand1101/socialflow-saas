@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
-import { Save, Loader2, Clock, Send, Trash2 } from 'lucide-react'
+import { Save, Loader2, Clock, Send, Trash2, MessageCircle, Repeat2 } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import type { SocialPlatform } from '@/store/useStore'
 import { useAuth } from '@clerk/react'
@@ -24,6 +24,7 @@ import {
 export const Compose = () => {
   const [searchParams] = useSearchParams()
   const [selectedPlatforms, setSelectedPlatforms] = useState<SocialPlatform[]>(['instagram'])
+  const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([])
   const [caption, setCaption] = useState('')
   const [previewDevice, setPreviewDevice] = useState<'mobile' | 'desktop'>('mobile')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -68,6 +69,11 @@ export const Compose = () => {
   const [shortlinkApiKey, setShortlinkApiKey] = useState('')
   const [shortlinkDomain, setShortlinkDomain] = useState('')
   const [shortlinkLoading, setShortlinkLoading] = useState(false)
+
+  const [firstComments, setFirstComments] = useState<Record<string, string>>({})
+  const [showFirstComment, setShowFirstComment] = useState(false)
+  const [repostUrl, setRepostUrl] = useState('')
+  const [repostEnabled, setRepostEnabled] = useState(false)
 
   const DRAFT_KEY = 'socialflow_draft'
   const TEMPLATES_KEY = 'socialflow_templates'
@@ -191,6 +197,10 @@ export const Compose = () => {
             setScheduledDate(format(new Date(post.scheduledAt || post.scheduledTime), "yyyy-MM-dd'T'HH:mm"))
             setShowScheduler(true)
           }
+          if (post.socialAccountIds) setSelectedAccountIds(post.socialAccountIds)
+          if (post.firstComments) setFirstComments(post.firstComments)
+          if (post.repostUrl) setRepostUrl(post.repostUrl)
+          if (post.repostEnabled) setRepostEnabled(post.repostEnabled)
         }
       }
     }
@@ -200,9 +210,9 @@ export const Compose = () => {
   useEffect(() => {
     if (editingPostId) return
     if (!caption && mediaFiles.length === 0 && threadPosts.length === 0) return
-    const draft = { caption, platforms: selectedPlatforms, mediaFiles, mediaTypes, platformCaptions, postTypes, structuredContent, scheduledDate, showScheduler, threadPosts }
+    const draft = { caption, platforms: selectedPlatforms, mediaFiles, mediaTypes, platformCaptions, postTypes, structuredContent, scheduledDate, showScheduler, threadPosts, selectedAccountIds, firstComments, repostUrl, repostEnabled }
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)) } catch {}
-  }, [caption, selectedPlatforms, mediaFiles, mediaTypes, platformCaptions, postTypes, structuredContent, scheduledDate, showScheduler, threadPosts, editingPostId])
+  }, [caption, selectedPlatforms, mediaFiles, mediaTypes, platformCaptions, postTypes, structuredContent, scheduledDate, showScheduler, threadPosts, editingPostId, selectedAccountIds, firstComments, repostUrl, repostEnabled])
 
   useEffect(() => {
     if (editingPostId) return
@@ -242,6 +252,10 @@ export const Compose = () => {
       if (saved.threadPosts) setThreadPosts(saved.threadPosts)
       if (saved.scheduledDate) setScheduledDate(saved.scheduledDate)
       if (saved.showScheduler) setShowScheduler(saved.showScheduler)
+      if (saved.selectedAccountIds) setSelectedAccountIds(saved.selectedAccountIds)
+      if (saved.firstComments) setFirstComments(saved.firstComments)
+      if (saved.repostUrl) setRepostUrl(saved.repostUrl)
+      if (saved.repostEnabled) setRepostEnabled(saved.repostEnabled)
     } catch {}
     setShowDraftRestore(false)
   }
@@ -462,16 +476,26 @@ export const Compose = () => {
     }
   }
 
-  const togglePlatform = (id: SocialPlatform) => {
-    setSelectedPlatforms(prev => {
-      const next = prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
+  const toggleAccount = (accountId: string) => {
+    setSelectedAccountIds(prev =>
+      prev.includes(accountId) ? prev.filter(id => id !== accountId) : [...prev, accountId]
+    )
+  }
+
+  useEffect(() => {
+    const platformsFromAccounts = new Set<SocialPlatform>()
+    for (const id of selectedAccountIds) {
+      const acc = connectedAccounts.find(a => a.id === id)
+      if (acc) platformsFromAccounts.add(acc.platform.toLowerCase() as SocialPlatform)
+    }
+    const next = [...platformsFromAccounts]
+    setSelectedPlatforms(() => {
       if (next.length > 0 && !next.includes(activePreviewPlatform as SocialPlatform)) {
         setActivePreviewPlatform(next[0])
       }
-      if (next.length === 0) return prev
-      return next
+      return next.length > 0 ? next : ['instagram']
     })
-  }
+  }, [selectedAccountIds, connectedAccounts])
 
   const handleRewrite = async () => {
     const targetText = currentEditorCaption
@@ -567,11 +591,12 @@ export const Compose = () => {
 
       const plainCaption = stripHtml(caption)
 
-      const accountIds: string[] = []
-      for (const pid of selectedPlatforms) {
-        const ids = platformToAccountIds[pid] || []
-        accountIds.push(...ids)
-      }
+      const accountIds: string[] = selectedAccountIds.length > 0
+        ? selectedAccountIds
+        : []
+
+      const firstCommentsObj = showFirstComment ? firstComments : undefined
+      const postRepostUrl = repostEnabled ? repostUrl : undefined
 
       if (editingPostId) {
         await updatePost(token, editingPostId, {
@@ -583,7 +608,10 @@ export const Compose = () => {
           status,
           structuredContent,
           postTypes,
-          thread: threadPosts
+          thread: threadPosts,
+          firstComments: firstCommentsObj,
+          repostUrl: postRepostUrl,
+          repostEnabled,
         })
       } else {
         await addPost(token, {
@@ -596,7 +624,10 @@ export const Compose = () => {
           tags: [],
           structuredContent,
           postTypes,
-          thread: threadPosts
+          thread: threadPosts,
+          firstComments: firstCommentsObj,
+          repostUrl: postRepostUrl,
+          repostEnabled,
         })
       }
 
@@ -621,7 +652,15 @@ export const Compose = () => {
     setActivePreviewPlatform('instagram')
     setActiveEditorPlatform('master')
     setShowWarnings(false)
+    setSelectedAccountIds([])
+    setFirstComments({})
+    setRepostUrl('')
+    setRepostEnabled(false)
     clearDraft()
+  }
+
+  const setFirstCommentForPlatform = (pid: string, text: string) => {
+    setFirstComments(prev => ({ ...prev, [pid]: text }))
   }
 
   return (
@@ -670,9 +709,10 @@ export const Compose = () => {
           <PlatformSelector
             availablePlatforms={availablePlatforms}
             selectedPlatforms={selectedPlatforms}
-            togglePlatform={togglePlatform}
             navigate={navigate}
-            isCustomized={isCustomized}
+            connectedAccounts={connectedAccounts}
+            selectedAccountIds={selectedAccountIds}
+            toggleAccount={toggleAccount}
           />
 
           <ContentEditor
@@ -747,6 +787,81 @@ export const Compose = () => {
             setNewTemplateName={setNewTemplateName}
             editorReloadKey={editorReloadKey}
           />
+
+          {/* First Comment Section */}
+          {selectedPlatforms.length > 0 && (
+            <div className="bg-white/[0.02] rounded-xl border border-white/[0.06] overflow-hidden">
+              <button
+                onClick={() => setShowFirstComment(!showFirstComment)}
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/[0.02] transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <MessageCircle className="w-4 h-4 text-purple-400" />
+                  <span className="text-sm font-semibold text-white">First Comment</span>
+                </div>
+                <span className="text-[11px] text-muted-foreground">{showFirstComment ? 'Hide' : 'Add'}</span>
+              </button>
+              {showFirstComment && (
+                <div className="px-4 pb-4 space-y-3">
+                  <p className="text-xs text-muted-foreground">Post an automatic first comment on each platform</p>
+                  {selectedPlatforms.map(pid => {
+                    const pl = ALL_PLATFORMS.find(x => x.id === pid)
+                    if (!pl) return null
+                    const Icon = pl.icon
+                    return (
+                      <div key={pid} className="flex items-start gap-3">
+                        <Icon className={cn("w-4 h-4 mt-2 shrink-0", pl.color)} />
+                        <div className="flex-1">
+                          <p className="text-xs font-medium text-white mb-1">{pl.label} comment</p>
+                          <textarea
+                            value={firstComments[pid] || ''}
+                            onChange={e => setFirstCommentForPlatform(pid, e.target.value)}
+                            placeholder={`First comment for ${pl.label}...`}
+                            rows={2}
+                            className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-white text-sm placeholder:text-muted-foreground/40 focus:outline-none focus:border-purple-500/40 resize-none transition-colors"
+                          />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Repost Section */}
+          <div className="bg-white/[0.02] rounded-xl border border-white/[0.06] overflow-hidden">
+            <button
+              onClick={() => setRepostEnabled(!repostEnabled)}
+              className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/[0.02] transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Repeat2 className={cn("w-4 h-4", repostEnabled ? "text-purple-400" : "text-muted-foreground")} />
+                <span className="text-sm font-semibold text-white">Repost</span>
+              </div>
+              <div className={cn(
+                "w-9 h-5 rounded-full transition-colors relative",
+                repostEnabled ? "bg-purple-500" : "bg-white/[0.08]"
+              )}>
+                <div className={cn(
+                  "absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all",
+                  repostEnabled ? "left-[18px]" : "left-0.5"
+                )} />
+              </div>
+            </button>
+            {repostEnabled && (
+              <div className="px-4 pb-4">
+                <p className="text-xs text-muted-foreground mb-2">URL of the original post to repost/share</p>
+                <input
+                  type="url"
+                  value={repostUrl}
+                  onChange={e => setRepostUrl(e.target.value)}
+                  placeholder="https://example.com/post/123"
+                  className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-white text-sm placeholder:text-muted-foreground/40 focus:outline-none focus:border-purple-500/40 transition-colors"
+                />
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Right column */}
@@ -777,6 +892,9 @@ export const Compose = () => {
             {selectedPlatforms.length > 0 ? (
               <span>
                 Publishing to <span className="text-white font-medium">{selectedPlatforms.length}</span> platform{selectedPlatforms.length > 1 ? 's' : ''}
+                {selectedAccountIds.length > 0 && (
+                  <> · <span className="text-white font-medium">{selectedAccountIds.length}</span> account{selectedAccountIds.length > 1 ? 's' : ''}</>
+                )}
               </span>
             ) : (
               <span>No platforms selected</span>

@@ -1,4 +1,4 @@
-import { Smartphone, Monitor, Check, X as XIcon } from 'lucide-react'
+import { Monitor, Check, X as XIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { SocialPlatform } from '@/store/useStore'
 import { ALL_PLATFORMS } from '@/lib/platforms'
@@ -89,12 +89,6 @@ export default function PreviewPanel({
           )}
           <div className="flex p-0.5 bg-white/[0.03] rounded-lg border border-white/[0.06]">
             <button
-              onClick={() => setPreviewDevice('mobile')}
-              className={cn("p-1.5 rounded-md transition-all", previewDevice === 'mobile' ? "bg-white/10 text-white" : "text-muted-foreground hover:text-white")}
-            >
-              <Smartphone className="w-4 h-4" />
-            </button>
-            <button
               onClick={() => setPreviewDevice('desktop')}
               className={cn("p-1.5 rounded-md transition-all", previewDevice === 'desktop' ? "bg-white/10 text-white" : "text-muted-foreground hover:text-white")}
             >
@@ -127,46 +121,30 @@ export default function PreviewPanel({
       </div>
 
       <div className={cn(
-        "flex justify-center items-start bg-white/[0.02] rounded-2xl border border-white/[0.05] overflow-hidden relative",
-        previewDevice === 'mobile' ? 'py-8 px-4' : 'py-6 px-4'
+        "relative bg-white/[0.02] rounded-2xl border border-white/[0.05] overflow-hidden",
+        previewDevice === 'mobile' ? 'max-w-[400px] mx-auto' : ''
       )}>
         <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none opacity-[0.08]">
           <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-purple-500 blur-[120px] rounded-full" />
           <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-pink-500 blur-[120px] rounded-full" />
         </div>
 
-        <div className={cn(
-          "z-10",
-          previewDevice === 'mobile'
-            ? 'bg-black rounded-[2.5rem] border-[3px] border-[#222] shadow-2xl overflow-hidden relative'
-            : 'w-full max-w-[520px]'
-        )}>
-          {previewDevice === 'mobile' && (
-            <>
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-28 h-5 bg-[#222] rounded-b-xl z-20" />
-              <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-28 h-1 bg-white/20 rounded-full z-20" />
-            </>
-          )}
-
-          <div className={cn(
-            previewDevice === 'mobile' ? 'px-3 pt-10 pb-6' : 'px-4 py-3'
-          )}>
-            {(() => {
-              const PreviewComponent = getPlatformPreview(activePlatform)
-              return (
-                <PreviewComponent
-                  caption={getCaptionForPlatform(activePlatform)}
-                  mediaUrls={mediaFiles}
-                  mediaTypes={mediaTypes}
-                  mediaInfo={mediaInfo}
-                  isMobile={previewDevice === 'mobile'}
-                  getRatioClass={() => previewRatioClass}
-                  structuredContent={getStructuredContent(activePlatform)}
-                  contentTypeId={postTypes[activePlatform] || getDefaultContentType(activePlatform)}
-                />
-              )
-            })()}
-          </div>
+        <div className={cn("z-10 relative", previewDevice === 'mobile' ? 'p-4' : 'p-4')}>
+          {(() => {
+            const PreviewComponent = getPlatformPreview(activePlatform)
+            return (
+              <PreviewComponent
+                caption={getCaptionForPlatform(activePlatform)}
+                mediaUrls={mediaFiles}
+                mediaTypes={mediaTypes}
+                mediaInfo={mediaInfo}
+                isMobile={previewDevice === 'mobile'}
+                getRatioClass={() => previewRatioClass}
+                structuredContent={getStructuredContent(activePlatform)}
+                contentTypeId={postTypes[activePlatform] || getDefaultContentType(activePlatform)}
+              />
+            )
+          })()}
         </div>
       </div>
 

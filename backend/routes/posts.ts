@@ -55,7 +55,7 @@ router.get('/', requireAuth, async (req: any, res: any) => {
 
 // POST /api/posts: Create a new post
 router.post('/', requireAuth, async (req: any, res: any) => {
-  const { content, mediaUrls, socialAccountIds, scheduledAt, status, structuredContent, postTypes, tags } = req.body;
+  const { content, mediaUrls, socialAccountIds, scheduledAt, status, structuredContent, postTypes, tags, firstComments, repostUrl, repostEnabled } = req.body;
 
   try {
     const workspaceId = req.workspaceId;
@@ -91,6 +91,9 @@ router.post('/', requireAuth, async (req: any, res: any) => {
         mediaUrls: mediaUrls || [],
         structuredContent: structuredContent || undefined,
         postTypes: postTypes || undefined,
+        firstComments: firstComments || undefined,
+        repostUrl: repostUrl || undefined,
+        repostEnabled: repostEnabled !== undefined ? repostEnabled : false,
         scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
         status: postStatus,
         accounts: {
@@ -139,7 +142,7 @@ router.post('/', requireAuth, async (req: any, res: any) => {
 // PATCH /api/posts/:id: Update content, media, target accounts, or reschedule
 router.patch('/:id', requireAuth, async (req: any, res: any) => {
   const { id } = req.params;
-  const { content, mediaUrls, socialAccountIds, scheduledAt, status, structuredContent, postTypes, tags } = req.body;
+  const { content, mediaUrls, socialAccountIds, scheduledAt, status, structuredContent, postTypes, tags, firstComments, repostUrl, repostEnabled } = req.body;
 
   try {
     const post = await prisma.post.findUnique({ where: { id }, include: { accounts: { include: { socialAccount: true } }, tags: { include: { tag: true } } } });
@@ -154,6 +157,9 @@ router.patch('/:id', requireAuth, async (req: any, res: any) => {
       ...(mediaUrls !== undefined && { mediaUrls }),
       ...(structuredContent !== undefined && { structuredContent }),
       ...(postTypes !== undefined && { postTypes }),
+      ...(firstComments !== undefined && { firstComments }),
+      ...(repostUrl !== undefined && { repostUrl }),
+      ...(repostEnabled !== undefined && { repostEnabled }),
       ...(scheduledAt !== undefined && { scheduledAt: new Date(scheduledAt) }),
       status: postStatus,
     };

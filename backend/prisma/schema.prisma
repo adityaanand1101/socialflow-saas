@@ -206,6 +206,9 @@ model Post {
   mediaUrls   String[]            // Array of cloud storage file URLs
   structuredContent Json?         // Per-platform structured fields: { "instagram": { "caption": "..." }, "x": { "text": "...", "poll_options": "..." } }
   postTypes   Json?               // Per-platform content type selection: { "instagram": "feed", "x": "poll" }
+  firstComments Json?             // Per-platform first comments: { "instagram": "Great post!", "x": "Check this out" }
+  repostUrl   String?
+  repostEnabled Boolean           @default(false)
   scheduledAt DateTime?
   status      PostStatus          @default(DRAFT)
   createdAt   DateTime            @default(now())

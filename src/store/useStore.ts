@@ -27,6 +27,9 @@ export interface Post {
   structuredContent?: Record<string, Record<string, string>>
   postTypes?: Record<string, string>
   thread?: ThreadPost[]
+  firstComments?: Record<string, string>
+  repostUrl?: string
+  repostEnabled?: boolean
 }
 
 export interface Channel {
@@ -161,6 +164,9 @@ export const useStore = create<SocialFlowStore>((set) => ({
       if (postData.thread) body.thread = postData.thread
       if (postData.tags) body.tags = postData.tags
       if (postData.platforms) body.platforms = postData.platforms
+      if (postData.firstComments) body.firstComments = postData.firstComments
+      if (postData.repostUrl !== undefined) body.repostUrl = postData.repostUrl
+      if (postData.repostEnabled !== undefined) body.repostEnabled = postData.repostEnabled
       const res = await apiFetch('/api/posts', {
         method: 'POST',
         headers: { 
@@ -212,6 +218,9 @@ export const useStore = create<SocialFlowStore>((set) => ({
       if (updates.thread !== undefined) payload.thread = updates.thread;
       if (updates.platforms !== undefined) payload.platforms = updates.platforms;
       if (updates.tags !== undefined) payload.tags = updates.tags;
+      if (updates.firstComments !== undefined) payload.firstComments = updates.firstComments;
+      if (updates.repostUrl !== undefined) payload.repostUrl = updates.repostUrl;
+      if (updates.repostEnabled !== undefined) payload.repostEnabled = updates.repostEnabled;
 
       const res = await apiFetch(`/api/posts/${id}`, {
         method: 'PATCH',
@@ -238,6 +247,9 @@ export const useStore = create<SocialFlowStore>((set) => ({
             thread: data.thread || updates.thread,
             socialAccountIds: data.socialAccountIds || updates.socialAccountIds,
             tags: data.tags || updates.tags,
+            firstComments: data.firstComments || updates.firstComments,
+            repostUrl: data.repostUrl !== undefined ? data.repostUrl : updates.repostUrl,
+            repostEnabled: data.repostEnabled !== undefined ? data.repostEnabled : updates.repostEnabled,
             id: data.id || id
           } : p)
         }))

@@ -696,7 +696,6 @@ export const Compose = () => {
           hashtagSuggestions={hashtagSuggestions}
           hashtagNiche={hashtagNiche}
           setHashtagNiche={setHashtagNiche}
-          setHashtagSuggestions={setHashtagSuggestions}
           hashtagLoading={hashtagLoading}
           generateHashtags={generateHashtags}
           insertHashtag={insertHashtag}

@@ -74,7 +74,6 @@ interface ContentEditorProps {
   showHashtagModal: boolean
   setShowHashtagModal: (v: boolean) => void
   hashtagSuggestions: string[]
-  setHashtagSuggestions: (v: string[]) => void
   hashtagNiche: string
   setHashtagNiche: (v: string) => void
   hashtagLoading: boolean
@@ -118,7 +117,7 @@ export default function ContentEditor(props: ContentEditorProps) {
     mediaFiles, mediaTypes, removeMedia, isUploadingMedia, uploadProgress,
     isDragging, setIsDragging, fileInputRef, onFileChange, onDrop,
     showMediaLibrary, setShowMediaLibrary, libraryMedia, toggleLibraryMedia,
-            showHashtagModal, setShowHashtagModal, hashtagSuggestions, hashtagNiche, setHashtagNiche, setHashtagSuggestions,
+            showHashtagModal, setShowHashtagModal, hashtagSuggestions, hashtagNiche, setHashtagNiche,
     hashtagLoading, generateHashtags, insertHashtag,
     showShortlinkModal, setShowShortlinkModal, shortlinkProvider, setShortlinkProvider,
     shortlinkApiKey, setShortlinkApiKey, shortlinkDomain, setShortlinkDomain,

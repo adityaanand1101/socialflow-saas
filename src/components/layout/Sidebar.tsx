@@ -85,6 +85,7 @@ export const Sidebar = () => {
           size="icon"
           onClick={toggleSidebar}
           className="hover:bg-white/5"
+          aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {sidebarCollapsed ? <ChevronRight /> : <ChevronLeft />}
         </Button>

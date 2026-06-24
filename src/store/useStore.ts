@@ -98,8 +98,26 @@ export const useStore = create<SocialFlowStore>((set) => ({
   setWorkspaces: (workspaces) => set({ workspaces }),
   setActiveWorkspace: (id, role) => set({ activeWorkspaceId: id, activeWorkspaceRole: role }),
 
-  fetchData: async (_token: string, _folderId = null) => {
-    // Redundant now that we use React Query, but keeping as placeholder for other data if needed
+  fetchData: async (token: string, _folderId = null) => {
+    set({ loading: true })
+    try {
+      const [channelsRes, postsRes] = await Promise.all([
+        apiFetch('/api/channels', { headers: { Authorization: `Bearer ${token}` } }),
+        apiFetch('/api/posts', { headers: { Authorization: `Bearer ${token}` } }),
+      ])
+      if (channelsRes.ok) {
+        const channelsData = await channelsRes.json()
+        if (Array.isArray(channelsData)) set({ channels: channelsData })
+      }
+      if (postsRes.ok) {
+        const postsData = await postsRes.json()
+        if (Array.isArray(postsData)) set({ posts: postsData })
+      }
+    } catch (e) {
+      console.error("Failed to fetch dashboard data", e)
+    } finally {
+      set({ loading: false })
+    }
   },
 
   createFolder: async (token, name, parentId = null) => {

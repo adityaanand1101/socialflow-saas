@@ -120,6 +120,7 @@ export const Topbar = () => {
           <Input 
             placeholder="Search posts, analytics, or media..." 
             className="pl-10 bg-white/5 border-white/10 text-white w-full"
+            aria-label="Search posts, analytics, or media"
           />
         </div>
       </div>
@@ -131,7 +132,7 @@ export const Topbar = () => {
         </Button>
 
         <div className="flex items-center gap-2 px-3" ref={dropdownRef}>
-          <Button variant="ghost" size="icon" className="relative" onClick={handleOpenNotifications}>
+          <Button variant="ghost" size="icon" className="relative" onClick={handleOpenNotifications} aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}>
             <Bell className="w-5 h-5" />
             {unreadCount > 0 && (
               <span className="absolute -top-0.5 -right-0.5 w-4.5 h-4.5 bg-pink-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center">
@@ -201,6 +202,7 @@ export const Topbar = () => {
           <button
             onClick={() => setUserMenuOpen(!userMenuOpen)}
             className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-sm font-bold text-white shrink-0 hover:ring-2 hover:ring-white/20 transition-all"
+            aria-label="User menu"
           >
             {(user?.fullName || user?.username || 'U')[0].toUpperCase()}
           </button>

@@ -50,6 +50,7 @@ model Workspace {
   activityLogs         ActivityLog[]
   apiKeys              ApiKey[]
   webhooks             WebhookEndpoint[]
+  pluginConfigs        PluginConfig[]
 }
 
 model ApiKey {
@@ -310,6 +311,21 @@ model Notification {
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, read])
+}
+
+model PluginConfig {
+  id          String    @id @default(uuid())
+  workspaceId String
+  pluginId    String
+  enabled     Boolean   @default(false)
+  config      Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, pluginId])
+  @@index([workspaceId])
 }
 
 model WorkspaceInvite {

@@ -74,6 +74,7 @@ router.post('/google-drive', requireAuth, async (req: any, res: any) => {
         fileSize,
         folderId: folderId || null,
         workspaceId,
+        userId: req.userId,
       },
     });
 

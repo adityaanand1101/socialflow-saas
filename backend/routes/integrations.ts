@@ -106,4 +106,62 @@ router.delete('/endpoints/:id', requireAuth, async (req: any, res: any) => {
   }
 });
 
+// ==========================================
+// 3. PLUGIN CONFIGURATION
+// ==========================================
+
+// List all plugin configs for workspace
+router.get('/plugins', requireAuth, async (req: any, res: any) => {
+  try {
+    const configs = await prisma.pluginConfig.findMany({
+      where: { workspaceId: req.workspaceId }
+    });
+    res.json(configs);
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Upsert plugin config (create or update)
+router.put('/plugins/:pluginId', requireAuth, async (req: any, res: any) => {
+  const { pluginId } = req.params;
+  const { enabled, config } = req.body;
+
+  if (typeof enabled !== 'boolean') {
+    return res.status(400).json({ error: 'enabled (boolean) is required' });
+  }
+
+  try {
+    const pluginConfig = await prisma.pluginConfig.upsert({
+      where: {
+        workspaceId_pluginId: { workspaceId: req.workspaceId, pluginId }
+      },
+      update: { enabled, config: config ?? undefined },
+      create: {
+        workspaceId: req.workspaceId,
+        pluginId,
+        enabled,
+        config: config ?? undefined
+      }
+    });
+    res.json(pluginConfig);
+  } catch (error) {
+    console.error('Plugin upsert error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Delete plugin config (reset to defaults)
+router.delete('/plugins/:pluginId', requireAuth, async (req: any, res: any) => {
+  const { pluginId } = req.params;
+  try {
+    await prisma.pluginConfig.deleteMany({
+      where: { pluginId, workspaceId: req.workspaceId }
+    });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;

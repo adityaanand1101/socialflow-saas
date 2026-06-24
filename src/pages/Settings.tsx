@@ -66,20 +66,23 @@ export const Settings = () => {
   const [connectingRss, setConnectingRss] = useState(false)
 
   const globalPlugins = [
-    { id: 'stripe', name: 'Stripe', description: 'Payment processing and subscription management', icon: CreditCard, enabled: false },
-    { id: 'mailchimp', name: 'Mailchimp', description: 'Email marketing and audience management', icon: LinkIcon, enabled: false },
-    { id: 'slack-webhook', name: 'Slack Webhooks', description: 'Post notifications to Slack channels', icon: LinkIcon, enabled: false },
-    { id: 'zapier', name: 'Zapier', description: 'Connect with 5,000+ apps via automation', icon: ExternalLink, enabled: false },
-    { id: 'ga', name: 'Google Analytics', description: 'Track content performance metrics', icon: Globe, enabled: false },
-    { id: 'hubspot', name: 'HubSpot', description: 'CRM and marketing automation', icon: LinkIcon, enabled: false },
-    { id: 'discord-webhook', name: 'Discord Webhooks', description: 'Send notifications to Discord', icon: LinkIcon, enabled: false },
-    { id: 'segment', name: 'Segment', description: 'Customer data platform and analytics', icon: Globe, enabled: false },
+    { id: 'stripe', name: 'Stripe', description: 'Payment processing and subscription management', icon: CreditCard, fields: [{ key: 'apiKey', label: 'Secret Key', placeholder: 'sk_live_...', secret: true }] },
+    { id: 'mailchimp', name: 'Mailchimp', description: 'Email marketing and audience management', icon: LinkIcon, fields: [{ key: 'apiKey', label: 'API Key', placeholder: 'xxxxxxxxxx-usxx', secret: true }] },
+    { id: 'slack-webhook', name: 'Slack Webhooks', description: 'Post notifications to Slack channels', icon: LinkIcon, fields: [{ key: 'webhookUrl', label: 'Webhook URL', placeholder: 'https://hooks.slack.com/services/...', secret: false }] },
+    { id: 'zapier', name: 'Zapier', description: 'Connect with 5,000+ apps via automation', icon: ExternalLink, fields: [{ key: 'webhookUrl', label: 'Webhook URL', placeholder: 'https://hooks.zapier.com/...', secret: false }] },
+    { id: 'ga', name: 'Google Analytics', description: 'Track content performance metrics', icon: Globe, fields: [{ key: 'trackingId', label: 'Tracking ID', placeholder: 'G-XXXXXXXXXX', secret: false }] },
+    { id: 'hubspot', name: 'HubSpot', description: 'CRM and marketing automation', icon: LinkIcon, fields: [{ key: 'apiKey', label: 'Private App Token', placeholder: 'pat-...', secret: true }] },
+    { id: 'discord-webhook', name: 'Discord Webhooks', description: 'Send notifications to Discord', icon: LinkIcon, fields: [{ key: 'webhookUrl', label: 'Webhook URL', placeholder: 'https://discord.com/api/webhooks/...', secret: false }] },
+    { id: 'segment', name: 'Segment', description: 'Customer data platform and analytics', icon: Globe, fields: [{ key: 'writeKey', label: 'Write Key', placeholder: 'xxxxxxxxxx', secret: true }] },
   ]
-  const [pluginToggles, setPluginToggles] = useState<Record<string, boolean>>({})
+  const [pluginConfigs, setPluginConfigs] = useState<Record<string, { enabled: boolean; config?: any }>>({})
   const [internalPlugins, setInternalPlugins] = useState<any[]>([])
   const [showInternalPluginModal, setShowInternalPluginModal] = useState(false)
   const [internalPluginName, setInternalPluginName] = useState('')
   const [internalPluginUrl, setInternalPluginUrl] = useState('')
+  const [configuringPlugin, setConfiguringPlugin] = useState<string | null>(null)
+  const [pluginFormData, setPluginFormData] = useState<Record<string, string>>({})
+  const [savingPlugin, setSavingPlugin] = useState(false)
 
   const [openclawKey, setOpenclawKey] = useState<string | null>(null)
   const [openclawConnected, setOpenclawConnected] = useState(false)
@@ -113,17 +116,32 @@ export const Settings = () => {
               plan: ws.plan || 'STARTER'
             })
 
-            // Fetch API keys, webhooks, and RSS feeds
-            const [keysRes, whRes, channelsRes] = await Promise.all([
+            // Fetch API keys, webhooks, RSS feeds, and plugin configs
+            const [keysRes, whRes, channelsRes, pluginsRes] = await Promise.all([
                apiFetch('/api/integrations/keys', { headers: { Authorization: `Bearer ${token}` } }),
                apiFetch('/api/integrations/endpoints', { headers: { Authorization: `Bearer ${token}` } }),
-               apiFetch('/api/channels', { headers: { Authorization: `Bearer ${token}` } })
+               apiFetch('/api/channels', { headers: { Authorization: `Bearer ${token}` } }),
+               apiFetch('/api/integrations/plugins', { headers: { Authorization: `Bearer ${token}` } })
             ])
             if (keysRes.ok) setApiKeys(await keysRes.json())
             if (whRes.ok) setWebhooks(await whRes.json())
             if (channelsRes.ok) {
               const allChannels = await channelsRes.json()
               setRssFeeds(allChannels.filter((c: any) => c.platform === 'rss'))
+            }
+            if (pluginsRes.ok) {
+              const configs = await pluginsRes.json()
+              const map: Record<string, { enabled: boolean; config?: any }> = {}
+              const internals: any[] = []
+              for (const c of configs) {
+                if (c.pluginId.startsWith('internal_')) {
+                  internals.push({ id: c.pluginId, name: c.config?.name || c.pluginId, url: c.config?.url || '', enabled: c.enabled })
+                } else {
+                  map[c.pluginId] = { enabled: c.enabled, config: c.config }
+                }
+              }
+              setPluginConfigs(map)
+              setInternalPlugins(internals)
             }
           }
         }
@@ -235,25 +253,81 @@ export const Settings = () => {
     }
   }
 
-  const togglePlugin = (id: string) => {
-    setPluginToggles(prev => ({ ...prev, [id]: !prev[id] }))
+  const savePluginConfig = async (pluginId: string, enabled: boolean, config?: any) => {
+    try {
+      const token = await getToken()
+      await apiFetch(`/api/integrations/plugins/${pluginId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ enabled, config })
+      })
+    } catch (e) {
+      console.error('Failed to save plugin config:', e)
+    }
   }
 
-  const handleAddInternalPlugin = () => {
+  const togglePlugin = async (id: string) => {
+    const current = pluginConfigs[id]
+    const newEnabled = !current?.enabled
+    setPluginConfigs(prev => ({ ...prev, [id]: { ...prev[id], enabled: newEnabled, config: prev[id]?.config } }))
+    await savePluginConfig(id, newEnabled, current?.config)
+    if (newEnabled) {
+      setConfiguringPlugin(id)
+      setPluginFormData(current?.config || {})
+    }
+  }
+
+  const openPluginConfig = (id: string) => {
+    setConfiguringPlugin(id)
+    setPluginFormData(pluginConfigs[id]?.config || {})
+  }
+
+  const handleSavePluginConfig = async () => {
+    if (!configuringPlugin) return
+    setSavingPlugin(true)
+    try {
+      const config = { ...pluginFormData }
+      await savePluginConfig(configuringPlugin, true, config)
+      setPluginConfigs(prev => ({ ...prev, [configuringPlugin]: { ...prev[configuringPlugin], enabled: true, config } }))
+      setConfiguringPlugin(null)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setSavingPlugin(false)
+    }
+  }
+
+  const handleAddInternalPlugin = async () => {
     if (!internalPluginName || !internalPluginUrl) return
-    setInternalPlugins(prev => [...prev, {
-      id: `internal_${Date.now()}`,
-      name: internalPluginName,
-      url: internalPluginUrl,
-      enabled: true
-    }])
+    const pluginId = `internal_${Date.now()}`
+    const config = { name: internalPluginName, url: internalPluginUrl }
+    try {
+      const token = await getToken()
+      await apiFetch(`/api/integrations/plugins/${pluginId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ enabled: true, config })
+      })
+      setInternalPlugins(prev => [...prev, { id: pluginId, name: internalPluginName, url: internalPluginUrl, enabled: true }])
+    } catch (e) {
+      console.error(e)
+    }
     setShowInternalPluginModal(false)
     setInternalPluginName('')
     setInternalPluginUrl('')
   }
 
-  const removeInternalPlugin = (id: string) => {
-    setInternalPlugins(prev => prev.filter(p => p.id !== id))
+  const removeInternalPlugin = async (id: string) => {
+    try {
+      const token = await getToken()
+      await apiFetch(`/api/integrations/plugins/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      setInternalPlugins(prev => prev.filter(p => p.id !== id))
+    } catch (e) {
+      console.error(e)
+    }
   }
 
   const handleConnectOpenClaw = async () => {
@@ -658,7 +732,8 @@ export const Settings = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {globalPlugins.map(plugin => {
                       const Icon = plugin.icon
-                      const enabled = pluginToggles[plugin.id] ?? plugin.enabled
+                      const pc = pluginConfigs[plugin.id]
+                      const enabled = pc?.enabled ?? false
                       return (
                         <div key={plugin.id} className={cn(
                           "p-4 rounded-xl border flex items-start gap-3 transition-all",
@@ -673,19 +748,32 @@ export const Settings = () => {
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-bold text-white">{plugin.name}</p>
                             <p className="text-[10px] text-muted-foreground mt-0.5">{plugin.description}</p>
-                          </div>
-                          <button
-                            onClick={() => togglePlugin(plugin.id)}
-                            className={cn(
-                              "w-10 h-6 rounded-full relative shrink-0 transition-all mt-1",
-                              enabled ? "bg-purple-500" : "bg-white/10"
+                            {enabled && pc?.config && (
+                              <p className="text-[10px] text-green-400 mt-0.5 font-medium">Configured</p>
                             )}
-                          >
-                            <div className={cn(
-                              "w-4 h-4 bg-white rounded-full absolute top-1 transition-all shadow",
-                              enabled ? "left-5" : "left-1"
-                            )} />
-                          </button>
+                          </div>
+                          <div className="flex flex-col items-end gap-1.5 shrink-0">
+                            <button
+                              onClick={() => togglePlugin(plugin.id)}
+                              className={cn(
+                                "w-10 h-6 rounded-full relative shrink-0 transition-all",
+                                enabled ? "bg-purple-500" : "bg-white/10"
+                              )}
+                            >
+                              <div className={cn(
+                                "w-4 h-4 bg-white rounded-full absolute top-1 transition-all shadow",
+                                enabled ? "left-5" : "left-1"
+                              )} />
+                            </button>
+                            {enabled && (
+                              <button
+                                onClick={() => openPluginConfig(plugin.id)}
+                                className="text-[10px] font-bold text-purple-400 hover:text-purple-300 transition-colors"
+                              >
+                                Configure
+                              </button>
+                            )}
+                          </div>
                         </div>
                       )
                     })}
@@ -761,6 +849,53 @@ export const Settings = () => {
                 </div>
               </div>
             )}
+
+            {/* Plugin Config Modal */}
+            {configuringPlugin && (() => {
+              const plugin = globalPlugins.find(p => p.id === configuringPlugin)
+              if (!plugin) return null
+              return (
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={(e) => e.target === e.currentTarget && !savingPlugin && setConfiguringPlugin(null)}>
+                  <div className="bg-[#141218] border border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+                    <div className="flex items-center justify-between mb-5">
+                      <div>
+                        <h2 className="text-base font-bold text-white">{plugin.name}</h2>
+                        <p className="text-xs text-muted-foreground">Configure {plugin.name} integration</p>
+                      </div>
+                      <button onClick={() => !savingPlugin && setConfiguringPlugin(null)} className="p-2 hover:bg-white/5 rounded-lg">
+                        <X className="w-4 h-4 text-muted-foreground" />
+                      </button>
+                    </div>
+                    <div className="space-y-4 mb-6">
+                      {plugin.fields.map(field => (
+                        <div key={field.key} className="space-y-2">
+                          <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{field.label}</label>
+                          <input
+                            type={field.secret ? 'password' : 'text'}
+                            value={pluginFormData[field.key] || ''}
+                            onChange={(e) => setPluginFormData(prev => ({ ...prev, [field.key]: e.target.value }))}
+                            placeholder={field.placeholder}
+                            className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500/50"
+                          />
+                        </div>
+                      ))}
+                      <p className="text-[10px] text-muted-foreground">
+                        Your credentials are encrypted at rest and never shared.
+                      </p>
+                    </div>
+                    <div className="flex gap-3">
+                      <Button variant="outline" className="flex-1" onClick={() => setConfiguringPlugin(null)} disabled={savingPlugin}>
+                        Cancel
+                      </Button>
+                      <Button className="flex-1 gap-2" onClick={handleSavePluginConfig} disabled={savingPlugin}>
+                        {savingPlugin ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                        {savingPlugin ? 'Saving...' : 'Save'}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* OpenClaw Integration */}
             <Card>

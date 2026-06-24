@@ -78,11 +78,13 @@ export const MediaLibrary = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deletingTargets, setDeletingTargets] = useState<{ type: 'asset' | 'assets'; ids: string[] } | null>(null)
 
-  // Google Drive Import
+  // Google Drive Import (Picker API)
   const [showDriveModal, setShowDriveModal] = useState(false)
   const [driveImporting, setDriveImporting] = useState(false)
-  const [driveFileId, setDriveFileId] = useState('')
-  const [driveFileName, setDriveFileName] = useState('')
+  const [driveFiles, setDriveFiles] = useState<{ id: string; name: string; mimeType: string; size: string }[]>([])
+  const [driveAccessToken, setDriveAccessToken] = useState<string | null>(null)
+  const pickerLoaded = useRef(false)
+  const driveAuthInProgress = useRef(false)
 
   // Asset Rename Modal
   const [isRenameModalOpen, setIsRenameModalOpen] = useState(false)
@@ -363,29 +365,131 @@ export const MediaLibrary = () => {
     }
   }
 
-  const handleDriveImportFromUrl = async () => {
-    if (!driveFileId.trim()) return
+  // Google Drive Picker API
+  const loadGapi = (): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      if (typeof window !== 'undefined' && (window as any).gapi) {
+        resolve()
+        return
+      }
+      const script = document.createElement('script')
+      script.src = 'https://apis.google.com/js/api.js'
+      script.onload = () => resolve()
+      script.onerror = () => reject(new Error('Failed to load Google API'))
+      document.head.appendChild(script)
+    })
+  }
+
+  const initializePicker = async () => {
+    try {
+      await loadGapi()
+      await new Promise<void>((resolve, reject) => {
+        (window as any).gapi.load('picker', { callback: resolve, onerror: reject })
+      })
+      pickerLoaded.current = true
+    } catch (e) {
+      console.error('Failed to initialize Google Picker:', e)
+      showToast('error', 'Failed to load Google Drive picker')
+    }
+  }
+
+  const handleDriveAuth = async () => {
+    if (driveAuthInProgress.current) return
+    driveAuthInProgress.current = true
+    try {
+      await loadGapi()
+      await new Promise<void>((resolve, reject) => {
+        (window as any).gapi.load('auth2', { callback: resolve, onerror: reject })
+      })
+      const authInstance = (window as any).gapi.auth2.getAuthInstance() || 
+        await (window as any).gapi.auth2.init({
+          client_id: import.meta.env.VITE_GOOGLE_DRIVE_CLIENT_ID,
+          scope: 'https://www.googleapis.com/auth/drive.readonly'
+        })
+      
+      const user = await authInstance.signIn()
+      const token = user.getAuthResponse().access_token
+      setDriveAccessToken(token)
+      showToast('success', 'Connected to Google Drive')
+    } catch (e) {
+      console.error('Drive auth error:', e)
+      showToast('error', 'Failed to connect to Google Drive')
+    } finally {
+      driveAuthInProgress.current = false
+    }
+  }
+
+  const openDrivePicker = () => {
+    if (!driveAccessToken) {
+      handleDriveAuth().then(() => {
+        if (driveAccessToken) openDrivePicker()
+      })
+      return
+    }
+
+    const view = new (window as any).google.picker.View((window as any).google.picker.ViewId.DOCS)
+    view.setMimeTypes('image/*,video/*')
+    view.setOwnedByMe(true)
+
+    const picker = new (window as any).google.picker.PickerBuilder()
+      .addView(view)
+      .setOAuthToken(driveAccessToken)
+      .setDeveloperKey(import.meta.env.VITE_GOOGLE_DRIVE_API_KEY)
+      .setCallback((data: any) => {
+        if (data.action === (window as any).google.picker.Action.PICKED) {
+          const docs = data.docs
+          setDriveFiles(docs.map((doc: any) => ({
+            id: doc.id,
+            name: doc.name,
+            mimeType: doc.mimeType,
+            size: doc.size
+          })))
+        }
+      })
+      .setTitle('Select files from Google Drive')
+      .setSize(800, 600)
+      .build()
+    picker.setVisible(true)
+  }
+
+  const importSelectedDriveFiles = async () => {
+    if (driveFiles.length === 0) return
     setDriveImporting(true)
     try {
       const token = await getToken()
-      const fileId = driveFileId.trim()
-      // Extract file ID from a full Google Drive URL if pasted
-      const urlMatch = fileId.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || fileId.match(/id=([a-zA-Z0-9_-]+)/)
-      const resolvedId = urlMatch ? urlMatch[1] : fileId
-      const res = await apiFetch('/api/uploads/google-drive', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileId: resolvedId, fileName: driveFileName || undefined, folderId: currentFolderId })
-      })
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.error || 'Import failed')
+      let successCount = 0
+      for (const file of driveFiles) {
+        // Use the Google Drive file download endpoint with the access token
+        const downloadRes = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
+          headers: { Authorization: `Bearer ${driveAccessToken}` }
+        })
+        if (!downloadRes.ok) continue
+        
+        const blob = await downloadRes.blob()
+        const fileObj = new File([blob], file.name, { type: file.mimeType })
+        
+        // Upload via existing presigned URL flow
+        const presignedRes = await apiFetch('/api/media/presigned-url', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileName: fileObj.name, fileType: fileObj.type, fileSize: fileObj.size })
+        })
+        if (!presignedRes.ok) continue
+        const { uploadUrl, fileUrl } = await presignedRes.json()
+        
+        await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': fileObj.type }, body: fileObj })
+        
+        await apiFetch('/api/media/register', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileName: fileObj.name, fileUrl, fileType: fileObj.type, fileSize: fileObj.size, folderId: currentFolderId })
+        })
+        successCount++
       }
       queryClient.invalidateQueries({ queryKey: ['media'] })
-      showToast('success', 'Imported from Google Drive')
+      showToast('success', `Imported ${successCount} file${successCount !== 1 ? 's' : ''} from Google Drive`)
       setShowDriveModal(false)
-      setDriveFileId('')
-      setDriveFileName('')
+      setDriveFiles([])
     } catch (err: any) {
       showToast('error', err.message || 'Failed to import from Google Drive')
     } finally {
@@ -547,7 +651,7 @@ export const MediaLibrary = () => {
       {/* Google Drive Import Modal */}
       {showDriveModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4" onClick={() => { if (!driveImporting) setShowDriveModal(false) }}>
-          <div className="bg-[#141218] border border-white/10 rounded-2xl w-full max-w-md p-6 space-y-5" onClick={e => e.stopPropagation()}>
+          <div className="bg-[#141218] border border-white/10 rounded-2xl w-full max-w-lg p-6 space-y-5" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
@@ -558,7 +662,7 @@ export const MediaLibrary = () => {
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-white">Import from Google Drive</h3>
-                  <p className="text-sm text-muted-foreground">Paste a shareable link or file ID</p>
+                  <p className="text-sm text-muted-foreground">Browse and select files to import</p>
                 </div>
               </div>
               <button onClick={() => { if (!driveImporting) setShowDriveModal(false) }} className="text-muted-foreground hover:text-white transition-colors">
@@ -566,45 +670,80 @@ export const MediaLibrary = () => {
               </button>
             </div>
 
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Google Drive File ID or URL</label>
-                <Input
-                  value={driveFileId}
-                  onChange={(e) => setDriveFileId(e.target.value)}
-                  placeholder="e.g. 1ABCxyz... or https://drive.google.com/file/d/..."
-                />
+            {!driveAccessToken ? (
+              <div className="py-10 flex flex-col items-center gap-4">
+                <div className="w-16 h-16 rounded-2xl bg-blue-500/10 flex items-center justify-center">
+                  <svg className="w-8 h-8 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M9.5 2L3 14h6.5L12 8l2.5 6H21L14.5 2H9.5z" />
+                    <path d="M3 16l3 4h12l3-4" />
+                  </svg>
+                </div>
+                <p className="text-sm text-muted-foreground text-center max-w-xs">
+                  Connect your Google account to browse Drive files and import them directly into your media library.
+                </p>
+                <p className="text-xs text-muted-foreground text-center max-w-xs">
+                  Requires <code className="text-blue-400 bg-blue-500/10 px-1 rounded">VITE_GOOGLE_DRIVE_CLIENT_ID</code> and <code className="text-blue-400 bg-blue-500/10 px-1 rounded">VITE_GOOGLE_DRIVE_API_KEY</code> in your <code className="text-blue-400">.env</code>.
+                </p>
+                <Button className="gap-2 mt-2" onClick={openDrivePicker}>
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M9.5 2L3 14h6.5L12 8l2.5 6H21L14.5 2H9.5z" />
+                    <path d="M3 16l3 4h12l3-4" />
+                  </svg>
+                  Connect Google Drive
+                </Button>
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">File Name (optional)</label>
-                <Input
-                  value={driveFileName}
-                  onChange={(e) => setDriveFileName(e.target.value)}
-                  placeholder="Leave blank to use the original name"
-                />
+            ) : driveFiles.length === 0 ? (
+              <div className="py-10 flex flex-col items-center gap-4">
+                <p className="text-sm text-green-400 font-medium">Connected to Google Drive</p>
+                <Button className="gap-2" onClick={openDrivePicker}>
+                  <span className="text-lg">+</span>
+                  Browse Files
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => { setDriveAccessToken(null) }}>
+                  Disconnect
+                </Button>
               </div>
-            </div>
-
-            <p className="text-xs text-muted-foreground">
-              The file must be publicly accessible (shareable with link). We'll download and import it into your media library.
-            </p>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm font-medium text-white">{driveFiles.length} file{driveFiles.length !== 1 ? 's' : ''} selected</p>
+                <div className="max-h-48 overflow-y-auto space-y-2">
+                  {driveFiles.map((f) => (
+                    <div key={f.id} className="flex items-center gap-3 p-2 rounded-lg bg-white/5 border border-white/10">
+                      <div className="w-8 h-8 rounded bg-blue-500/10 flex items-center justify-center shrink-0">
+                        {f.mimeType.startsWith('video') ? <Video className="w-4 h-4 text-blue-400" /> : <ImageIcon className="w-4 h-4 text-blue-400" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-white truncate">{f.name}</p>
+                        <p className="text-xs text-muted-foreground">{f.size ? formatSize(parseInt(f.size)) : 'Unknown size'}</p>
+                      </div>
+                      <button onClick={() => setDriveFiles(prev => prev.filter(x => x.id !== f.id))} className="text-muted-foreground hover:text-red-400">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <Button variant="ghost" size="sm" onClick={openDrivePicker} disabled={driveImporting}>
+                  + Add more files
+                </Button>
+              </div>
+            )}
 
             <div className="flex gap-3 pt-2">
               <Button
                 variant="outline"
                 className="flex-1"
-                onClick={() => { setShowDriveModal(false); setDriveFileId(''); setDriveFileName('') }}
+                onClick={() => { setShowDriveModal(false); setDriveFiles([]); setDriveAccessToken(null) }}
                 disabled={driveImporting}
               >
                 Cancel
               </Button>
               <Button
                 className="flex-1 gap-2"
-                onClick={handleDriveImportFromUrl}
-                disabled={!driveFileId.trim() || driveImporting}
+                onClick={importSelectedDriveFiles}
+                disabled={driveFiles.length === 0 || driveImporting}
               >
                 {driveImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                {driveImporting ? 'Importing...' : 'Import'}
+                {driveImporting ? 'Importing...' : `Import ${driveFiles.length > 0 ? driveFiles.length + ' file' + (driveFiles.length !== 1 ? 's' : '') : ''}`}
               </Button>
             </div>
           </div>

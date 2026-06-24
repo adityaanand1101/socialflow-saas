@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
   Image as ImageIcon, Hash, Sparkles, Upload,
-  AlertTriangle, Trash2, Lock, Plus, GripVertical, Link2, X, Loader2, FileText, Wand2
+  AlertTriangle, Trash2, Lock, Plus, GripVertical, Link2, X, Loader2, FileText
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { SocialPlatform } from '@/store/useStore'

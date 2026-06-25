@@ -126,6 +126,7 @@ export const PhotoEditor = () => {
   const [flipH, setFlipH] = useState(false)
   const [flipV, setFlipV] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [containerSize, setContainerSize] = useState({ width: 800, height: 600 })
 
   const stageRef = useRef<any>(null)
   const transformerRef = useRef<any>(null)
@@ -139,6 +140,17 @@ export const PhotoEditor = () => {
   useEffect(() => {
     if (initialImageUrl) loadImage(initialImageUrl)
   }, [initialImageUrl])
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const ro = new ResizeObserver(entries => {
+      const { width, height } = entries[0].contentRect
+      setContainerSize({ width: Math.max(200, width), height: Math.max(200, height) })
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   useEffect(() => {
     if (transformerRef.current && selectedLayerId) {
@@ -169,8 +181,8 @@ export const PhotoEditor = () => {
     img.crossOrigin = 'anonymous'
     img.onload = () => {
       setImage(img)
-      const w = Math.min(img.naturalWidth, 1200)
-      const h = Math.min(img.naturalHeight, 900)
+      const w = img.naturalWidth
+      const h = img.naturalHeight
       setImageSize({ width: w, height: h })
       setFilterSettings({ brightness: 0, contrast: 0, saturate: 0, blur: 0, grayscale: 0, sepia: 0, hueRotate: 0 })
       setActiveFilter('Normal')
@@ -239,11 +251,12 @@ export const PhotoEditor = () => {
     if (tool === 'text' && textInput) {
       const pos = e.target.getStage()?.getPointerPosition()
       if (!pos) return
+      const imgPos = stageToImage(pos.x, pos.y)
       addLayer({
         id: newLayerId(),
         type: 'text',
-        x: pos.x / zoom,
-        y: pos.y / zoom,
+        x: imgPos.x,
+        y: imgPos.y,
         text: textInput,
         fontSize: textSize,
         fontFamily: 'Inter, sans-serif',
@@ -257,7 +270,7 @@ export const PhotoEditor = () => {
     if (tool === 'shape' && shapeType) {
       const pos = e.target.getStage()?.getPointerPosition()
       if (!pos) return
-      const x = pos.x / zoom, y = pos.y / zoom
+      const { x, y } = stageToImage(pos.x, pos.y)
       if (shapeType === 'rect') {
         addLayer({
           id: newLayerId(), type: 'rect', x, y, width: 120, height: 80,
@@ -279,12 +292,23 @@ export const PhotoEditor = () => {
     }
   }
 
+  const stageToImage = (sx: number, sy: number) => {
+    const fitScale = getFitScale()
+    const cx = containerSize.width / 2
+    const cy = containerSize.height / 2
+    return {
+      x: (sx - cx) / (zoom * fitScale) + imageSize.width / 2,
+      y: (sy - cy) / (zoom * fitScale) + imageSize.height / 2,
+    }
+  }
+
   const handleMouseDown = (e: any) => {
     if (tool === 'draw') {
       isDrawingRef.current = true
       const pos = e.target.getStage()?.getPointerPosition()
       if (!pos) return
-      currentDrawPointsRef.current = [pos.x / zoom, pos.y / zoom]
+      const p = stageToImage(pos.x, pos.y)
+      currentDrawPointsRef.current = [p.x, p.y]
       setIsDrawing(true)
       const newLayer: DrawLayer = {
         id: newLayerId(), type: 'draw', points: [...currentDrawPointsRef.current],
@@ -295,9 +319,9 @@ export const PhotoEditor = () => {
     }
     if (tool === 'crop' && image) {
       const pos = e.target.getStage()?.getPointerPosition()
-      if (!pos) return
+      const p = stageToImage(pos.x, pos.y)
       setIsCropping(true)
-      setCropRect({ x: pos.x / zoom, y: pos.y / zoom, width: 0, height: 0 })
+      setCropRect({ x: p.x, y: p.y, width: 0, height: 0 })
     }
   }
 
@@ -305,23 +329,19 @@ export const PhotoEditor = () => {
     if (tool === 'draw' && isDrawingRef.current) {
       const pos = e.target.getStage()?.getPointerPosition()
       if (!pos) return
-      const newPoints = [...currentDrawPointsRef.current, pos.x / zoom, pos.y / zoom]
-      currentDrawPointsRef.current = newPoints
+      const p = stageToImage(pos.x, pos.y)
+      currentDrawPointsRef.current = [...currentDrawPointsRef.current, p.x, p.y]
       setLayers(prev => {
         const copy = [...prev]
         const last = copy[copy.length - 1]
-        if (last?.type === 'draw') { last.points = newPoints }
+        if (last?.type === 'draw') { last.points = [...currentDrawPointsRef.current] }
         return copy
       })
     }
     if (tool === 'crop' && isCropping && cropRect) {
       const pos = e.target.getStage()?.getPointerPosition()
-      if (!pos) return
-      setCropRect(prev => prev ? {
-        ...prev,
-        width: pos.x / zoom - prev.x,
-        height: pos.y / zoom - prev.y,
-      } : null)
+      const p = stageToImage(pos.x, pos.y)
+      setCropRect(prev => prev ? { ...prev, width: p.x - prev.x, height: p.y - prev.y } : null)
     }
   }
 
@@ -389,18 +409,20 @@ export const PhotoEditor = () => {
   const exportImage = (): Promise<string> => {
     return new Promise((resolve) => {
       if (!image) { resolve(''); return }
+      const w = imageSize.width
+      const h = imageSize.height
       const canvas = document.createElement('canvas')
-      canvas.width = imageSize.width
-      canvas.height = imageSize.height
+      canvas.width = w
+      canvas.height = h
       const ctx = canvas.getContext('2d')
       if (!ctx) { resolve(''); return }
 
       ctx.filter = filterToCss(filterSettings)
       ctx.save()
-      ctx.translate(canvas.width / 2, canvas.height / 2)
+      ctx.translate(w / 2, h / 2)
       ctx.rotate((rotation * Math.PI) / 180)
       ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1)
-      ctx.drawImage(image, -canvas.width / 2, -canvas.height / 2, canvas.width, canvas.height)
+      ctx.drawImage(image, -w / 2, -h / 2, w, h)
       ctx.restore()
       ctx.filter = 'none'
 
@@ -410,21 +432,21 @@ export const PhotoEditor = () => {
           ctx.font = `${layer.fontSize}px ${layer.fontFamily}`
           ctx.fillStyle = layer.fill
           ctx.save()
-          ctx.translate(layer.x + canvas.width / 4, layer.y + canvas.height / 4)
+          ctx.translate(layer.x, layer.y)
           ctx.rotate((layer.rotation * Math.PI) / 180)
           ctx.fillText(layer.text, 0, 0)
           ctx.restore()
         } else if (layer.type === 'rect') {
           ctx.fillStyle = layer.fill
           ctx.save()
-          ctx.translate(layer.x + canvas.width / 4, layer.y + canvas.height / 4)
+          ctx.translate(layer.x, layer.y)
           ctx.rotate((layer.rotation * Math.PI) / 180)
           ctx.fillRect(0, 0, layer.width || 0, layer.height || 0)
           ctx.restore()
         } else if (layer.type === 'circle') {
           ctx.fillStyle = layer.fill
           ctx.beginPath()
-          ctx.arc(layer.x + canvas.width / 4, layer.y + canvas.height / 4, layer.radius || 0, 0, Math.PI * 2)
+          ctx.arc(layer.x, layer.y, layer.radius || 0, 0, Math.PI * 2)
           ctx.fill()
         } else if (layer.type === 'draw') {
           ctx.strokeStyle = layer.stroke
@@ -433,8 +455,8 @@ export const PhotoEditor = () => {
           ctx.lineJoin = 'round'
           ctx.beginPath()
           for (let i = 0; i < layer.points.length; i += 2) {
-            if (i === 0) ctx.moveTo(layer.points[i] + canvas.width / 4, layer.points[i + 1] + canvas.height / 4)
-            else ctx.lineTo(layer.points[i] + canvas.width / 4, layer.points[i + 1] + canvas.height / 4)
+            if (i === 0) ctx.moveTo(layer.points[i], layer.points[i + 1])
+            else ctx.lineTo(layer.points[i], layer.points[i + 1])
           }
           ctx.stroke()
         }
@@ -498,13 +520,12 @@ export const PhotoEditor = () => {
     showToast('Image downloaded')
   }
 
-  const getStageScale = () => {
-    if (!containerRef.current) return zoom
-    const cw = containerRef.current.clientWidth - 320
-    const ch = containerRef.current.clientHeight - 80
-    const scaleX = cw / imageSize.width
-    const scaleY = ch / imageSize.height
-    return Math.min(scaleX, scaleY, 1) * zoom
+  const getFitScale = () => {
+    const pad = 32
+    const cw = containerSize.width - pad * 2
+    const ch = containerSize.height - pad * 2
+    if (cw <= 0 || ch <= 0) return 0.1
+    return Math.min(cw / imageSize.width, ch / imageSize.height, 1)
   }
 
   const selectedLayer = layers.find(l => l.id === selectedLayerId)
@@ -527,6 +548,9 @@ export const PhotoEditor = () => {
     }))
   }
 
+  const imageCenterX = imageSize.width / 2
+  const imageCenterY = imageSize.height / 2
+
   return (
     <div className="h-[calc(100vh-4rem)] flex flex-col bg-black/40 rounded-2xl overflow-hidden border border-white/10" onDragOver={(e) => e.preventDefault()} onDrop={handleDrop}>
       {toast && (
@@ -536,7 +560,7 @@ export const PhotoEditor = () => {
       )}
 
       {/* Top Toolbar */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-white/10 bg-black/30">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-white/10 bg-black/30 shrink-0">
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-white" onClick={() => navigate(-1)}>
             <X className="w-4 h-4" />
@@ -573,9 +597,9 @@ export const PhotoEditor = () => {
         </div>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden min-h-0">
         {/* Left Toolbar */}
-        <div className="w-16 flex flex-col items-center py-3 gap-1 border-r border-white/10 bg-black/20">
+        <div className="w-16 flex flex-col items-center py-3 gap-1 border-r border-white/10 bg-black/20 shrink-0">
           <ToolButton icon={ImagePlus} label="Select" active={tool === 'select'} onClick={() => setTool('select')} />
           <ToolButton icon={Crop} label="Crop" active={tool === 'crop'} onClick={() => setTool('crop')} />
           <div className="w-8 h-px bg-white/10 my-1" />
@@ -593,7 +617,7 @@ export const PhotoEditor = () => {
         </div>
 
         {/* Canvas */}
-        <div ref={containerRef} className="flex-1 relative overflow-hidden bg-[#0a0a0f]" style={{ backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
+        <div ref={containerRef} className="flex-1 relative overflow-hidden bg-[#0a0a0f] min-w-0" style={{ backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
           {!image ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground gap-4">
               <div className="w-20 h-20 rounded-2xl border-2 border-dashed border-white/10 flex items-center justify-center">
@@ -605,134 +629,146 @@ export const PhotoEditor = () => {
           ) : (
             <Stage
               ref={stageRef}
-              width={imageSize.width * getStageScale()}
-              height={imageSize.height * getStageScale()}
-              scaleX={getStageScale()}
-              scaleY={getStageScale()}
+              width={containerSize.width}
+              height={containerSize.height}
               onClick={handleStageClick}
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
-              style={{ margin: 'auto', cursor: tool === 'draw' ? 'crosshair' : tool === 'crop' ? 'crosshair' : tool === 'text' ? 'text' : 'default' }}
+              style={{ cursor: tool === 'draw' || tool === 'crop' ? 'crosshair' : tool === 'text' ? 'text' : 'default' }}
             >
               <Layer>
-                <KonvaImage
-                  image={image}
-                  width={imageSize.width}
-                  height={imageSize.height}
-                  x={flipH ? imageSize.width / 2 : 0}
-                  y={flipV ? imageSize.height / 2 : 0}
-                  filters={[]}
-                  opacity={1}
-                  rotation={rotation}
-                  scaleX={flipH ? -1 : 1}
-                  scaleY={flipV ? -1 : 1}
-                  offsetX={flipH ? imageSize.width / 2 : 0}
-                  offsetY={flipV ? imageSize.height / 2 : 0}
-                />
-                {/* Apply filter via CSS on a wrapper image - use a semi-transparent overlay for filter preview */}
-                <Rect
-                  x={0} y={0} width={imageSize.width} height={imageSize.height}
-                  fill={`rgba(0,0,0,${((filterSettings.brightness || 0) < 0 ? Math.abs(filterSettings.brightness) : 0) / 200})`}
-                  listening={false}
-                />
-                {layers.filter(l => l.visible).map(layer => {
-                  if (layer.type === 'text') {
-                    return (
-                      <Text
-                        key={layer.id} id={layer.id}
-                        x={layer.x} y={layer.y}
-                        text={layer.text}
-                        fontSize={layer.fontSize}
-                        fontFamily={layer.fontFamily}
-                        fill={layer.fill}
-                        rotation={layer.rotation}
-                        draggable={tool === 'select'}
-                        onClick={() => setSelectedLayerId(layer.id)}
-                        onDragEnd={(e) => {
-                          const node = e.target
-                          setLayers(prev => prev.map(l => l.id === layer.id ? { ...l, x: node.x(), y: node.y() } as TextLayer : l))
-                        }}
+                <Group
+                  x={containerSize.width / 2}
+                  y={containerSize.height / 2}
+                  scaleX={zoom * getFitScale()}
+                  scaleY={zoom * getFitScale()}
+                >
+                  <Group x={-imageCenterX} y={-imageCenterY}>
+                    {/* Image with flip + rotation */}
+                    <Group
+                      x={imageCenterX}
+                      y={imageCenterY}
+                      rotation={rotation}
+                      scaleX={flipH ? -1 : 1}
+                      scaleY={flipV ? -1 : 1}
+                      offsetX={imageCenterX}
+                      offsetY={imageCenterY}
+                    >
+                      <KonvaImage
+                        image={image}
+                        width={imageSize.width}
+                        height={imageSize.height}
+                        filters={[]}
+                        opacity={1}
                       />
-                    )
-                  }
-                  if (layer.type === 'rect') {
-                    return (
-                      <Rect
-                        key={layer.id} id={layer.id}
-                        x={layer.x} y={layer.y}
-                        width={layer.width || 120}
-                        height={layer.height || 80}
-                        fill={layer.fill}
-                        stroke={layer.stroke}
-                        strokeWidth={layer.strokeWidth}
-                        rotation={layer.rotation}
-                        draggable={tool === 'select'}
-                        onClick={() => setSelectedLayerId(layer.id)}
-                        onDragEnd={(e) => {
-                          const node = e.target
-                          setLayers(prev => prev.map(l => l.id === layer.id ? { ...l, x: node.x(), y: node.y() } as ShapeLayer : l))
-                        }}
-                      />
-                    )
-                  }
-                  if (layer.type === 'circle') {
-                    return (
-                      <Circle
-                        key={layer.id} id={layer.id}
-                        x={layer.x} y={layer.y}
-                        radius={layer.radius || 50}
-                        fill={layer.fill}
-                        stroke={layer.stroke}
-                        strokeWidth={layer.strokeWidth}
-                        rotation={layer.rotation}
-                        draggable={tool === 'select'}
-                        onClick={() => setSelectedLayerId(layer.id)}
-                        onDragEnd={(e) => {
-                          const node = e.target
-                          setLayers(prev => prev.map(l => l.id === layer.id ? { ...l, x: node.x(), y: node.y() } as ShapeLayer : l))
-                        }}
-                      />
-                    )
-                  }
-                  if (layer.type === 'draw') {
-                    return (
-                      <Line
-                        key={layer.id} id={layer.id}
-                        points={layer.points}
-                        stroke={layer.stroke}
-                        strokeWidth={layer.strokeWidth}
-                        tension={0.5}
-                        lineCap="round"
-                        lineJoin="round"
-                        globalCompositeOperation="source-over"
-                        listening={false}
-                      />
-                    )
-                  }
-                  return null
-                })}
-                {/* Crop overlay */}
-                {tool === 'crop' && cropRect && (
-                  <Group>
+                    </Group>
+                    {/* Filter preview overlay */}
                     <Rect
-                      x={cropRect.x} y={cropRect.y}
-                      width={cropRect.width} height={cropRect.height}
-                      stroke="#6366f1"
-                      strokeWidth={2}
-                      dash={[10, 5]}
-                      fill="rgba(99,102,241,0.1)"
+                      x={0} y={0} width={imageSize.width} height={imageSize.height}
+                      fill={`rgba(0,0,0,${((filterSettings.brightness || 0) < 0 ? Math.abs(filterSettings.brightness) : 0) / 200})`}
+                      listening={false}
+                    />
+                    {/* User layers */}
+                    {layers.filter(l => l.visible).map(layer => {
+                      if (layer.type === 'text') {
+                        return (
+                          <Text
+                            key={layer.id} id={layer.id}
+                            x={layer.x} y={layer.y}
+                            text={layer.text}
+                            fontSize={layer.fontSize}
+                            fontFamily={layer.fontFamily}
+                            fill={layer.fill}
+                            rotation={layer.rotation}
+                            draggable={tool === 'select'}
+                            onClick={() => setSelectedLayerId(layer.id)}
+                            onDragEnd={(e) => {
+                              const node = e.target
+                              setLayers(prev => prev.map(l => l.id === layer.id ? { ...l, x: node.x(), y: node.y() } as TextLayer : l))
+                            }}
+                          />
+                        )
+                      }
+                      if (layer.type === 'rect') {
+                        return (
+                          <Rect
+                            key={layer.id} id={layer.id}
+                            x={layer.x} y={layer.y}
+                            width={layer.width || 120}
+                            height={layer.height || 80}
+                            fill={layer.fill}
+                            stroke={layer.stroke}
+                            strokeWidth={layer.strokeWidth}
+                            rotation={layer.rotation}
+                            draggable={tool === 'select'}
+                            onClick={() => setSelectedLayerId(layer.id)}
+                            onDragEnd={(e) => {
+                              const node = e.target
+                              setLayers(prev => prev.map(l => l.id === layer.id ? { ...l, x: node.x(), y: node.y() } as ShapeLayer : l))
+                            }}
+                          />
+                        )
+                      }
+                      if (layer.type === 'circle') {
+                        return (
+                          <Circle
+                            key={layer.id} id={layer.id}
+                            x={layer.x} y={layer.y}
+                            radius={layer.radius || 50}
+                            fill={layer.fill}
+                            stroke={layer.stroke}
+                            strokeWidth={layer.strokeWidth}
+                            rotation={layer.rotation}
+                            draggable={tool === 'select'}
+                            onClick={() => setSelectedLayerId(layer.id)}
+                            onDragEnd={(e) => {
+                              const node = e.target
+                              setLayers(prev => prev.map(l => l.id === layer.id ? { ...l, x: node.x(), y: node.y() } as ShapeLayer : l))
+                            }}
+                          />
+                        )
+                      }
+                      if (layer.type === 'draw') {
+                        return (
+                          <Line
+                            key={layer.id} id={layer.id}
+                            points={layer.points}
+                            stroke={layer.stroke}
+                            strokeWidth={layer.strokeWidth}
+                            tension={0.5}
+                            lineCap="round"
+                            lineJoin="round"
+                            globalCompositeOperation="source-over"
+                            listening={false}
+                          />
+                        )
+                      }
+                      return null
+                    })}
+                    {/* Crop overlay */}
+                    {tool === 'crop' && cropRect && (
+                      <Group>
+                        <Rect
+                          x={cropRect.x} y={cropRect.y}
+                          width={cropRect.width} height={cropRect.height}
+                          stroke="#6366f1"
+                          strokeWidth={2}
+                          dash={[10, 5]}
+                          fill="rgba(99,102,241,0.1)"
+                        />
+                      </Group>
+                    )}
+                    <Transformer
+                      ref={transformerRef}
+                      boundBoxFunc={(oldBox, newBox) => {
+                        if (newBox.width < 10 || newBox.height < 10) return oldBox
+                        return newBox
+                      }}
+                      onTransformEnd={handleLayerTransformEnd}
                     />
                   </Group>
-                )}
-                <Transformer
-                  ref={transformerRef}
-                  boundBoxFunc={(oldBox, newBox) => {
-                    if (newBox.width < 10 || newBox.height < 10) return oldBox
-                    return newBox
-                  }}
-                  onTransformEnd={handleLayerTransformEnd}
-                />
+                </Group>
               </Layer>
             </Stage>
           )}
@@ -747,7 +783,7 @@ export const PhotoEditor = () => {
         </div>
 
         {/* Right Panel */}
-        <div className="w-64 border-l border-white/10 bg-black/20 overflow-y-auto p-4 space-y-4">
+        <div className="w-64 border-l border-white/10 bg-black/20 overflow-y-auto p-4 space-y-4 shrink-0">
           {tool === 'adjust' && image && (
             <div className="space-y-4">
               <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Adjustments</h3>

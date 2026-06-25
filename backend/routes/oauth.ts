@@ -616,10 +616,36 @@ router.get('/:platform/callback', async (req: any, res) => {
     }
 
     // Find user and their active workspace
-    const user = await prisma.user.findUnique({
+    let user = await prisma.user.findUnique({
       where: { clerkId: resolvedClerkId },
       include: { memberships: { include: { workspace: true } } }
     });
+
+    if (!user || user.memberships.length === 0) {
+      const { users: clerkUsers } = require('@clerk/clerk-sdk-node');
+      try {
+        const clerkUser = await clerkUsers.getUser(resolvedClerkId);
+        const email = clerkUser.emailAddresses?.[0]?.emailAddress || '';
+        const name = `${clerkUser.firstName || ''} ${clerkUser.lastName || ''}`.trim() || 'User';
+        const avatarUrl = clerkUser.imageUrl || null;
+        const newUser = await prisma.user.create({
+          data: { clerkId: resolvedClerkId, email, name, avatarUrl },
+        });
+        const workspace = await prisma.workspace.create({
+          data: { name: `${name}'s Workspace`, slug: `workspace-${newUser.id}` },
+        });
+        await prisma.workspaceMember.create({
+          data: { userId: newUser.id, workspaceId: workspace.id, role: 'OWNER' },
+        });
+        user = await prisma.user.findUnique({
+          where: { clerkId: resolvedClerkId },
+          include: { memberships: { include: { workspace: true } } },
+        });
+      } catch (syncErr) {
+        console.error(`[${platform}] Auto-sync failed:`, syncErr);
+        return res.status(404).send('User or Workspace not found');
+      }
+    }
 
     if (!user || user.memberships.length === 0) {
       return res.status(404).send('User or Workspace not found');

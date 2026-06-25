@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { ClerkExpressRequireAuth } from '@clerk/clerk-sdk-node';
+import { ClerkExpressRequireAuth, users } from '@clerk/clerk-sdk-node';
 import { PrismaClient, User, WorkspaceMember } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -12,6 +12,29 @@ export interface AuthenticatedRequest extends Request {
   workspaceRole: string | null;
 }
 
+const syncUser = async (clerkId: string) => {
+  try {
+    const clerkUser = await users.getUser(clerkId);
+    const email = clerkUser.emailAddresses?.[0]?.emailAddress || '';
+    const name = `${clerkUser.firstName || ''} ${clerkUser.lastName || ''}`.trim() || 'User';
+    const avatarUrl = clerkUser.imageUrl || null;
+
+    const user = await prisma.user.create({
+      data: { clerkId, email, name, avatarUrl },
+    });
+    const workspace = await prisma.workspace.create({
+      data: { name: `${name}'s Workspace`, slug: `workspace-${user.id}` },
+    });
+    await prisma.workspaceMember.create({
+      data: { userId: user.id, workspaceId: workspace.id, role: 'OWNER' },
+    });
+    return user;
+  } catch (err) {
+    console.error('Auto-sync user failed:', err);
+    return null;
+  }
+};
+
 export const requireAuth = [
   ClerkExpressRequireAuth() as any,
   async (req: any, res: Response, next: NextFunction) => {
@@ -21,24 +44,29 @@ export const requireAuth = [
     }
 
     try {
-      const dbUser = await prisma.user.findUnique({
+      let dbUser = await prisma.user.findUnique({
         where: { clerkId },
         include: { memberships: { include: { workspace: true } } },
       });
 
       if (!dbUser) {
-        return res.status(401).json({ error: 'User not synced to database yet' });
+        const newUser = await syncUser(clerkId);
+        if (!newUser) {
+          return res.status(401).json({ error: 'User not synced to database yet' });
+        }
+        dbUser = await prisma.user.findUnique({
+          where: { clerkId },
+          include: { memberships: { include: { workspace: true } } },
+        })!;
       }
 
-      // Attach database IDs
-      req.userId = dbUser.id;
-      req.dbUser = dbUser;
+      req.userId = dbUser!.id;
+      req.dbUser = dbUser!;
       
-      // Multi-tenant check: use header if supplied, otherwise fallback to first membership
       const headerWorkspaceId = req.headers['x-workspace-id'] as string;
       const targetMembership = headerWorkspaceId
-        ? dbUser.memberships.find(m => m.workspaceId === headerWorkspaceId)
-        : dbUser.memberships[0];
+        ? dbUser!.memberships.find(m => m.workspaceId === headerWorkspaceId)
+        : dbUser!.memberships[0];
 
       req.workspaceId = targetMembership?.workspaceId || null;
       req.workspaceRole = targetMembership?.role || null;

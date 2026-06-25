@@ -1,4 +1,5 @@
 import { useRef, useState, useMemo, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,6 +26,7 @@ import {
   X,
   Check,
   AlertCircle,
+  Wand2,
 } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { useAuth } from '@clerk/react'
@@ -57,6 +59,7 @@ export const MediaLibrary = () => {
 
   const { getToken } = useAuth()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [searchQuery, setSearchQuery] = useState('')
@@ -552,6 +555,12 @@ export const MediaLibrary = () => {
                 </p>
               </div>
               <div className="flex items-center gap-2">
+                {previewAsset.fileType?.startsWith('image') && (
+                  <Button variant="ghost" size="sm" className="text-purple-400 text-xs gap-1.5"
+                    onClick={() => { navigate(`/app/media/editor?assetId=${previewAsset.id}&imageUrl=${encodeURIComponent(previewAsset.fileUrl)}`); }}>
+                    <Wand2 className="w-3.5 h-3.5" /> Edit Image
+                  </Button>
+                )}
                 <Button variant="ghost" size="icon" onClick={() => handleDownload(previewAsset.fileUrl, previewAsset.fileName)}>
                   <Download className="w-4 h-4" />
                 </Button>
@@ -1037,6 +1046,15 @@ export const MediaLibrary = () => {
                       </Button>
                       {activeMenuId === item.id && (
                         <div className="absolute right-0 top-full mt-1 w-44 bg-[#1a1820] border border-white/10 rounded-lg shadow-xl py-1 z-[120]" onClick={(e) => e.stopPropagation()}>
+                          {item.fileType?.startsWith('image') && (
+                            <>
+                              <button className="w-full text-left px-4 py-2 text-xs text-purple-400 hover:bg-purple-500/10 flex items-center gap-2"
+                                onClick={() => { navigate(`/app/media/editor?assetId=${item.id}&imageUrl=${encodeURIComponent(item.fileUrl)}`); setActiveMenuId(null); }}>
+                                <Wand2 className="w-3.5 h-3.5" /> Edit in Editor
+                              </button>
+                              <div className="h-[1px] bg-white/10 my-1" />
+                            </>
+                          )}
                           <button className="w-full text-left px-4 py-2 text-xs text-white hover:bg-white/5 flex items-center gap-2"
                             onClick={() => { setRenameAssetId(item.id); setNewFileName(item.fileName); setIsRenameModalOpen(true); setActiveMenuId(null); }}>
                             <Edit2 className="w-3.5 h-3.5" /> Rename
@@ -1182,6 +1200,15 @@ export const MediaLibrary = () => {
                       </Button>
                       {activeMenuId === item.id && (
                         <div className="absolute right-0 top-full mt-1 w-44 bg-[#1a1820] border border-white/10 rounded-lg shadow-xl py-1 z-[120]" onClick={(e) => e.stopPropagation()}>
+                          {item.fileType?.startsWith('image') && (
+                            <>
+                              <button className="w-full text-left px-4 py-2 text-xs text-purple-400 hover:bg-purple-500/10 flex items-center gap-2"
+                                onClick={() => { navigate(`/app/media/editor?assetId=${item.id}&imageUrl=${encodeURIComponent(item.fileUrl)}`); setActiveMenuId(null); }}>
+                                <Wand2 className="w-3.5 h-3.5" /> Edit in Editor
+                              </button>
+                              <div className="h-[1px] bg-white/10 my-1" />
+                            </>
+                          )}
                           <button className="w-full text-left px-4 py-2 text-xs text-white hover:bg-white/5 flex items-center gap-2"
                             onClick={() => { setRenameAssetId(item.id); setNewFileName(item.fileName); setIsRenameModalOpen(true); setActiveMenuId(null); }}>
                             <Edit2 className="w-3.5 h-3.5" /> Rename

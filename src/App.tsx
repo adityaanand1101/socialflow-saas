@@ -18,6 +18,7 @@ const Calendar = lazy(() => import('./pages/Calendar').then(m => ({ default: m.C
 const Team = lazy(() => import('./pages/Team').then(m => ({ default: m.Team })))
 const Settings = lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings })))
 const Inbox = lazy(() => import('./pages/Inbox').then(m => ({ default: m.Inbox })))
+const PhotoEditor = lazy(() => import('./pages/PhotoEditor').then(m => ({ default: m.PhotoEditor })))
 
 function LoadingFallback() {
   return (
@@ -76,6 +77,11 @@ function App() {
           <Route path="inbox" element={
             <Suspense fallback={<LoadingFallback />}>
               <Inbox />
+            </Suspense>
+          } />
+          <Route path="media/editor" element={
+            <Suspense fallback={<LoadingFallback />}>
+              <PhotoEditor />
             </Suspense>
           } />
           <Route path="compose" element={

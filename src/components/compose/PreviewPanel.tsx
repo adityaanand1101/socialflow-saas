@@ -153,14 +153,15 @@ export default function PreviewPanel({
               />
             )
           })()}
-          {firstComments?.[activePlatform] && (
-            <div className="mt-3 pt-3 border-t border-white/[0.06]">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">First comment</p>
-              <p className="text-sm text-white/70">{firstComments[activePlatform]}</p>
-            </div>
-          )}
         </div>
       </div>
+
+      {firstComments?.[activePlatform] && (
+        <div className="bg-white/[0.02] rounded-xl border border-white/[0.06] p-4">
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">First comment</p>
+          <p className="text-sm text-white/80">{firstComments[activePlatform]}</p>
+        </div>
+      )}
 
       {mediaFiles.length > 0 && selectedPlatforms.length > 1 && (
         <div className="bg-white/[0.02] rounded-xl border border-white/[0.06] overflow-hidden">

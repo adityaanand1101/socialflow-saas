@@ -19,7 +19,7 @@ router.post('/', requireAuth, checkSaaSLimits('workspaces'), async (req: any, re
   try {
     const slug = `workspace-${req.userId}-${Date.now()}`;
     const workspace = await prisma.workspace.create({
-      data: { name, slug }
+      data: { name, slug, plan: 'PRO' }
     });
 
     await prisma.workspaceMember.create({
@@ -348,8 +348,8 @@ router.get('/:id/limits', requireAuth, async (req: any, res: any) => {
     const workspace = await prisma.workspace.findUnique({ where: { id } });
     if (!workspace) return res.status(404).json({ error: 'Workspace not found' });
 
-    const planName = (workspace.plan as keyof typeof PLAN_LIMITS) || 'STARTER';
-    const limits = PLAN_LIMITS[planName] || PLAN_LIMITS.STARTER;
+    const planName = (workspace.plan as keyof typeof PLAN_LIMITS) || 'PRO';
+    const limits = PLAN_LIMITS[planName] || PLAN_LIMITS.PRO;
 
     const [memberCount, channelCount] = await Promise.all([
       prisma.workspaceMember.count({ where: { workspaceId: id } }),

@@ -23,7 +23,7 @@ const syncUser = async (clerkId: string) => {
       data: { clerkId, email, name, avatarUrl },
     });
     const workspace = await prisma.workspace.create({
-      data: { name: `${name}'s Workspace`, slug: `workspace-${user.id}` },
+      data: { name: `${name}'s Workspace`, slug: `workspace-${user.id}`, plan: 'PRO' },
     });
     await prisma.workspaceMember.create({
       data: { userId: user.id, workspaceId: workspace.id, role: 'OWNER' },

@@ -24,7 +24,7 @@ export const checkSaaSLimits = (limitType: 'workspaces' | 'channels' | 'seats') 
       // For simplicity, we'll check the current workspace if it's 'channels' or 'seats',
       // or check the user's global state if it's 'workspaces'.
       
-      let planName: keyof typeof PLAN_LIMITS = 'STARTER';
+      let planName: keyof typeof PLAN_LIMITS = 'PRO';
       
       if (limitType === 'workspaces') {
          // Count user's workspaces

@@ -632,7 +632,7 @@ router.get('/:platform/callback', async (req: any, res) => {
           data: { clerkId: resolvedClerkId, email, name, avatarUrl },
         });
         const workspace = await prisma.workspace.create({
-          data: { name: `${name}'s Workspace`, slug: `workspace-${newUser.id}` },
+          data: { name: `${name}'s Workspace`, slug: `workspace-${newUser.id}`, plan: 'PRO' },
         });
         await prisma.workspaceMember.create({
           data: { userId: newUser.id, workspaceId: workspace.id, role: 'OWNER' },

@@ -15,6 +15,7 @@ import {
   ChevronDown,
   Building2,
   MessageSquareText,
+  Wand2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useStore } from '@/store/useStore'
@@ -27,6 +28,7 @@ const navItems = [
   { icon: Calendar, label: 'Calendar', href: '/app/calendar' },
   { icon: PenTool, label: 'Compose', href: '/app/compose' },
   { icon: ImageIcon, label: 'Media Library', href: '/app/media' },
+  { icon: Wand2, label: 'Photo Editor', href: '/app/media/editor' },
   { icon: MessageSquareText, label: 'Inbox', href: '/app/inbox' },
   { icon: BarChart3, label: 'Analytics', href: '/app/analytics' },
   { icon: Share2, label: 'Channels', href: '/app/channels' },
@@ -131,7 +133,7 @@ export const Sidebar = () => {
         </div>
       )}
 
-      <nav className="flex-1 px-3 space-y-2 mt-2">
+      <nav className="flex-1 px-3 space-y-2 mt-2 overflow-y-auto min-h-0">
         {navItems.map((item) => {
           const isActive = location.pathname === item.href
           return (
@@ -158,7 +160,7 @@ export const Sidebar = () => {
         })}
       </nav>
 
-      <div className="p-4 border-t border-white/10 space-y-2">
+      <div className="p-4 border-t border-white/10 space-y-2 shrink-0">
         <div className={cn(
           "flex items-center gap-3 pt-2",
           sidebarCollapsed ? "justify-center" : "px-2"

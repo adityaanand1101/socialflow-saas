@@ -118,7 +118,7 @@ app.post('/api/webhooks/clerk', express.raw({ type: 'application/json' }), async
         data: { clerkId, email, name, avatarUrl: image_url },
       });
       const workspace = await prisma.workspace.create({
-        data: { name: `${name}'s Workspace`, slug: `workspace-${user.id}` },
+        data: { name: `${name}'s Workspace`, slug: `workspace-${user.id}`, plan: 'PRO' },
       });
       await prisma.workspaceMember.create({
         data: { userId: user.id, workspaceId: workspace.id, role: 'OWNER' },

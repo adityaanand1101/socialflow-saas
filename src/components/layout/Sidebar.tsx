@@ -14,6 +14,7 @@ import {
   ChevronRight,
   ChevronDown,
   Building2,
+  MessageSquareText,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useStore } from '@/store/useStore'
@@ -26,6 +27,7 @@ const navItems = [
   { icon: Calendar, label: 'Calendar', href: '/app/calendar' },
   { icon: PenTool, label: 'Compose', href: '/app/compose' },
   { icon: ImageIcon, label: 'Media Library', href: '/app/media' },
+  { icon: MessageSquareText, label: 'Inbox', href: '/app/inbox' },
   { icon: BarChart3, label: 'Analytics', href: '/app/analytics' },
   { icon: Share2, label: 'Channels', href: '/app/channels' },
   { icon: Sparkles, label: 'AI Studio', href: '/app/ai-studio' },

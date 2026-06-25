@@ -24,6 +24,7 @@ import shortlinksRouter from './routes/shortlinks';
 import webhooksRouter from './routes/webhooks';
 import uploadsRouter from './routes/uploads';
 import analyticsRouter from './routes/analytics';
+import inboxRouter from './routes/inbox';
 import { requireAuth } from './middlewares/auth';
 import { startRecoverySweep } from './utils/queue';
 
@@ -149,6 +150,7 @@ app.use('/api/shortlinks', shortlinksRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/webhooks', webhooksRouter);
 app.use('/api/uploads', uploadsRouter);
+app.use('/api/inbox', inboxRouter);
 
 app.get('/api/user/me', requireAuth, async (req: any, res: any) => {
   try {

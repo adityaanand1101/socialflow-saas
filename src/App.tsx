@@ -17,6 +17,7 @@ const Channels = lazy(() => import('./pages/Channels').then(m => ({ default: m.C
 const Calendar = lazy(() => import('./pages/Calendar').then(m => ({ default: m.Calendar })))
 const Team = lazy(() => import('./pages/Team').then(m => ({ default: m.Team })))
 const Settings = lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings })))
+const Inbox = lazy(() => import('./pages/Inbox').then(m => ({ default: m.Inbox })))
 
 function LoadingFallback() {
   return (
@@ -70,6 +71,11 @@ function App() {
           <Route path="calendar" element={
             <Suspense fallback={<LoadingFallback />}>
               <Calendar />
+            </Suspense>
+          } />
+          <Route path="inbox" element={
+            <Suspense fallback={<LoadingFallback />}>
+              <Inbox />
             </Suspense>
           } />
           <Route path="compose" element={

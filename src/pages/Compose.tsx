@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
-import { Save, Loader2, Clock, Send, Trash2, MessageCircle, Repeat2 } from 'lucide-react'
+import { Save, Loader2, Clock, Send, Trash2, MessageCircle, Repeat2, AtSign, Timer } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import type { SocialPlatform } from '@/store/useStore'
 import { useAuth } from '@clerk/react'
@@ -74,6 +74,9 @@ export const Compose = () => {
   const [showFirstComment, setShowFirstComment] = useState(false)
   const [repostUrl, setRepostUrl] = useState('')
   const [repostEnabled, setRepostEnabled] = useState(false)
+  const [showTags, setShowTags] = useState(false)
+  const [postDelayMinutes, setPostDelayMinutes] = useState(0)
+  const [postDelayEnabled, setPostDelayEnabled] = useState(false)
 
   const DRAFT_KEY = 'socialflow_draft'
   const TEMPLATES_KEY = 'socialflow_templates'
@@ -210,9 +213,9 @@ export const Compose = () => {
   useEffect(() => {
     if (editingPostId) return
     if (!caption && mediaFiles.length === 0 && threadPosts.length === 0) return
-    const draft = { caption, platforms: selectedPlatforms, mediaFiles, mediaTypes, platformCaptions, postTypes, structuredContent, scheduledDate, showScheduler, threadPosts, selectedAccountIds, firstComments, repostUrl, repostEnabled }
+    const draft = { caption, platforms: selectedPlatforms, mediaFiles, mediaTypes, platformCaptions, postTypes, structuredContent, scheduledDate, showScheduler, threadPosts, selectedAccountIds, firstComments, repostUrl, repostEnabled, postDelayMinutes, postDelayEnabled }
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)) } catch {}
-  }, [caption, selectedPlatforms, mediaFiles, mediaTypes, platformCaptions, postTypes, structuredContent, scheduledDate, showScheduler, threadPosts, editingPostId, selectedAccountIds, firstComments, repostUrl, repostEnabled])
+  }, [caption, selectedPlatforms, mediaFiles, mediaTypes, platformCaptions, postTypes, structuredContent, scheduledDate, showScheduler, threadPosts, editingPostId, selectedAccountIds, firstComments, repostUrl, repostEnabled, postDelayMinutes, postDelayEnabled])
 
   useEffect(() => {
     if (editingPostId) return
@@ -256,6 +259,8 @@ export const Compose = () => {
       if (saved.firstComments) setFirstComments(saved.firstComments)
       if (saved.repostUrl) setRepostUrl(saved.repostUrl)
       if (saved.repostEnabled) setRepostEnabled(saved.repostEnabled)
+      if (saved.postDelayMinutes) setPostDelayMinutes(saved.postDelayMinutes)
+      if (saved.postDelayEnabled) setPostDelayEnabled(saved.postDelayEnabled)
     } catch {}
     setShowDraftRestore(false)
   }
@@ -587,7 +592,10 @@ export const Compose = () => {
     try {
       const token = await getToken()
       if (!token) return
-      const time = status === 'scheduled' ? new Date(scheduledDate).toISOString() : new Date().toISOString()
+      const actualStatus = status === 'published' && postDelayEnabled && postDelayMinutes > 0 ? 'scheduled' : status
+      const time = actualStatus === 'scheduled'
+        ? new Date(status === 'scheduled' ? scheduledDate : Date.now() + postDelayMinutes * 60 * 1000).toISOString()
+        : new Date().toISOString()
 
       const plainCaption = stripHtml(caption)
 
@@ -605,7 +613,7 @@ export const Compose = () => {
           media: mediaFiles,
           socialAccountIds: accountIds,
           scheduledTime: time,
-          status,
+          status: actualStatus,
           structuredContent,
           postTypes,
           thread: threadPosts,
@@ -620,7 +628,7 @@ export const Compose = () => {
           media: mediaFiles,
           socialAccountIds: accountIds,
           scheduledTime: time,
-          status,
+          status: actualStatus,
           tags: [],
           structuredContent,
           postTypes,
@@ -656,11 +664,20 @@ export const Compose = () => {
     setFirstComments({})
     setRepostUrl('')
     setRepostEnabled(false)
+    setShowTags(false)
+    setPostDelayMinutes(0)
+    setPostDelayEnabled(false)
     clearDraft()
   }
 
   const setFirstCommentForPlatform = (pid: string, text: string) => {
     setFirstComments(prev => ({ ...prev, [pid]: text }))
+  }
+
+  const getTagsForPlatform = (pid: string): string => getFieldValue(pid, 'tags')
+
+  const setTagsForPlatform = (pid: string, value: string) => {
+    setFieldValue(pid, 'tags', value)
   }
 
   return (
@@ -829,6 +846,46 @@ export const Compose = () => {
             </div>
           )}
 
+          {/* Tags Section */}
+          {selectedPlatforms.length > 0 && (
+            <div className="bg-white/[0.02] rounded-xl border border-white/[0.06] overflow-hidden">
+              <button
+                onClick={() => setShowTags(!showTags)}
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/[0.02] transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <AtSign className="w-4 h-4 text-purple-400" />
+                  <span className="text-sm font-semibold text-white">Tag People</span>
+                </div>
+                <span className="text-[11px] text-muted-foreground">{showTags ? 'Hide' : 'Add'}</span>
+              </button>
+              {showTags && (
+                <div className="px-4 pb-4 space-y-3">
+                  <p className="text-xs text-muted-foreground">Tag accounts in your post (comma-separated usernames)</p>
+                  {selectedPlatforms.map(pid => {
+                    const pl = ALL_PLATFORMS.find(x => x.id === pid)
+                    if (!pl) return null
+                    const Icon = pl.icon
+                    return (
+                      <div key={pid} className="flex items-start gap-3">
+                        <Icon className={cn("w-4 h-4 mt-2 shrink-0", pl.color)} />
+                        <div className="flex-1">
+                          <p className="text-xs font-medium text-white mb-1">{pl.label}</p>
+                          <input
+                            value={getTagsForPlatform(pid)}
+                            onChange={e => setTagsForPlatform(pid, e.target.value)}
+                            placeholder="username1, username2, username3"
+                            className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-white text-sm placeholder:text-muted-foreground/40 focus:outline-none focus:border-purple-500/40 transition-colors"
+                          />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Repost Section */}
           <div className="bg-white/[0.02] rounded-xl border border-white/[0.06] overflow-hidden">
             <button
@@ -895,12 +952,42 @@ export const Compose = () => {
                 {selectedAccountIds.length > 0 && (
                   <> · <span className="text-white font-medium">{selectedAccountIds.length}</span> account{selectedAccountIds.length > 1 ? 's' : ''}</>
                 )}
+                {postDelayEnabled && postDelayMinutes > 0 && (
+                  <> · <span className="text-amber-400 font-medium">delay {postDelayMinutes}min</span></>
+                )}
               </span>
             ) : (
               <span>No platforms selected</span>
             )}
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <div className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-colors",
+              postDelayEnabled
+                ? "border-amber-500/30 bg-amber-500/5"
+                : "border-white/[0.06] bg-white/[0.03]"
+            )}>
+              <Timer className={cn("w-3.5 h-3.5", postDelayEnabled ? "text-amber-400" : "text-muted-foreground")} />
+              <input
+                type="number"
+                min={1}
+                max={1440}
+                value={postDelayMinutes || ''}
+                onChange={e => setPostDelayMinutes(parseInt(e.target.value) || 0)}
+                placeholder="0"
+                className="w-10 bg-transparent text-white text-xs text-center outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />
+              <span className="text-[11px] text-muted-foreground">min</span>
+              <button
+                onClick={() => { setPostDelayEnabled(!postDelayEnabled); if (!postDelayEnabled && !postDelayMinutes) setPostDelayMinutes(15) }}
+                className={cn(
+                  "text-[10px] font-semibold uppercase tracking-wider transition-colors ml-1",
+                  postDelayEnabled ? "text-amber-400" : "text-muted-foreground hover:text-white"
+                )}
+              >
+                {postDelayEnabled ? 'ON' : 'OFF'}
+              </button>
+            </div>
             <Button
               variant="outline"
               size="sm"

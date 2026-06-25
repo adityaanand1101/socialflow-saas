@@ -154,6 +154,7 @@ export const PhotoEditor = () => {
         previewPixelRatio={1}
         resetOnSourceChange
         useZoomPresetsMenu
+        previewBgColor="#0f1117"
         theme={{
           palette: {
             'txt-primary': '#ffffff',

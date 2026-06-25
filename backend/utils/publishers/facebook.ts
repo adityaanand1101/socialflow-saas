@@ -36,7 +36,7 @@ export async function publishToFacebook(
             const { id } = await photoRes.json() as any;
             attachedMedia.push(id);
           }
-        } catch {}
+        } catch (e) { console.warn('Failed to attach FB photo:', e) }
       }
       if (attachedMedia.length > 0) {
         body.attached_media = attachedMedia.map(id => ({ media_fbid: id }));
@@ -146,7 +146,7 @@ export async function publishToFacebook(
         const { id } = await photoRes.json() as any;
         attachedMedia.push(id);
       }
-    } catch {}
+    } catch (e) { console.warn('Failed to attach FB photo:', e) }
   }
 
   if (attachedMedia.length === 0) throw new Error('Facebook: failed to attach any media');

@@ -96,6 +96,8 @@ export const AIStudio = () => {
         const suffix = parts.length ? `, ${parts.join(', ')}` : ''
         return `${imw.subject}${suffix}`
       }
+      default:
+        return ''
     }
   }, [activeTool, cw, hw, iw, imw])
 
@@ -218,6 +220,8 @@ export const AIStudio = () => {
           }
           break
         }
+        default:
+          break
       }
     } catch (error) {
       console.error('Generation error:', error)

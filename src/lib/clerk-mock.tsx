@@ -4,11 +4,11 @@ import React, { createContext, useContext } from 'react'
 const MockAuthContext = createContext({
   isSignedIn: true,
   isLoaded: true,
-  user: {
-    fullName: "Aditya Anand",
-    username: "aditya_anand",
+    user: {
+    fullName: "Demo User",
+    username: "demo_user",
     primaryEmailAddress: {
-      emailAddress: "aditya@example.com"
+      emailAddress: "demo@example.com"
     }
   }
 })
@@ -19,10 +19,10 @@ export const ClerkProvider = ({ children }: { children: React.ReactNode; publish
       isSignedIn: true,
       isLoaded: true,
       user: {
-        fullName: "Aditya Anand",
-        username: "aditya_anand",
+        fullName: "Demo User",
+        username: "demo_user",
         primaryEmailAddress: {
-          emailAddress: "aditya@example.com"
+          emailAddress: "demo@example.com"
         }
       }
     }}>
@@ -61,13 +61,12 @@ export const useUser = () => {
   }
 }
 
-export const UserButton = ({}: { afterSignOutUrl?: string }) => {
+export const UserButton = (_: { afterSignOutUrl?: string }) => {
   return (
     <div className="relative group cursor-pointer flex items-center justify-center">
       <div className="w-8 h-8 rounded-full bg-gradient-primary flex items-center justify-center text-white font-bold text-xs shadow-glow">
-        AA
+        DU
       </div>
-      {/* Tooltip or popover can be added here if needed */}
     </div>
   )
 }

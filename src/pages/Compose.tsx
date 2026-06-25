@@ -41,7 +41,6 @@ export const Compose = () => {
   const [selectedTone, setSelectedTone] = useState('Professional')
   const [mediaFiles, setMediaFiles] = useState<string[]>([])
   const [isUploadingMedia, setIsUploadingMedia] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState<number>(0)
   const [showMediaLibrary, setShowMediaLibrary] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [editingPostId] = useState<string | null>(searchParams.get('postId'))
@@ -208,7 +207,7 @@ export const Compose = () => {
     if (editingPostId) return
     if (!caption && mediaFiles.length === 0 && threadPosts.length === 0) return
     const draft = { caption, platforms: selectedPlatforms, mediaFiles, mediaTypes, platformCaptions, postTypes, structuredContent, scheduledDate, showScheduler, threadPosts, selectedAccountIds, firstComments }
-    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)) } catch {}
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)) } catch (e) { console.warn('Failed to save draft:', e) }
   }, [caption, selectedPlatforms, mediaFiles, mediaTypes, platformCaptions, postTypes, structuredContent, scheduledDate, showScheduler, threadPosts, editingPostId, selectedAccountIds, firstComments])
 
   useEffect(() => {
@@ -220,7 +219,7 @@ export const Compose = () => {
         if (saved.caption || saved.mediaFiles?.length > 0) {
           setShowDraftRestore(true)
         }
-      } catch {}
+      } catch (e) { console.warn('Failed to check drafts:', e) }
     }
   }, [editingPostId])
 
@@ -252,7 +251,7 @@ export const Compose = () => {
       if (saved.selectedAccountIds) setSelectedAccountIds(saved.selectedAccountIds)
       if (saved.firstComments) setFirstComments(saved.firstComments)
 
-    } catch {}
+    } catch (e) { console.warn('Failed to restore draft:', e) }
     setShowDraftRestore(false)
   }
 
@@ -420,18 +419,10 @@ export const Compose = () => {
 
   const handleMediaUploads = async (files: File[]) => {
     setIsUploadingMedia(true)
-    setUploadProgress(0)
-    let done = 0
-    const results = await Promise.allSettled(files.map(async (file) => {
-      const asset = await handleMediaUpload(file)
-      done++
-      setUploadProgress(Math.round((done / files.length) * 100))
-      return asset
-    }))
+    const results = await Promise.allSettled(files.map(file => handleMediaUpload(file)))
     const successes = results.filter(r => r.status === 'fulfilled' && r.value)
     if (successes.length > 0) setShowMediaLibrary(false)
     setIsUploadingMedia(false)
-    setUploadProgress(100)
   }
 
   const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -744,7 +735,6 @@ export const Compose = () => {
             mediaTypes={mediaTypes}
             removeMedia={removeMedia}
             isUploadingMedia={isUploadingMedia}
-            uploadProgress={uploadProgress}
             isDragging={isDragging}
             setIsDragging={setIsDragging}
             fileInputRef={fileInputRef}

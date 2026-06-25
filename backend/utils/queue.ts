@@ -190,14 +190,6 @@ async function refreshSocialAccountToken(account: any) {
   }
 }
 
-async function publishToPlatform(platform: string, decryptedToken: string, content: string, mediaUrls: string[]) {
-  // The account's platform-specific ID (e.g., IG user ID, Facebook page ID, etc.)
-  // is stored in the junction table; we include it from the calling code.
-  // This function is maintained for backward compatibility — the real dispatch
-  // is handled by the publishers module, which receives platformAccountId separately.
-  throw new Error(`Publishing logic for ${platform} is not yet implemented.`);
-}
-
 try {
   postQueue = new Queue('post-publishing', { 
     connection: connection as any,

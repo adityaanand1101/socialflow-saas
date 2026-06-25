@@ -61,7 +61,6 @@ interface ContentEditorProps {
   mediaTypes: Record<string, string>
   removeMedia: (index: number) => void
   isUploadingMedia: boolean
-  uploadProgress: number
   isDragging: boolean
   setIsDragging: (v: boolean) => void
   fileInputRef: React.RefObject<HTMLInputElement | null>
@@ -110,7 +109,7 @@ export default function ContentEditor(props: ContentEditorProps) {
     setContentType, setFieldValue, getFieldValue,
     getCaptionForPlatform, isCustomized, breakoutPlatform, resetToGlobal,
     showThreadEditor, setShowThreadEditor, threadPosts, addThreadPost, removeThreadPost, updateThreadPost,
-    mediaFiles, mediaTypes, removeMedia, isUploadingMedia, uploadProgress,
+    mediaFiles, mediaTypes, removeMedia, isUploadingMedia,
     isDragging, setIsDragging, fileInputRef, onFileChange, onDrop,
     showMediaLibrary, setShowMediaLibrary, libraryMedia, toggleLibraryMedia,
             showHashtagModal, setShowHashtagModal, hashtagSuggestions, hashtagNiche, setHashtagNiche,
@@ -486,7 +485,7 @@ export default function ContentEditor(props: ContentEditorProps) {
                 title="Upload media files"
               >
                 {isUploadingMedia ? (
-                  <span className="text-[10px] font-bold text-purple-400 min-w-[24px] text-center inline-block">{uploadProgress}%</span>
+                  <span className="w-4 h-4 rounded-full border-2 border-purple-400 border-t-transparent animate-spin" />
                 ) : (
                   <Upload className="w-4 h-4" />
                 )}
@@ -545,7 +544,6 @@ export default function ContentEditor(props: ContentEditorProps) {
             mediaFiles={mediaFiles}
             toggleLibraryMedia={toggleLibraryMedia}
             isUploadingMedia={isUploadingMedia}
-            uploadProgress={uploadProgress}
             fileInputRef={fileInputRef}
             onFileChange={onFileChange}
             onDrop={onDrop}
@@ -664,7 +662,7 @@ export default function ContentEditor(props: ContentEditorProps) {
                   <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider w-20 shrink-0">Provider</label>
                   <select
                     value={shortlinkProvider}
-                    onChange={e => setShortlinkProvider(e.target.value as any)}
+                    onChange={e => setShortlinkProvider((e.target as HTMLSelectElement).value)}
                     className="flex-1 bg-black/30 border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/40 transition-colors"
                   >
                     <option value="dub">Dub.co</option>

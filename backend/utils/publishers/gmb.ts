@@ -70,6 +70,8 @@ export async function publishToGMB(
       body.alertType = sc.alert_type || 'COVID_19';
       break;
     }
+    default:
+      break;
   }
 
   const res = await fetch(`${GMB_BASE}/${parent}/localPosts`, {

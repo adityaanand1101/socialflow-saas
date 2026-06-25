@@ -22,6 +22,17 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+
+interface CalendarPost {
+  id: string
+  title?: string
+  content?: string
+  platform: string
+  status: string
+  scheduledDate: string
+  mediaUrls?: string[]
+}
+
 import {
   ChevronLeft,
   ChevronRight,
@@ -84,8 +95,8 @@ export const Calendar = () => {
   })
 
   const posts = useMemo(() => {
-    if (Array.isArray(postsData)) return postsData as any[]
-    if (postsData?.posts) return postsData.posts as any[]
+    if (Array.isArray(postsData)) return postsData as CalendarPost[]
+    if (postsData?.posts) return postsData.posts as CalendarPost[]
     return []
   }, [postsData])
 

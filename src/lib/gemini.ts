@@ -45,7 +45,7 @@ export const generateContentIdeas = async (topic: string): Promise<Array<{day: n
 Return ONLY a JSON array of 30 objects like:
 [{"day": 1, "topic": "Topic title", "description": "Brief 1-sentence description"}, ...]
 Make each day unique with varied formats: tips, stories, polls, carousels, behind-the-scenes, etc.`;
-  return generateJSON<any[]>(prompt, []);
+  return generateJSON<Array<{day: number; topic: string; description: string}>>(prompt, []);
 };
 
 export const generateImage = async (imagePrompt: string): Promise<string> => {

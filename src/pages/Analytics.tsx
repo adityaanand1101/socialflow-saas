@@ -287,7 +287,7 @@ export const Analytics = () => {
                 <div key={i} className="flex items-center justify-between p-4 rounded-lg bg-white/5 border border-white/10">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center overflow-hidden">
-                      {p.avatarUrl ? (
+                      {p.avatarUrl && !p.avatarUrl.includes('shadcn.png') ? (
                         <img src={p.avatarUrl} alt="" className="w-full h-full object-cover" />
                       ) : (
                         <span className="text-lg font-bold text-white/60">{p.platform.charAt(0).toUpperCase()}</span>

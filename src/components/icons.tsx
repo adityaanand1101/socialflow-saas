@@ -145,9 +145,4 @@ export const Tumblr = (props: React.SVGProps<SVGSVGElement>) => (
   </svg>
 )
 
-export const Medium = (props: React.SVGProps<SVGSVGElement>) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="M2 3h20v18H2z" />
-    <path d="M6 7h12v10H6z" />
-  </svg>
-)
+

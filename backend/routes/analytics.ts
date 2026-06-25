@@ -61,6 +61,9 @@ router.get('/', requireAuth, async (req: any, res: any) => {
     const platforms: any[] = [];
     for (const result of platformResults) {
       if (result.status === 'fulfilled') {
+        if (result.value.avatarUrl?.includes('shadcn.png')) {
+          result.value.avatarUrl = undefined;
+        }
         platforms.push(result.value);
       }
     }

@@ -4,8 +4,7 @@ import { AuthenticatedRequest } from './auth';
 
 const prisma = new PrismaClient();
 
-// In a real application, you might query a pricing tier config table or use Stripe SDK.
-// Here we define a simple hardcoded tier limits for the prototype.
+// Hardcoded tier limits — in production this would query a Stripe or pricing config table.
 const PLAN_LIMITS = {
   STARTER: { workspaces: 1, channels: 3, members: 1 },
   PRO: { workspaces: 3, channels: 10, members: 5 },

@@ -26,6 +26,22 @@ if (!ENCRYPTION_KEY) {
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://socialflow-saas.vercel.app';
 const BACKEND_URL = process.env.BACKEND_URL || 'https://socialflow-saas.onrender.com';
 
+if (!process.env.MASTODON_INSTANCE_URL) {
+  console.warn('MASTODON_INSTANCE_URL not set — Mastodon OAuth will fail');
+}
+
+const debugLog = (platform: string, ...args: any[]) => {
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[${platform}]`, ...args);
+  }
+};
+
+const debugWarn = (platform: string, ...args: any[]) => {
+  if (process.env.NODE_ENV !== 'production') {
+    console.warn(`[${platform}]`, ...args);
+  }
+};
+
 // Helper to determine redirect URL
 const getRedirectUri = (platform: string) => `${BACKEND_URL}/api/oauth/${platform}/callback`;
 
@@ -107,9 +123,9 @@ const providers = {
     scopes: 'identity,submit,edit',
   },
   mastodon: {
-    authUrl: `${process.env.MASTODON_INSTANCE_URL}/oauth/authorize`, 
-    tokenUrl: `${process.env.MASTODON_INSTANCE_URL}/oauth/token`,
-    profileUrl: `${process.env.MASTODON_INSTANCE_URL}/api/v1/accounts/verify_credentials`,
+    authUrl: `${process.env.MASTODON_INSTANCE_URL || ''}/oauth/authorize`, 
+    tokenUrl: `${process.env.MASTODON_INSTANCE_URL || ''}/oauth/token`,
+    profileUrl: `${process.env.MASTODON_INSTANCE_URL || ''}/api/v1/accounts/verify_credentials`,
     clientId: process.env.MASTODON_CLIENT_ID || '',
     clientSecret: process.env.MASTODON_CLIENT_SECRET || '',
     scopes: 'read write', // Mastodon scopes are space-separated, 'read write' is standard
@@ -296,13 +312,13 @@ router.get('/:platform/callback', async (req: any, res) => {
     return res.status(400).send('Unsupported or unconfigured platform');
   }
 
-  console.log(`[${platform}] OAuth callback - code received, exchanging for token...`);
-  console.log(`[${platform}] Callback details - raw query: ${JSON.stringify(req.query)}, code (first 10): ${(code as string).substring(0,10)}..., code length: ${(code as string).length}, platform: ${platform}, cookie present: ${!!req.cookies?.pending_oauth_user}, clerkId from state: ${!!clerkId}`);
-  console.log(`[${platform}] Full request URL: ${req.protocol}://${req.get('host')}${req.originalUrl}`);
+  debugLog(platform, `OAuth callback - code received, exchanging for token...`);
+  debugLog(platform, `Callback details - raw query: ${JSON.stringify(req.query)}, code (first 10): ${(code as string).substring(0,10)}..., code length: ${(code as string).length}, platform: ${platform}, cookie present: ${!!req.cookies?.pending_oauth_user}, clerkId from state: ${!!clerkId}`);
+  debugLog(platform, `Full request URL: ${req.protocol}://${req.get('host')}${req.originalUrl}`);
   // Check for special characters in the code
   const codeStr = code as string;
   if (/[+\s&=%]/.test(codeStr)) {
-    console.warn(`[${platform}] WARNING: Code contains special characters (+, &, =, %, or spaces) that may be corrupted by query parsing`);
+    debugWarn(platform, `WARNING: Code contains special characters (+, &, =, %, or spaces) that may be corrupted by query parsing`);
   }
 
   // Dedup: prevent processing the same authorization code twice
@@ -310,8 +326,8 @@ router.get('/:platform/callback', async (req: any, res) => {
   const now = Date.now();
   if (processedCodes.has(codeKey)) {
     const firstSeen = processedCodes.get(codeKey)!;
-    console.warn(`[${platform}] DUPLICATE CALLBACK DETECTED - code ${(code as string).substring(0,10)}... was first seen ${now - firstSeen}ms ago. Skipping.`);
-    console.warn(`[${platform}] This means the callback URL was requested TWICE. Possible browser prefetch or redirect loop.`);
+    debugWarn(platform, `DUPLICATE CALLBACK DETECTED - code ${(code as string).substring(0,10)}... was first seen ${now - firstSeen}ms ago. Skipping.`);
+    debugWarn(platform, `This means the callback URL was requested TWICE. Possible browser prefetch or redirect loop.`);
     return res.redirect(`${FRONTEND_URL}/app/channels?duplicate=true`);
   }
   processedCodes.set(codeKey, now);
@@ -339,9 +355,9 @@ router.get('/:platform/callback', async (req: any, res) => {
     // Meta Dashboard may add trailing slash to redirect URIs — detect from request URL
     if ((platform === 'threads' || platform === 'instagram') && req.originalUrl?.startsWith(getRedirectUri(platform) + '/')) {
       redirectUri = getRedirectUri(platform) + '/';
-      console.log(`[${platform}] Request URL has trailing slash, adjusting redirect_uri to match Dashboard`);
+      debugLog(platform, `Request URL has trailing slash, adjusting redirect_uri to match Dashboard`);
     }
-    console.log(`[${platform}] Token exchange - redirectUri: ${redirectUri}`);
+    debugLog(platform, `Token exchange - redirectUri: ${redirectUri}`);
     
     const bodyParams = new URLSearchParams();
     bodyParams.append('grant_type', 'authorization_code');
@@ -365,8 +381,8 @@ router.get('/:platform/callback', async (req: any, res) => {
     const usesBasicAuth = platform === 'tumblr' || platform === 'slack' || platform === 'x';
 
     const requestBody = bodyParams.toString();
-    console.log(`[${platform}] Exchanging code at ${provider.tokenUrl}`);
-    console.log(`[${platform}] Request body (redacted): grant_type=authorization_code&redirect_uri=${encodeURIComponent(redirectUri)}&client_id=${provider.clientId.substring(0,8)}...&client_secret=${provider.clientSecret.substring(0,4)}...&code=${(code as string).substring(0,8)}...`);
+    debugLog(platform, `Exchanging code at ${provider.tokenUrl}`);
+    debugLog(platform, `Request body (redacted): grant_type=authorization_code&redirect_uri=${encodeURIComponent(redirectUri)}&client_id=${provider.clientId.substring(0,8)}...&client_secret=${provider.clientSecret.substring(0,4)}...&code=${(code as string).substring(0,8)}...`);
     const tokenRes = await fetch(provider.tokenUrl, {
       method: 'POST',
       headers: {
@@ -378,30 +394,31 @@ router.get('/:platform/callback', async (req: any, res) => {
       body: requestBody
     });
 
-    console.log(`[${platform}] Token response status: ${tokenRes.status}`);
+    debugLog(platform, `Token response status: ${tokenRes.status}`);
 
     if (!tokenRes.ok) {
       const errText = await tokenRes.text();
       console.error(`[${platform}] Token exchange failed: ${errText}`);
-      // Log the full request details for debugging
-      console.error(`[${platform}] FAILED REQUEST DETAILS - url: ${provider.tokenUrl}`);
-      console.error(`[${platform}] redirect_uri: ${redirectUri}`);
-      console.error(`[${platform}] client_id: ${provider.clientId}`);
-      console.error(`[${platform}] code (first 10): ${codeStr.substring(0,10)}, code length: ${codeStr.length}`);
-      console.error(`[${platform}] code character codes: ${codeStr.split('').map(c => c.charCodeAt(0)).join(',')}`);
-      console.error(`[${platform}] Request body sent (URL-decoded): ${decodeURIComponent(requestBody)}`);
+      if (process.env.NODE_ENV !== 'production') {
+        console.error(`[${platform}] FAILED REQUEST DETAILS - url: ${provider.tokenUrl}`);
+        console.error(`[${platform}] redirect_uri: ${redirectUri}`);
+        console.error(`[${platform}] client_id: ${provider.clientId}`);
+        console.error(`[${platform}] code (first 10): ${codeStr.substring(0,10)}, code length: ${codeStr.length}`);
+        console.error(`[${platform}] code character codes: ${codeStr.split('').map(c => c.charCodeAt(0)).join(',')}`);
+        console.error(`[${platform}] Request body sent (URL-decoded): ${decodeURIComponent(requestBody)}`);
+      }
       // Try to parse error details
       try {
         const errObj = JSON.parse(errText);
         if (errObj.error?.fbtrace_id) {
           console.error(`[${platform}] FB Trace ID: ${errObj.error.fbtrace_id} - share this with Meta support`);
         }
-      } catch {}
+      } catch (e2) { console.debug('Failed to parse OAuth error response:', e2) }
       throw new Error(`Failed to exchange code for token: ${errText}`);
     }
 
     const tokenData = await tokenRes.json() as any;
-    console.log(`[${platform}] Token exchange successful`);
+    debugLog(platform, `Token exchange successful`);
     
     // Slack sometimes nests the user token inside authed_user depending on the scopes requested
     if (platform === 'slack') {
@@ -427,14 +444,14 @@ router.get('/:platform/callback', async (req: any, res) => {
           access_token: accessToken,
         });
         const longLivedUrl = `https://graph.threads.net/access_token?${qs.toString()}`;
-        console.log(`[threads] Exchanging short-lived token for long-lived token`);
+        debugLog('threads', 'Exchanging short-lived token for long-lived token');
         const longLivedRes = await fetch(longLivedUrl);
         if (longLivedRes.ok) {
           const longLivedData = await longLivedRes.json();
           if (longLivedData.access_token) {
             accessToken = longLivedData.access_token;
             tokenExpiresIn = longLivedData.expires_in || 5184000; // 60 days default
-            console.log(`[threads] Long-lived token obtained, expires_in: ${tokenExpiresIn}s`);
+            debugLog('threads', `Long-lived token obtained, expires_in: ${tokenExpiresIn}s`);
           }
         } else {
           const errText = await longLivedRes.text();
@@ -454,14 +471,14 @@ router.get('/:platform/callback', async (req: any, res) => {
           access_token: accessToken,
         });
         const longLivedUrl = `https://graph.instagram.com/access_token?${qs.toString()}`;
-        console.log(`[instagram] Exchanging short-lived token for long-lived token`);
+        debugLog('instagram', 'Exchanging short-lived token for long-lived token');
         const longLivedRes = await fetch(longLivedUrl);
         if (longLivedRes.ok) {
           const longLivedData = await longLivedRes.json() as any;
           if (longLivedData.access_token) {
             accessToken = longLivedData.access_token;
             tokenExpiresIn = longLivedData.expires_in || 5184000; // 60 days default
-            console.log(`[instagram] Long-lived token obtained, expires_in: ${tokenExpiresIn}s`);
+            debugLog('instagram', `Long-lived token obtained, expires_in: ${tokenExpiresIn}s`);
           }
         } else {
           const errText = await longLivedRes.text();

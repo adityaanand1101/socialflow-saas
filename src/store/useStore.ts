@@ -178,7 +178,7 @@ export const useStore = create<SocialFlowStore>((set) => ({
 
       if (res.ok) {
         const data = await res.json()
-        set((state) => ({ posts: [data as any, ...state.posts] }))
+        set((state) => ({ posts: [data, ...state.posts] }))
       } else {
         throw new Error(`Failed to add post: ${res.status}`)
       }

@@ -9,7 +9,6 @@ interface MediaSectionProps {
   mediaFiles: string[]
   toggleLibraryMedia: (url: string, fileType?: string) => void
   isUploadingMedia: boolean
-  uploadProgress: number
   fileInputRef: React.RefObject<HTMLInputElement | null>
   onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void
   onDrop: (e: React.DragEvent) => void

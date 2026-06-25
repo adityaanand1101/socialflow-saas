@@ -97,7 +97,12 @@ router.post('/webhook', async (req: any, res: any) => {
         }
         break;
       }
-      // Add other events like subscription.cancelled if using Razorpay Subscriptions
+      case 'subscription.cancelled':
+        console.log(`Subscription cancelled: ${payload.subscription?.entity?.id}`);
+        break;
+      case 'payment.failed':
+        console.error(`Payment failed: ${payload.payment?.entity?.error_description || 'Unknown error'}`);
+        break;
       default:
         console.log(`Unhandled Razorpay event: ${event}`);
     }

@@ -40,8 +40,8 @@ export const Topbar = () => {
         setNotifications(data.notifications)
         setUnreadCount(data.unreadCount)
       }
-    } catch {
-      // silently fail
+    } catch (e) {
+      console.error('Failed to fetch notifications:', e)
     }
   }, [getToken])
 
@@ -76,8 +76,8 @@ export const Topbar = () => {
       })
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
       setUnreadCount(prev => Math.max(0, prev - 1))
-    } catch {
-      // silently fail
+    } catch (e) {
+      console.error('Failed to mark notification read:', e)
     }
   }
 
@@ -90,8 +90,8 @@ export const Topbar = () => {
       })
       setNotifications(prev => prev.map(n => ({ ...n, read: true })))
       setUnreadCount(0)
-    } catch {
-      // silently fail
+    } catch (e) {
+      console.error('Failed to mark all notifications read:', e)
     }
   }
 

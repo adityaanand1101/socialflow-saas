@@ -48,7 +48,7 @@ export async function publishToDiscord(
           const filename = url.split('/').pop() || 'file';
           files.push({ filename, buffer });
         }
-      } catch {}
+              } catch (e) { console.warn('Failed to fetch Discord media:', e) }
     }
 
     if (files.length > 0) {
@@ -93,7 +93,7 @@ export async function publishToDiscord(
         const filename = url.split('/').pop() || 'file';
         files.push({ filename, buffer });
       }
-    } catch {}
+    } catch (e) { console.warn('Failed to fetch Discord media:', e) }
   }
 
   if (files.length > 0) {

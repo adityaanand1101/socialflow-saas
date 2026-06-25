@@ -42,10 +42,11 @@ export function Inbox() {
   const [sendingReply, setSendingReply] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (withSync = false) => {
     try {
       const token = await getToken()
-      const commentsRes = await apiFetch('/api/inbox/comments', { headers: { Authorization: `Bearer ${token}` } })
+      const url = withSync ? '/api/inbox/comments?sync=true' : '/api/inbox/comments'
+      const commentsRes = await apiFetch(url, { headers: { Authorization: `Bearer ${token}` } })
       if (commentsRes.ok) setComments(await commentsRes.json())
     } catch (e) {
       console.error('Failed to fetch inbox:', e)
@@ -57,7 +58,7 @@ export function Inbox() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  const handleRefresh = () => { setRefreshing(true); fetchData() }
+  const handleRefresh = () => { setRefreshing(true); fetchData(true) }
 
   const handleReply = async () => {
     if (!replyText.trim() || !selectedComment) return
@@ -87,7 +88,7 @@ export function Inbox() {
         method: 'PATCH',
         headers: { Authorization: `Bearer ${token}` },
       })
-    } catch {}
+    } catch (e) { console.error('Failed to mark comment as read:', e) }
   }
 
   const filteredComments = platformFilter === 'all'

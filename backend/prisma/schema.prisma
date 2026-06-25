@@ -170,6 +170,7 @@ model SocialAccount {
   // Relations
   workspace         Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   posts             SocialAccountPost[]
+  comments          Comment[]
 
   @@unique([workspaceId, platform, platformAccountId])
   @@index([workspaceId, platform])
@@ -234,6 +235,29 @@ model SocialAccountPost {
   socialAccount   SocialAccount       @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
 
   @@id([postId, socialAccountId])
+}
+
+model Comment {
+  id              String        @id @default(uuid())
+  workspaceId     String
+  socialAccountId String
+  platform        PlatformType
+  externalId      String        // Platform's comment ID
+  externalPostId  String        // Platform's post ID this comment is on
+  fromName        String
+  fromUsername    String
+  fromAvatar      String?
+  content         String        @db.Text
+  timestamp       DateTime
+  isRead          Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  socialAccount   SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, platform])
+  @@index([socialAccountId])
+  @@unique([platform, externalId])
 }
 
 model MediaFolder {

@@ -45,7 +45,7 @@ export async function publishToWordPress(
           featuredMediaId = mediaData.id;
         }
       }
-    } catch {}
+    } catch (e) { console.warn('Failed to upload WP featured image:', e) }
   }
 
   const postBody: Record<string, any> = {

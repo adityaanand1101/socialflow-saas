@@ -115,6 +115,7 @@ export const useStore = create<SocialFlowStore>((set) => ({
       if (postsRes.ok) {
         const postsData = await postsRes.json()
         if (Array.isArray(postsData)) set({ posts: postsData })
+        else if (postsData?.posts && Array.isArray(postsData.posts)) set({ posts: postsData.posts })
       }
     } catch (e) {
       console.error("Failed to fetch dashboard data", e)

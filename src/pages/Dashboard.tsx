@@ -1,49 +1,112 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Calendar, Plus, AlertCircle, RefreshCw } from 'lucide-react'
+import { useAuth } from '@clerk/react'
 import { useStore } from '@/store/useStore'
 import { KpiCards } from '@/components/dashboard/KpiCards'
 import { UpcomingPosts } from '@/components/dashboard/UpcomingPosts'
 import { ChannelHealth } from '@/components/dashboard/ChannelHealth'
 import { GrowthTrendChart } from '@/components/dashboard/GrowthTrendChart'
 import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton'
+import { apiFetch } from '@/lib/api'
+
+interface AnalyticsMetrics {
+  total: number
+  growth: number
+}
+
+interface AnalyticsResponse {
+  platforms: Array<{
+    platform: string
+    accountId: string
+    accountName: string
+    avatarUrl?: string
+    followers: number
+    engagement: number
+    impressions: number
+    error?: string
+  }>
+  metrics: {
+    followers: AnalyticsMetrics
+    engagements: AnalyticsMetrics
+    impressions: AnalyticsMetrics
+    linkClicks: AnalyticsMetrics
+    shares: AnalyticsMetrics
+  }
+  timeline: Array<Record<string, any>>
+  platformDistribution: Array<{ name: string; value: number }>
+  topPosts: Array<any>
+}
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 export const Dashboard = () => {
   const navigate = useNavigate()
-  const { channels, posts, loading } = useStore()
+  const { channels, posts, loading: storeLoading } = useStore()
+  const { getToken } = useAuth()
+  const [analytics, setAnalytics] = useState<AnalyticsResponse | null>(null)
+  const [analyticsLoading, setAnalyticsLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchAnalytics = async () => {
+      try {
+        setAnalyticsLoading(true)
+        const token = await getToken()
+        if (!token) { setAnalyticsLoading(false); return }
+        const res = await apiFetch('/api/analytics', { headers: { Authorization: `Bearer ${token}` } })
+        if (res.ok) setAnalytics(await res.json())
+      } catch (e) {
+        console.error('Failed to fetch dashboard analytics:', e)
+      } finally {
+        setAnalyticsLoading(false)
+      }
+    }
+    fetchAnalytics()
+  }, [getToken])
 
   const kpiData = useMemo(() => {
-    const totalFollowers = channels.reduce((sum, c) => sum + c.followers, 0)
-    const totalEngagement = channels.reduce((sum, c) => sum + Math.round(c.followers * (c.engagementRate / 100)), 0)
-    const totalImpressions = channels.reduce((sum, c) => sum + Math.round(c.followers * ((c.engagementRate / 100) * 3)), 0)
-    const totalPosts = posts.length
-
-    return {
-      totalFollowers,
-      totalEngagement,
-      totalImpressions,
-      totalPosts,
-      followerGrowth: channels.length > 0 ? 2.4 : 0,
-      engagementGrowth: channels.length > 0 ? 1.8 : 0,
-      impressionGrowth: channels.length > 0 ? 3.2 : 0,
-      postGrowth: posts.filter(p => p.status === 'published').length > 0 ? 5.1 : 0,
+    const m = analytics?.metrics
+    if (m) {
+      return {
+        totalFollowers: m.followers.total,
+        totalEngagement: m.engagements.total,
+        totalImpressions: m.impressions.total,
+        totalPosts: posts.length,
+        followerGrowth: m.followers.growth,
+        engagementGrowth: m.engagements.growth,
+        impressionGrowth: m.impressions.growth,
+        postGrowth: posts.filter(p => p.status === 'published').length > 0 ? 5.1 : 0,
+      }
     }
-  }, [channels, posts])
+    return {
+      totalFollowers: 0,
+      totalEngagement: 0,
+      totalImpressions: 0,
+      totalPosts: posts.length,
+      followerGrowth: 0,
+      engagementGrowth: 0,
+      impressionGrowth: 0,
+      postGrowth: 0,
+    }
+  }, [analytics, posts])
 
   const chartData = useMemo(() => {
     const now = new Date()
+    const base = analytics?.metrics?.followers?.total || channels.reduce((sum, c) => sum + (c.followers || 0), 0) || 1000
     return Array.from({ length: 12 }, (_, i) => {
       const monthIdx = (now.getMonth() - 11 + i + 12) % 12
-      const followers = channels.reduce((sum, c) => sum + Math.round(c.followers * (0.85 + Math.random() * 0.3)), 0)
-      const engagement = channels.reduce((sum, c) => sum + Math.round(c.followers * (c.engagementRate / 100) * (0.8 + Math.random() * 0.4)), 0)
-      const reach = channels.reduce((sum, c) => sum + Math.round(c.followers * (2 + Math.random() * 3)), 0)
-      return { month: MONTHS[monthIdx], followers, engagement, reach }
+      return {
+        month: MONTHS[monthIdx],
+        followers: Math.round(base * (0.85 + Math.random() * 0.3)),
+        engagement: Math.round(base * (0.02 + Math.random() * 0.04)),
+        reach: Math.round(base * (2 + Math.random() * 3)),
+      }
     })
-  }, [channels])
+  }, [analytics, channels])
+
+  const loading = storeLoading || analyticsLoading
 
   if (loading) {
     return (
@@ -57,7 +120,9 @@ export const Dashboard = () => {
     )
   }
 
-  if (!loading && channels.length === 0 && posts.length === 0) {
+  const hasChannels = channels.length > 0 || (analytics?.platforms?.length ?? 0) > 0
+
+  if (!hasChannels && posts.length === 0) {
     return (
       <div className="space-y-8 pb-10">
         <div>

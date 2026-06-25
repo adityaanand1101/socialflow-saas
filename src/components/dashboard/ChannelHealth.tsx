@@ -35,7 +35,7 @@ export const ChannelHealth = memo(function ChannelHealth({ channels }: ChannelHe
       <CardContent>
         <div className="space-y-4">
           {channels.map((channel) => {
-            const rate = Math.min(channel.engagementRate / 100, 1)
+            const rate = channel.engagementRate ? Math.min(channel.engagementRate / 100, 1) : 0
             const healthColor =
               rate >= 0.05 ? 'bg-green-500' :
               rate >= 0.02 ? 'bg-yellow-500' :
@@ -60,7 +60,7 @@ export const ChannelHealth = memo(function ChannelHealth({ channels }: ChannelHe
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground capitalize">
-                    {channel.followers?.toLocaleString()} followers
+                    {channel.followers ? `${channel.followers.toLocaleString()} followers` : ''}
                   </p>
                   <div className="mt-1.5 w-full h-1.5 rounded-full bg-white/5 overflow-hidden">
                     <div

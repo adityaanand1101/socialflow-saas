@@ -151,7 +151,7 @@ export const Calendar = () => {
       const post = posts.find((p: any) => p.id === postId)
       if (!post) return
 
-      const existingDate = new Date(post.scheduledAt || post.scheduledTime || new Date())
+      const existingDate = new Date(post.scheduledDate || new Date())
       const newDate = new Date(targetDate)
       newDate.setHours(existingDate.getHours(), existingDate.getMinutes())
 

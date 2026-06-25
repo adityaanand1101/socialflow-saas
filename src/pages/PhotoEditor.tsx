@@ -4,7 +4,7 @@ import { Stage, Layer, Image as KonvaImage, Transformer, Text, Rect, Circle, Lin
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@clerk/react'
 import { apiFetch } from '@/lib/api'
-import { Loader2, X, Undo2, Redo2, ZoomIn, ZoomOut, Download, Save, Trash2, RotateCcw, FlipHorizontal, FlipVertical, ImagePlus, Type, Square, Circle as CircleIcon, Pencil, Crop, Sliders, Palette, Eraser, Wand2 } from 'lucide-react'
+import { Loader2, X, Undo2, Redo2, ZoomIn, ZoomOut, Download, Save, Trash2, RotateCcw, FlipHorizontal, FlipVertical, ImagePlus, Type, Square, Circle as CircleIcon, Pencil, Crop, Sliders, Palette, Wand2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 type ToolType = 'select' | 'crop' | 'adjust' | 'filter' | 'text' | 'draw' | 'shape' | 'bgremove'
@@ -97,10 +97,8 @@ export const PhotoEditor = () => {
   const [imageUrl, setImageUrl] = useState(initialImageUrl)
   const [imageSize, setImageSize] = useState({ width: 800, height: 600 })
   const [assetId, setAssetId] = useState(initialAssetId)
-  const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [tool, setTool] = useState<ToolType>('select')
-  const [activeTool, setActiveTool] = useState<string | null>(null)
 
   const [layers, setLayers] = useState<EditorLayer[]>([])
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null)
@@ -117,7 +115,7 @@ export const PhotoEditor = () => {
   const [textSize, setTextSize] = useState(32)
   const [drawColor, setDrawColor] = useState('#ffffff')
   const [drawWidth, setDrawWidth] = useState(3)
-  const [isDrawing, setIsDrawing] = useState(false)
+  const [, setIsDrawing] = useState(false)
   const [shapeType, setShapeType] = useState<'rect' | 'circle'>('rect')
   const [shapeColor, setShapeColor] = useState('#6366f1')
   const [cropRect, setCropRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
@@ -620,10 +618,10 @@ export const PhotoEditor = () => {
               <Layer>
                 <KonvaImage
                   image={image}
-                  x={0}
-                  y={0}
                   width={imageSize.width}
                   height={imageSize.height}
+                  x={flipH ? imageSize.width / 2 : 0}
+                  y={flipV ? imageSize.height / 2 : 0}
                   filters={[]}
                   opacity={1}
                   rotation={rotation}
@@ -631,8 +629,6 @@ export const PhotoEditor = () => {
                   scaleY={flipV ? -1 : 1}
                   offsetX={flipH ? imageSize.width / 2 : 0}
                   offsetY={flipV ? imageSize.height / 2 : 0}
-                  x={flipH ? imageSize.width / 2 : 0}
-                  y={flipV ? imageSize.height / 2 : 0}
                 />
                 {/* Apply filter via CSS on a wrapper image - use a semi-transparent overlay for filter preview */}
                 <Rect

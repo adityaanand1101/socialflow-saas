@@ -662,7 +662,7 @@ export default function ContentEditor(props: ContentEditorProps) {
                   <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider w-20 shrink-0">Provider</label>
                   <select
                     value={shortlinkProvider}
-                    onChange={e => setShortlinkProvider((e.target as HTMLSelectElement).value)}
+                    onChange={e => setShortlinkProvider((e.target as HTMLSelectElement).value as 'dub' | 'shortio' | 'kutt' | 'linkdrip')}
                     className="flex-1 bg-black/30 border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/40 transition-colors"
                   >
                     <option value="dub">Dub.co</option>

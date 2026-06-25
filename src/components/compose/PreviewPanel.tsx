@@ -1,4 +1,4 @@
-import { Monitor, Check, X as XIcon } from 'lucide-react'
+import { Monitor, Smartphone, Check, X as XIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { SocialPlatform } from '@/store/useStore'
 import { ALL_PLATFORMS } from '@/lib/platforms'
@@ -32,6 +32,7 @@ interface PreviewPanelProps {
   postTypes: Record<string, string>
   getDefaultContentType: (pid: string) => string
   guessMediaType: (url: string, typesMap?: Record<string, string>) => 'image' | 'video'
+  firstComments?: Record<string, string>
 }
 
 export default function PreviewPanel({
@@ -48,6 +49,7 @@ export default function PreviewPanel({
   getStructuredContent,
   postTypes,
   guessMediaType,
+  firstComments,
 }: PreviewPanelProps) {
   const activeConstraints = getPlatformConstraint(activePlatform)
   const previewIsVideo = mediaInfo.length > 0 && mediaInfo[0].type === 'video'
@@ -88,6 +90,12 @@ export default function PreviewPanel({
             </div>
           )}
           <div className="flex p-0.5 bg-white/[0.03] rounded-lg border border-white/[0.06]">
+            <button
+              onClick={() => setPreviewDevice('mobile')}
+              className={cn("p-1.5 rounded-md transition-all", previewDevice === 'mobile' ? "bg-white/10 text-white" : "text-muted-foreground hover:text-white")}
+            >
+              <Smartphone className="w-4 h-4" />
+            </button>
             <button
               onClick={() => setPreviewDevice('desktop')}
               className={cn("p-1.5 rounded-md transition-all", previewDevice === 'desktop' ? "bg-white/10 text-white" : "text-muted-foreground hover:text-white")}
@@ -145,6 +153,12 @@ export default function PreviewPanel({
               />
             )
           })()}
+          {firstComments?.[activePlatform] && (
+            <div className="mt-3 pt-3 border-t border-white/[0.06]">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">First comment</p>
+              <p className="text-sm text-white/70">{firstComments[activePlatform]}</p>
+            </div>
+          )}
         </div>
       </div>
 

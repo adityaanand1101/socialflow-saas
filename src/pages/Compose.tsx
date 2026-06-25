@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
-import { Save, Loader2, Clock, Send, Trash2, MessageCircle, Repeat2, AtSign, Timer } from 'lucide-react'
+import { Save, Loader2, Clock, Send, Trash2, MessageCircle, AtSign } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import type { SocialPlatform } from '@/store/useStore'
 import { useAuth } from '@clerk/react'
@@ -72,12 +72,7 @@ export const Compose = () => {
 
   const [firstComments, setFirstComments] = useState<Record<string, string>>({})
   const [showFirstComment, setShowFirstComment] = useState(false)
-  const [repostUrl, setRepostUrl] = useState('')
-  const [repostEnabled, setRepostEnabled] = useState(false)
   const [showTags, setShowTags] = useState(false)
-  const [postDelayMinutes, setPostDelayMinutes] = useState(0)
-  const [postDelayEnabled, setPostDelayEnabled] = useState(false)
-
   const DRAFT_KEY = 'socialflow_draft'
   const TEMPLATES_KEY = 'socialflow_templates'
 
@@ -202,8 +197,7 @@ export const Compose = () => {
           }
           if (post.socialAccountIds) setSelectedAccountIds(post.socialAccountIds)
           if (post.firstComments) setFirstComments(post.firstComments)
-          if (post.repostUrl) setRepostUrl(post.repostUrl)
-          if (post.repostEnabled) setRepostEnabled(post.repostEnabled)
+
         }
       }
     }
@@ -213,9 +207,9 @@ export const Compose = () => {
   useEffect(() => {
     if (editingPostId) return
     if (!caption && mediaFiles.length === 0 && threadPosts.length === 0) return
-    const draft = { caption, platforms: selectedPlatforms, mediaFiles, mediaTypes, platformCaptions, postTypes, structuredContent, scheduledDate, showScheduler, threadPosts, selectedAccountIds, firstComments, repostUrl, repostEnabled, postDelayMinutes, postDelayEnabled }
+    const draft = { caption, platforms: selectedPlatforms, mediaFiles, mediaTypes, platformCaptions, postTypes, structuredContent, scheduledDate, showScheduler, threadPosts, selectedAccountIds, firstComments }
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)) } catch {}
-  }, [caption, selectedPlatforms, mediaFiles, mediaTypes, platformCaptions, postTypes, structuredContent, scheduledDate, showScheduler, threadPosts, editingPostId, selectedAccountIds, firstComments, repostUrl, repostEnabled, postDelayMinutes, postDelayEnabled])
+  }, [caption, selectedPlatforms, mediaFiles, mediaTypes, platformCaptions, postTypes, structuredContent, scheduledDate, showScheduler, threadPosts, editingPostId, selectedAccountIds, firstComments])
 
   useEffect(() => {
     if (editingPostId) return
@@ -257,10 +251,7 @@ export const Compose = () => {
       if (saved.showScheduler) setShowScheduler(saved.showScheduler)
       if (saved.selectedAccountIds) setSelectedAccountIds(saved.selectedAccountIds)
       if (saved.firstComments) setFirstComments(saved.firstComments)
-      if (saved.repostUrl) setRepostUrl(saved.repostUrl)
-      if (saved.repostEnabled) setRepostEnabled(saved.repostEnabled)
-      if (saved.postDelayMinutes) setPostDelayMinutes(saved.postDelayMinutes)
-      if (saved.postDelayEnabled) setPostDelayEnabled(saved.postDelayEnabled)
+
     } catch {}
     setShowDraftRestore(false)
   }
@@ -592,10 +583,7 @@ export const Compose = () => {
     try {
       const token = await getToken()
       if (!token) return
-      const actualStatus = status === 'published' && postDelayEnabled && postDelayMinutes > 0 ? 'scheduled' : status
-      const time = actualStatus === 'scheduled'
-        ? new Date(status === 'scheduled' ? scheduledDate : Date.now() + postDelayMinutes * 60 * 1000).toISOString()
-        : new Date().toISOString()
+      const time = new Date().toISOString()
 
       const plainCaption = stripHtml(caption)
 
@@ -604,7 +592,6 @@ export const Compose = () => {
         : []
 
       const firstCommentsObj = showFirstComment ? firstComments : undefined
-      const postRepostUrl = repostEnabled ? repostUrl : undefined
 
       if (editingPostId) {
         await updatePost(token, editingPostId, {
@@ -613,13 +600,11 @@ export const Compose = () => {
           media: mediaFiles,
           socialAccountIds: accountIds,
           scheduledTime: time,
-          status: actualStatus,
+          status,
           structuredContent,
           postTypes,
           thread: threadPosts,
           firstComments: firstCommentsObj,
-          repostUrl: postRepostUrl,
-          repostEnabled,
         })
       } else {
         await addPost(token, {
@@ -628,14 +613,12 @@ export const Compose = () => {
           media: mediaFiles,
           socialAccountIds: accountIds,
           scheduledTime: time,
-          status: actualStatus,
+          status,
           tags: [],
           structuredContent,
           postTypes,
           thread: threadPosts,
           firstComments: firstCommentsObj,
-          repostUrl: postRepostUrl,
-          repostEnabled,
         })
       }
 
@@ -662,11 +645,7 @@ export const Compose = () => {
     setShowWarnings(false)
     setSelectedAccountIds([])
     setFirstComments({})
-    setRepostUrl('')
-    setRepostEnabled(false)
     setShowTags(false)
-    setPostDelayMinutes(0)
-    setPostDelayEnabled(false)
     clearDraft()
   }
 
@@ -886,39 +865,7 @@ export const Compose = () => {
             </div>
           )}
 
-          {/* Repost Section */}
-          <div className="bg-white/[0.02] rounded-xl border border-white/[0.06] overflow-hidden">
-            <button
-              onClick={() => setRepostEnabled(!repostEnabled)}
-              className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/[0.02] transition-colors"
-            >
-              <div className="flex items-center gap-2">
-                <Repeat2 className={cn("w-4 h-4", repostEnabled ? "text-purple-400" : "text-muted-foreground")} />
-                <span className="text-sm font-semibold text-white">Repost</span>
-              </div>
-              <div className={cn(
-                "w-9 h-5 rounded-full transition-colors relative",
-                repostEnabled ? "bg-purple-500" : "bg-white/[0.08]"
-              )}>
-                <div className={cn(
-                  "absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all",
-                  repostEnabled ? "left-[18px]" : "left-0.5"
-                )} />
-              </div>
-            </button>
-            {repostEnabled && (
-              <div className="px-4 pb-4">
-                <p className="text-xs text-muted-foreground mb-2">URL of the original post to repost/share</p>
-                <input
-                  type="url"
-                  value={repostUrl}
-                  onChange={e => setRepostUrl(e.target.value)}
-                  placeholder="https://example.com/post/123"
-                  className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-white text-sm placeholder:text-muted-foreground/40 focus:outline-none focus:border-purple-500/40 transition-colors"
-                />
-              </div>
-            )}
-          </div>
+
         </div>
 
         {/* Right column */}
@@ -938,6 +885,7 @@ export const Compose = () => {
             postTypes={postTypes}
             getDefaultContentType={getDefaultContentType}
             guessMediaType={guessMediaType}
+            firstComments={firstComments}
           />
         </div>
       </div>
@@ -952,42 +900,13 @@ export const Compose = () => {
                 {selectedAccountIds.length > 0 && (
                   <> · <span className="text-white font-medium">{selectedAccountIds.length}</span> account{selectedAccountIds.length > 1 ? 's' : ''}</>
                 )}
-                {postDelayEnabled && postDelayMinutes > 0 && (
-                  <> · <span className="text-amber-400 font-medium">delay {postDelayMinutes}min</span></>
-                )}
+
               </span>
             ) : (
               <span>No platforms selected</span>
             )}
           </div>
           <div className="flex items-center gap-2">
-            <div className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-colors",
-              postDelayEnabled
-                ? "border-amber-500/30 bg-amber-500/5"
-                : "border-white/[0.06] bg-white/[0.03]"
-            )}>
-              <Timer className={cn("w-3.5 h-3.5", postDelayEnabled ? "text-amber-400" : "text-muted-foreground")} />
-              <input
-                type="number"
-                min={1}
-                max={1440}
-                value={postDelayMinutes || ''}
-                onChange={e => setPostDelayMinutes(parseInt(e.target.value) || 0)}
-                placeholder="0"
-                className="w-10 bg-transparent text-white text-xs text-center outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-              />
-              <span className="text-[11px] text-muted-foreground">min</span>
-              <button
-                onClick={() => { setPostDelayEnabled(!postDelayEnabled); if (!postDelayEnabled && !postDelayMinutes) setPostDelayMinutes(15) }}
-                className={cn(
-                  "text-[10px] font-semibold uppercase tracking-wider transition-colors ml-1",
-                  postDelayEnabled ? "text-amber-400" : "text-muted-foreground hover:text-white"
-                )}
-              >
-                {postDelayEnabled ? 'ON' : 'OFF'}
-              </button>
-            </div>
             <Button
               variant="outline"
               size="sm"

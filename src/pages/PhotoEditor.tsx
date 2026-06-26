@@ -1,12 +1,11 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import FilerobotImageEditor, { TABS, TOOLS, type FilerobotImageEditorConfig } from 'react-filerobot-image-editor'
-import { Button } from '@/components/ui/button'
 import { useAuth } from '@clerk/react'
 import { apiFetch } from '@/lib/api'
-import { Loader2, ArrowLeft, ImagePlus } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 
-type Stage = 'idle' | 'editing' | 'saving'
+const TRANSPARENT_PIXEL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
 
 export const PhotoEditor = () => {
   const navigate = useNavigate()
@@ -14,9 +13,8 @@ export const PhotoEditor = () => {
   const imageUrl = searchParams.get('imageUrl') || ''
   const assetId = searchParams.get('assetId') || ''
   const { getToken } = useAuth()
-  const [stage, setStage] = useState<Stage>(imageUrl ? 'editing' : 'idle')
   const [saving, setSaving] = useState(false)
-  const [source, setSource] = useState(imageUrl)
+  const [source, setSource] = useState(imageUrl || TRANSPARENT_PIXEL)
   const [toast, setToast] = useState<string | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -40,7 +38,6 @@ export const PhotoEditor = () => {
     const url = URL.createObjectURL(file)
     objectUrlRef.current = url
     setSource(url)
-    setStage('editing')
     e.target.value = ''
   }
 
@@ -94,29 +91,9 @@ export const PhotoEditor = () => {
     }
   }, [assetId, getToken])
 
-  if (stage === 'idle') {
-    return (
-      <div className="h-[calc(100vh-4rem)] flex flex-col items-center justify-center bg-black/40 rounded-2xl border border-white/10 gap-4 p-6 text-center">
-        <div className="w-20 h-20 rounded-2xl border-2 border-dashed border-white/10 flex items-center justify-center">
-          <ImagePlus className="w-8 h-8 text-muted-foreground" />
-        </div>
-        <p className="text-lg font-medium text-white">Open an image to edit</p>
-        <p className="text-xs text-muted-foreground">Choose an image from your device or launch the editor from Media Library.</p>
-        <div className="flex gap-3">
-          <Button variant="outline" size="sm" className="gap-2" onClick={() => navigate(-1)}>
-            <ArrowLeft className="w-3.5 h-3.5" /> Back
-          </Button>
-          <Button size="sm" className="gap-2" onClick={() => fileInputRef.current?.click()}>
-            Open Image
-          </Button>
-        </div>
-        <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleFileSelect} />
-      </div>
-    )
-  }
-
   return (
     <div className="h-[calc(100vh-4rem)] relative bg-black/40 rounded-2xl overflow-hidden border border-white/10">
+      <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleFileSelect} />
       {toast && (
         <div className="fixed top-6 right-6 z-[300] bg-green-500/20 border border-green-500/30 px-4 py-2.5 rounded-xl text-sm text-green-200 shadow-2xl">
           {toast}
@@ -167,33 +144,43 @@ export const PhotoEditor = () => {
             'accent-primary': '#7c3aed',
             'accent-primary-hover': '#8b5cf6',
             'accent-primary-active': '#6d28d9',
-            'accent-primary-disabled': '#4a495a',
-            'accent-stateless': '#4a495a',
-            'bg-grey': '#1d1b20',
+            'accent-primary-disabled': '#2a2830',
+            'accent-secondary-disabled': '#1d1b20',
+            'accent-stateless': '#7c3aed',
+            'accent-stateless_0_4_opacity': 'rgba(124,58,237,0.4)',
+            'accent_0_5_opacity': 'rgba(124,58,237,0.05)',
+            'accent_0_5_5_opacity': 'rgba(124,58,237,0.55)',
+            'accent_0_7_opacity': 'rgba(124,58,237,0.7)',
+            'accent_1_2_opacity': 'rgba(124,58,237,0.12)',
+            'accent_1_8_opacity': 'rgba(124,58,237,0.18)',
+            'accent_2_8_opacity': 'rgba(124,58,237,0.28)',
+            'accent_4_0_opacity': 'rgba(124,58,237,0.4)',
+            'bg-grey': '#1a1a21',
             'bg-stateless': '#141218',
-            'bg-active': '#1d1b20',
+            'bg-active': '#1a1a21',
             'bg-base-light': '#0f1117',
             'bg-base-medium': '#141218',
-            'bg-primary': '#7c3aed',
-            'bg-primary-light': '#8b5cf6',
-            'bg-primary-hover': '#8b5cf6',
-            'bg-primary-active': '#6d28d9',
-            'bg-primary-stateless': '#4a495a',
-            'bg-secondary': '#1d1b20',
-            'bg-hover': '#2a2830',
-            'bg-tooltip': '#141218',
-            'icon-primary': '#ffffff',
-            'icons-primary-opacity-0-6': 'rgba(255,255,255,0.6)',
-            'icons-secondary': '#b3b3c2',
-            'icons-placeholder': '#6b6b7a',
-            'icons-invert': '#0f1117',
+            'bg-primary': '#0f1117',
+            'bg-primary-light': '#141218',
+            'bg-primary-hover': '#1a1a21',
+            'bg-primary-active': '#1d1b20',
+            'bg-primary-0-5-opacity': 'rgba(15,17,23,0.5)',
+            'bg-primary-stateless': '#1a1a21',
+            'bg-secondary': '#141218',
+            'bg-hover': '#1a1a21',
+            'bg-tooltip': '#1d1b20',
+            'icon-primary': '#b3b3c2',
+            'icons-primary-opacity-0-6': 'rgba(179,179,194,0.6)',
+            'icons-secondary': '#6b6b7a',
+            'icons-placeholder': '#4a495a',
+            'icons-invert': '#ffffff',
             'icons-muted': '#6b6b7a',
             'icons-primary-hover': '#ffffff',
             'icons-secondary-hover': '#b3b3c2',
             'btn-primary-text': '#ffffff',
             'btn-primary-text-0-6': 'rgba(255,255,255,0.6)',
             'btn-primary-text-0-4': 'rgba(255,255,255,0.4)',
-            'btn-disabled-text': '#6b6b7a',
+            'btn-disabled-text': '#4a495a',
             'btn-secondary-text': '#b3b3c2',
             'link-primary': '#a78bfa',
             'link-stateless': '#c4b5fd',
@@ -201,12 +188,18 @@ export const PhotoEditor = () => {
             'link-active': '#ddd6fe',
             'link-pressed': '#e9d5ff',
             'link-muted': '#6b6b7a',
-            'borders-primary': 'rgba(255,255,255,0.1)',
-            'borders-primary-hover': 'rgba(255,255,255,0.15)',
-            'borders-secondary': 'rgba(255,255,255,0.05)',
-            'borders-strong': 'rgba(255,255,255,0.2)',
-            'borders-base-light': 'rgba(255,255,255,0.1)',
-            'borders-base-medium': 'rgba(255,255,255,0.05)',
+            'borders-primary': 'rgba(255,255,255,0.06)',
+            'borders-primary-hover': 'rgba(255,255,255,0.10)',
+            'borders-secondary': 'rgba(255,255,255,0.04)',
+            'borders-strong': 'rgba(255,255,255,0.12)',
+            'borders-invert': '#1a1a21',
+            'border-hover-bottom': 'rgba(124,58,237,0.18)',
+            'border-active-bottom': '#7c3aed',
+            'border-primary-stateless': 'rgba(255,255,255,0.06)',
+            'borders-button': 'rgba(255,255,255,0.08)',
+            'borders-item': 'rgba(255,255,255,0.04)',
+            'borders-base-light': 'rgba(124,58,237,0.2)',
+            'borders-base-medium': 'rgba(124,58,237,0.3)',
             'error': '#ef4444',
             'error-0-28-opacity': 'rgba(239,68,68,0.28)',
             'error-0-12-opacity': 'rgba(239,68,68,0.12)',
@@ -220,6 +213,14 @@ export const PhotoEditor = () => {
             'warning-active': '#ca8a04',
             'info': '#3b82f6',
             'modified': '#a78bfa',
+            'active-secondary': '#8b5cf6',
+            'active-secondary-hover': 'rgba(139,92,246,0.08)',
+            'tag': '#4a495a',
+            'states-error-disabled-text': 'rgba(239,68,68,0.3)',
+            'light-shadow': 'rgba(0,0,0,0.3)',
+            'medium-shadow': 'rgba(0,0,0,0.4)',
+            'large-shadow': 'rgba(0,0,0,0.5)',
+            'x-large-shadow': 'rgba(0,0,0,0.6)',
           },
         }}
         translations={{

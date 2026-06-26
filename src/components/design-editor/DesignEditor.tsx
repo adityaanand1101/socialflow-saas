@@ -4,7 +4,7 @@ import { EditorCanvas } from './EditorCanvas'
 import { Toolbar } from './Toolbar'
 import { SidePanel } from './SidePanel'
 import { ImportScreen } from './ImportScreen'
-import { Download, Loader2, Check, X } from 'lucide-react'
+import { Loader2, Check, X } from 'lucide-react'
 
 function EditorWorkspace() {
   const { state, dispatch } = useEditor()
@@ -114,7 +114,7 @@ function EditorWorkspace() {
           )}
         </div>
 
-        <SidePanel onUploadClick={handleUploadClick} />
+        <SidePanel />
       </div>
 
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
@@ -153,7 +153,6 @@ export function DesignEditor() {
         ) : (
           <ImportScreen
             onImageLoaded={handleImageLoaded}
-            onStartDesign={() => setHasImage(true)}
           />
         )}
       </div>

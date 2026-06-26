@@ -4,10 +4,9 @@ import { StockPhotoSearch } from './StockPhotoSearch'
 
 interface ImportScreenProps {
   onImageLoaded: (src: string) => void
-  onStartDesign: () => void
 }
 
-export function ImportScreen({ onImageLoaded, onStartDesign }: ImportScreenProps) {
+export function ImportScreen({ onImageLoaded }: ImportScreenProps) {
   const [dragOver, setDragOver] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
   const [recentImages, setRecentImages] = useState<string[]>([])

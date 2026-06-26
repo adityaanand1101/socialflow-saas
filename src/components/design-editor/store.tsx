@@ -1,6 +1,6 @@
 import { createContext, useContext, useReducer, type ReactNode } from 'react'
 import { v4 as uuid } from 'uuid'
-import type { DesignElement, EditorAction, EditorState, ToolType, TabId } from './types'
+import type { DesignElement, EditorAction, EditorState } from './types'
 
 const DEFAULT_WIDTH = 800
 const DEFAULT_HEIGHT = 600

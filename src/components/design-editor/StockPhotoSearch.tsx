@@ -1,5 +1,5 @@
-import { useState, useCallback, useRef } from 'react'
-import { Search, Loader2, Image as ImageIcon, Camera, Globe } from 'lucide-react'
+import { useState, useCallback } from 'react'
+import { Search, Loader2, Camera } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 type ImageProvider = 'pixabay' | 'unsplash' | 'pexels'
@@ -141,14 +141,6 @@ export function StockPhotoSearch({ onSelect }: StockPhotoSearchProps) {
     e.preventDefault()
     searchAll(query, 1)
   }
-
-  const availableProviders = Object.entries(PROVIDER_CONFIG).filter(([key]) => {
-    const envKey = `VITE_${key.toUpperCase()}_API_KEY`
-    if (key === 'pixabay') return true
-    if (key === 'unsplash') return true
-    if (key === 'pexels') return true
-    return false
-  })
 
   return (
     <div className="flex flex-col h-full">

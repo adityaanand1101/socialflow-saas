@@ -29,7 +29,6 @@ export function EditorCanvas({ containerRef }: EditorCanvasProps) {
   }, [containerRef])
 
   useEffect(() => {
-    const newImages: Record<string, HTMLImageElement> = {}
     state.elements.filter(e => e.type === 'image' && e.src && !images[e.src]).forEach(el => {
       const img = new window.Image()
       img.crossOrigin = 'anonymous'
@@ -126,7 +125,6 @@ export function EditorCanvas({ containerRef }: EditorCanvasProps) {
               key={el.id}
               element={el}
               imgElement={images[el.src || '']}
-              isSelected={state.selectedId === el.id}
               onSelect={() => dispatch({ type: 'SELECT_ELEMENT', payload: el.id })}
               onDragEnd={(e) => handleDragEnd(e, el.id)}
               onTransformEnd={(e) => handleTransformEnd(e, el.id)}
@@ -157,14 +155,13 @@ export function EditorCanvas({ containerRef }: EditorCanvasProps) {
 interface CanvasElementProps {
   element: DesignElement
   imgElement?: HTMLImageElement
-  isSelected: boolean
   onSelect: () => void
   onDragEnd: (e: Konva.KonvaEventObject<DragEvent>) => void
   onTransformEnd: (e: Konva.KonvaEventObject<Event>) => void
   onDoubleClick: () => void
 }
 
-function CanvasElement({ element: el, imgElement, isSelected, onSelect, onDragEnd, onTransformEnd, onDoubleClick }: CanvasElementProps) {
+function CanvasElement({ element: el, imgElement, onSelect, onDragEnd, onTransformEnd, onDoubleClick }: CanvasElementProps) {
   const sharedProps = {
     id: el.id,
     x: el.x,

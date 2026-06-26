@@ -8,11 +8,7 @@ import { FontPicker } from './FontPicker'
 import { cn } from '@/lib/utils'
 import type { TabId } from './types'
 
-interface SidePanelProps {
-  onUploadClick: () => void
-}
-
-export function SidePanel({ onUploadClick }: SidePanelProps) {
+export function SidePanel(_props: unknown) {
   const { state, dispatch, addText } = useEditor()
 
   const tabs: { id: TabId; icon: typeof Square; label: string }[] = [

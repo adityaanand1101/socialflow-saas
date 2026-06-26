@@ -1,1 +1,3 @@
-export { DesignEditor as default } from '@/components/design-editor/DesignEditor'
+import { DesignEditor } from '@/components/design-editor/DesignEditor'
+export default DesignEditor
+export { DesignEditor as PhotoEditor }

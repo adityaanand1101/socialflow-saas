@@ -99,6 +99,15 @@ export const PhotoEditor = () => {
           {toast}
         </div>
       )}
+      {source === TRANSPARENT_PIXEL && (
+        <div className="absolute inset-0 z-40 flex items-center justify-center pointer-events-none">
+          <div className="text-center max-w-md">
+            <p className="text-[15px] text-white/80 font-medium leading-relaxed">
+              Drag and drop an image here, or use the Open button above to import from your computer or media gallery.
+            </p>
+          </div>
+        </div>
+      )}
       {saving && (
         <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-50">
           <div className="flex flex-col items-center gap-3">

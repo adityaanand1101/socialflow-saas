@@ -101,10 +101,22 @@ export const PhotoEditor = () => {
       )}
       {source === TRANSPARENT_PIXEL && (
         <div className="absolute inset-0 z-40 flex items-center justify-center pointer-events-none">
-          <div className="text-center max-w-md">
-            <p className="text-[15px] text-white/80 font-medium leading-relaxed">
-              Drag and drop an image here, or use the Open button above to import from your computer or media gallery.
+          <div className="text-center max-w-md pointer-events-auto">
+            <p className="text-[15px] text-white/80 font-medium leading-relaxed mb-5">
+              Drag and drop an image here, or import from your computer or media gallery.
             </p>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium rounded-xl transition-colors"
+            >
+              Choose from Computer
+            </button>
+            <button
+              onClick={() => navigate('/app/media')}
+              className="px-5 py-2.5 bg-white/10 hover:bg-white/15 text-white text-sm font-medium rounded-xl transition-colors ml-3"
+            >
+              Media Gallery
+            </button>
           </div>
         </div>
       )}

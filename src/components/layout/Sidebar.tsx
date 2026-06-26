@@ -28,7 +28,7 @@ const navItems = [
   { icon: Calendar, label: 'Calendar', href: '/app/calendar' },
   { icon: PenTool, label: 'Compose', href: '/app/compose' },
   { icon: ImageIcon, label: 'Media Library', href: '/app/media' },
-  { icon: Wand2, label: 'Design Studio', href: '/app/media/editor' },
+  { icon: Wand2, label: 'Photo Editor', href: '/app/media/editor' },
   { icon: MessageSquareText, label: 'Inbox', href: '/app/inbox' },
   { icon: BarChart3, label: 'Analytics', href: '/app/analytics' },
   { icon: Share2, label: 'Channels', href: '/app/channels' },

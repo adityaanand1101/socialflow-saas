@@ -125,12 +125,11 @@ export const PhotoEditor = () => {
           TABS.RESIZE,
         ]}
         defaultTabId={TABS.ADJUST}
-        defaultToolId={TOOLS.CROP}
+        defaultToolId={TOOLS.BRIGHTNESS}
         useAiTab
         savingPixelRatio={1}
         previewPixelRatio={1}
         resetOnSourceChange
-        useZoomPresetsMenu
         previewBgColor="#0f1117"
         theme={{
           palette: {

@@ -207,11 +207,21 @@ async function fetchThreads(
     );
     if (userRes.ok) {
       const u = await userRes.json() as any;
-      base.followers = u.followers_count ?? 0;
-      base.following = u.follows_count ?? 0;
-      base.postsCount = u.media_count ?? 0;
       if (u.name) base.accountName = u.name;
       if (u.threads_profile_picture_url) base.avatarUrl = u.threads_profile_picture_url;
+    }
+    // Attempt to get follower/media counts via Threads Insights API
+    const insightsRes = await fetch(
+      `${THREADS_GRAPH_API}/${_platformAccountId}/insights?metric=followers_count,media_count&period=day`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    ).catch(() => null);
+    if (insightsRes && insightsRes.ok) {
+      const ins = await insightsRes.json() as any;
+      for (const d of ins.data || []) {
+        const v = d.values?.[d.values.length - 1]?.value ?? 0;
+        if (d.name === 'followers_count') base.followers = v;
+        if (d.name === 'media_count') base.postsCount = v;
+      }
     }
   } catch (e: any) { base.error = e.message; }
   return base;
@@ -523,6 +533,7 @@ async function fetchGMB(
       const l = await locationRes.json() as any;
       base.accountName = l.locationName || l.locationKey?.locationName || base.accountName;
     }
+    base.error = 'GMB analytics metrics not available via public API';
   } catch (e: any) { base.error = e.message; }
   return base;
 }

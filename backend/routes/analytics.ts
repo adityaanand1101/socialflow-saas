@@ -41,12 +41,28 @@ router.get('/', requireAuth, async (req: any, res: any) => {
       where: { workspaceId },
     });
 
-    // 2. Fetch analytics for each account in parallel (decrypting tokens first)
-    const validAccounts = socialAccounts.filter(acct => acct.accessToken);
+    // 2. Separate API-connected accounts (have tokens) from MANUAL accounts (no tokens)
+    const apiAccounts = socialAccounts.filter(acct => acct.accessToken);
+    const manualAccounts = socialAccounts.filter(acct => !acct.accessToken);
+
+    // 3. Fetch analytics for API accounts in parallel (decrypting tokens first)
     const platformResults = await Promise.allSettled(
-        validAccounts.map(acct => {
+        apiAccounts.map(acct => {
           let token: string = acct.accessToken!;
-          try { token = decryptToken(token, ENCRYPTION_KEY); } catch { /* use raw token if decryption fails */ }
+          try {
+            token = decryptToken(token, ENCRYPTION_KEY);
+          } catch (e) {
+            console.warn(`[analytics] Token decryption failed for ${acct.platform} account ${acct.id}:`, (e as Error).message);
+            return Promise.resolve({
+              platform: acct.platform.toLowerCase(),
+              accountId: acct.platformAccountId!,
+              accountName: acct.displayName || acct.username,
+              avatarUrl: acct.avatarUrl,
+              followers: 0, following: 0, postsCount: 0,
+              engagement: 0, impressions: 0, reach: 0, profileViews: 0,
+              error: 'Token decryption failed — re-connect this account',
+            });
+          }
           return fetchAnalyticsForAccount(
             acct.platform.toLowerCase(),
             token,
@@ -65,10 +81,25 @@ router.get('/', requireAuth, async (req: any, res: any) => {
           result.value.avatarUrl = undefined;
         }
         platforms.push(result.value);
+      } else {
+        console.warn('[analytics] A platform fetch rejected unexpectedly:', result.reason);
       }
     }
 
-    // 3. Compute aggregated metrics
+    // 4. Add stub entries for MANUAL accounts (so they still appear in the breakdown)
+    for (const acct of manualAccounts) {
+      platforms.push({
+        platform: acct.platform.toLowerCase(),
+        accountId: acct.platformAccountId || acct.id,
+        accountName: acct.manualDisplayName || acct.displayName || acct.manualHandle || acct.username,
+        avatarUrl: acct.manualAvatarUrl || acct.avatarUrl,
+        followers: 0, following: 0, postsCount: 0,
+        engagement: 0, impressions: 0, reach: 0, profileViews: 0,
+        error: 'Analytics unavailable for manual connections',
+      });
+    }
+
+    // 5. Compute aggregated metrics
     let totalFollowers = 0;
     let totalImpressions = 0;
     let totalEngagement = 0;
@@ -79,7 +110,7 @@ router.get('/', requireAuth, async (req: any, res: any) => {
       totalEngagement += p.engagement || 0;
     }
 
-    // 4. Compute platform distribution (for pie chart)
+    // 6. Compute platform distribution (for pie chart)
     const platformDistribution = platforms
       .filter(p => p.followers > 0)
       .map(p => ({
@@ -87,7 +118,7 @@ router.get('/', requireAuth, async (req: any, res: any) => {
         value: p.followers,
       }));
 
-    // 5. Build timeline data from posts
+    // 7. Build timeline data from posts
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const recentPosts = await prisma.post.findMany({
       where: {
@@ -121,7 +152,7 @@ router.get('/', requireAuth, async (req: any, res: any) => {
         ...counts,
       }));
 
-    // 6. Get top performing posts
+    // 8. Get top performing posts
     const publishedPosts = await prisma.post.findMany({
       where: { workspaceId, status: 'PUBLISHED' },
       include: {
@@ -139,13 +170,13 @@ router.get('/', requireAuth, async (req: any, res: any) => {
         content: text.length > 80 ? text.slice(0, 80) + '...' : text,
         platform: platformData?.platform?.toLowerCase() || 'unknown',
         publishedAt: post.createdAt,
-        reach: Math.floor(Math.random() * 1000),
-        engagement: Math.floor(Math.random() * 200),
-        rate: (Math.random() * 5).toFixed(1) + '%',
+        reach: 0,
+        engagement: 0,
+        rate: '0%',
       };
     });
 
-    // 7. Return the aggregated response
+    // 9. Return the aggregated response
     const response: AnalyticsResponse = {
       platforms,
       metrics: {

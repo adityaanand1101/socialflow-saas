@@ -31,31 +31,18 @@ async function fetchInstagram(
     engagement: 0, impressions: 0, reach: 0, profileViews: 0,
   };
   try {
-    const [userRes, insightsRes] = await Promise.all([
-      fetch(`${GRAPH_API}/${platformAccountId}?fields=followers_count,follows_count,media_count,profile_picture_url`, {
-        headers: { Authorization: `Bearer ${token}` },
-      }),
-      fetch(`${GRAPH_API}/${platformAccountId}/insights?metric=impressions,reach,profile_views&period=day`, {
-        headers: { Authorization: `Bearer ${token}` },
-      }).catch(() => null),
-    ]);
-
+    // Instagram Basic Display API — token goes as query param, not Bearer header
+    const userRes = await fetch(
+      `https://graph.instagram.com/v24.0/${platformAccountId}?fields=id,username,media_count,profile_picture_url&access_token=${token}`,
+    );
     if (userRes.ok) {
       const u = await userRes.json() as any;
-      base.followers = u.followers_count ?? 0;
-      base.following = u.follows_count ?? 0;
       base.postsCount = u.media_count ?? 0;
+      base.accountName = u.username || base.accountName;
       if (u.profile_picture_url) base.avatarUrl = u.profile_picture_url;
-    }
-
-    if (insightsRes && insightsRes.ok) {
-      const ins = await insightsRes.json() as any;
-      for (const d of ins.data || []) {
-        const v = d.values?.[d.values.length - 1]?.value ?? 0;
-        if (d.name === 'impressions') base.impressions += v;
-        if (d.name === 'reach') base.reach += v;
-        if (d.name === 'profile_views') base.profileViews += v;
-      }
+    } else {
+      const errBody = await userRes.text().catch(() => '');
+      base.error = `Instagram API ${userRes.status}: ${errBody.slice(0, 200)}`;
     }
   } catch (e: any) { base.error = e.message; }
   return base;

@@ -281,11 +281,9 @@ async function fetchBluesky(
   };
   try {
     const actor = username.startsWith('@') ? username.slice(1) : username;
-    const profileRes = await fetch('https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ actor }),
-    });
+    const profileRes = await fetch(
+      `https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor=${encodeURIComponent(actor)}`,
+    );
     if (profileRes.ok) {
       const p = await profileRes.json() as any;
       base.followers = p.followersCount ?? 0;
@@ -293,6 +291,9 @@ async function fetchBluesky(
       base.postsCount = p.postsCount ?? 0;
       base.accountName = p.displayName || base.accountName;
       if (p.avatar) base.avatarUrl = p.avatar;
+    } else {
+      const errBody = await profileRes.text().catch(() => '');
+      base.error = `Bluesky API ${profileRes.status}: ${errBody.slice(0, 200)}`;
     }
   } catch (e: any) { base.error = e.message; }
   return base;

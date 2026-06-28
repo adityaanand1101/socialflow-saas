@@ -342,7 +342,7 @@ export const useStore = create<SocialFlowStore>((set) => ({
     throw new Error('Media upload failed')
   },
 
-  removeMedia: async (token: string, id: string) => {
+  removeMedia: async (token: string, id: string): Promise<boolean> => {
     try {
       const res = await apiFetch(`/api/media/${id}`, {
         method: 'DELETE',
@@ -350,10 +350,13 @@ export const useStore = create<SocialFlowStore>((set) => ({
       });
       if (res.ok) {
         set((state) => ({ media: state.media.filter((m) => m.id !== id) }))
+        return true
       }
+      console.error('Failed to remove media:', await res.text().catch(() => res.status))
     } catch (error) {
       console.error("Failed to remove media", error);
     }
+    return false
   },
 
   updateFolder: async (token, id, name) => {
@@ -377,7 +380,7 @@ export const useStore = create<SocialFlowStore>((set) => ({
     }
   },
 
-  removeFolder: async (token, id) => {
+  removeFolder: async (token, id): Promise<boolean> => {
     try {
       const res = await apiFetch(`/api/media/folders/${id}`, {
         method: 'DELETE',
@@ -385,10 +388,13 @@ export const useStore = create<SocialFlowStore>((set) => ({
       });
       if (res.ok) {
         set((state) => ({ folders: state.folders.filter(f => f.id !== id) }))
+        return true
       }
+      console.error('Failed to remove folder:', await res.text().catch(() => res.status))
     } catch (error) {
       console.error("Failed to remove folder", error);
     }
+    return false
   },
 
   moveAsset: async (token, id, folderId) => {

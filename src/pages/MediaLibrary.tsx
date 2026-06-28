@@ -180,7 +180,7 @@ export const MediaLibrary = () => {
 
   const handleDeleteFolder = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation()
-    setDeletingTargets({ type: 'asset', ids: [id] })
+    setDeletingTargets({ type: 'folder', ids: [id] })
     setShowDeleteConfirm(true)
   }
 
@@ -188,9 +188,9 @@ export const MediaLibrary = () => {
     if (!deletingTargets) return
     const token = await getToken()
     if (token) {
-      await removeFolder(token, deletingTargets.ids[0])
+      const ok = await removeFolder(token, deletingTargets.ids[0])
       queryClient.invalidateQueries({ queryKey: ['media'] })
-      showToast('success', 'Folder deleted')
+      showToast(ok ? 'success' : 'error', ok ? 'Folder deleted' : 'Failed to delete folder')
     }
     setShowDeleteConfirm(false)
     setDeletingTargets(null)
@@ -212,13 +212,19 @@ export const MediaLibrary = () => {
     if (!deletingTargets) return
     const token = await getToken()
     if (token) {
+      let allOk = true
       for (const id of deletingTargets.ids) {
-        await removeMedia(token, id)
+        const ok = await removeMedia(token, id)
+        if (!ok) allOk = false
       }
       queryClient.invalidateQueries({ queryKey: ['media'] })
       setSelectedIds(new Set())
       setSelectMode(false)
-      showToast('success', `${deletingTargets.ids.length} asset${deletingTargets.ids.length > 1 ? 's' : ''} deleted`)
+      if (allOk) {
+        showToast('success', `${deletingTargets.ids.length} asset${deletingTargets.ids.length > 1 ? 's' : ''} deleted`)
+      } else {
+        showToast('error', 'Some assets could not be deleted')
+      }
     }
     setShowDeleteConfirm(false)
     setDeletingTargets(null)
@@ -527,7 +533,7 @@ export const MediaLibrary = () => {
             </div>
             <div className="flex gap-3 pt-2">
               <Button variant="outline" className="flex-1" onClick={() => setShowDeleteConfirm(false)}>Cancel</Button>
-              <Button className="flex-1 bg-red-500 hover:bg-red-600 text-white gap-2" onClick={deletingTargets?.type === 'assets' ? confirmDeleteAsset : confirmDeleteFolder}>
+              <Button className="flex-1 bg-red-500 hover:bg-red-600 text-white gap-2" onClick={deletingTargets?.type === 'folder' ? confirmDeleteFolder : confirmDeleteAsset}>
                 <Trash2 className="w-4 h-4" /> Delete
               </Button>
             </div>

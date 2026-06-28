@@ -17,6 +17,7 @@ import {
 import { useAuth } from '@clerk/react'
 import { cn } from '@/lib/utils'
 import { apiFetch } from '@/lib/api'
+import { ChannelAvatar } from '@/components/ChannelAvatar'
 
 const COLORS = ['#E4405F', '#0A66C2', '#000000', '#FF0000', '#FFC107', '#00BCD4', '#9C27B0', '#4CAF50', '#FF5722', '#607D8B']
 
@@ -286,13 +287,7 @@ export const Analytics = () => {
               {data.platforms.map((p, i) => (
                 <div key={i} className="flex items-center justify-between p-4 rounded-lg bg-white/5 border border-white/10">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center overflow-hidden">
-                      {p.avatarUrl && !p.avatarUrl.includes('shadcn.png') ? (
-                        <img src={p.avatarUrl} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        <span className="text-lg font-bold text-white/60">{p.platform.charAt(0).toUpperCase()}</span>
-                      )}
-                    </div>
+                    <ChannelAvatar src={p.avatarUrl} name={p.platform} platform={p.platform} className="w-10 h-10" />
                     <div>
                       <p className="text-sm font-medium text-white capitalize">{p.accountName}</p>
                       <p className="text-xs text-muted-foreground">{p.platform} {p.error && <span className="text-red-400 ml-2">· {p.error}</span>}</p>

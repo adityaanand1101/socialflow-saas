@@ -63,16 +63,16 @@ const providers = {
     scopes: 'tweet.read tweet.write users.read offline.access',
   },
   instagram: {
-    // Instagram API with Instagram Login (Business Login for Instagram)
-    // Uses Instagram-hosted OAuth, does NOT require a linked Facebook Page
-    // Only works for Business/Creator accounts (personal accounts rejected at OAuth layer)
-    authUrl: 'https://api.instagram.com/oauth/authorize',
-    tokenUrl: 'https://api.instagram.com/oauth/access_token',
-    // Get Instagram user profile + account type
-    profileUrl: 'https://graph.instagram.com/me?fields=id,username,account_type,profile_picture_url',
-    clientId: process.env.INSTAGRAM_CLIENT_ID || '',
-    clientSecret: process.env.INSTAGRAM_CLIENT_SECRET || '',
-    scopes: 'instagram_business_basic,instagram_business_content_publish',
+    // Facebook Login for Business — Meta-recommended approach for Instagram Business Access
+    // The Facebook app must have "Instagram API with Instagram Login" product added
+    // The user's Instagram must be a Business/Creator account linked to a Facebook Page
+    // Uses same Facebook app credentials as the `facebook` provider
+    authUrl: 'https://www.facebook.com/v22.0/dialog/oauth',
+    tokenUrl: 'https://graph.facebook.com/v22.0/oauth/access_token',
+    profileUrl: 'https://graph.facebook.com/v22.0/me?fields=instagram_business_account{id,username,name,profile_picture_url}',
+    clientId: process.env.FACEBOOK_CLIENT_ID || '',
+    clientSecret: process.env.FACEBOOK_CLIENT_SECRET || '',
+    scopes: 'instagram_basic,pages_show_list,pages_read_engagement,pages_manage_posts,public_profile',
   },
   facebook: {
     authUrl: 'https://www.facebook.com/v22.0/dialog/oauth',
@@ -462,33 +462,6 @@ router.get('/:platform/callback', async (req: any, res) => {
       }
     }
 
-    // Instagram: Exchange short-lived token (1 hour) for long-lived token (60 days)
-    if (platform === 'instagram') {
-      try {
-        const qs = new URLSearchParams({
-          grant_type: 'ig_exchange_token',
-          client_secret: provider.clientSecret,
-          access_token: accessToken,
-        });
-        const longLivedUrl = `https://graph.instagram.com/access_token?${qs.toString()}`;
-        debugLog('instagram', 'Exchanging short-lived token for long-lived token');
-        const longLivedRes = await fetch(longLivedUrl);
-        if (longLivedRes.ok) {
-          const longLivedData = await longLivedRes.json() as any;
-          if (longLivedData.access_token) {
-            accessToken = longLivedData.access_token;
-            tokenExpiresIn = longLivedData.expires_in || 5184000; // 60 days default
-            debugLog('instagram', `Long-lived token obtained, expires_in: ${tokenExpiresIn}s`);
-          }
-        } else {
-          const errText = await longLivedRes.text();
-          console.warn(`[instagram] Long-lived exchange failed, using short-lived token: ${errText}`);
-        }
-      } catch (e) {
-        console.warn(`[instagram] Long-lived exchange error, using short-lived token:`, e);
-      }
-    }
-
     // Fetch user profile info from the platform
     const profileHeaders: Record<string, string> = {
       'Authorization': `Bearer ${accessToken}`
@@ -498,101 +471,42 @@ router.get('/:platform/callback', async (req: any, res) => {
       profileHeaders['User-Agent'] = 'SocialFlowApp';
     }
 
-    // Special handling for Instagram - Instagram Login API returns profile directly
+    // Special handling for Instagram — Facebook Login for Business
     let finalProfileUrl = provider.profileUrl;
     let finalProfileHeaders = { ...profileHeaders };
-    let pageAccessToken = accessToken; // default to user token
     let igAccountType: string | null = null;
-    
-    // Attempt to fetch the Instagram profile using the best available method.
-    // The Instagram Business Login token works with Facebook Graph API but NOT
-    // with Instagram Basic Display API (graph.instagram.com/me).
-    // Strategy: try user_id from token exchange → try FB Graph API /me → fallback
     let profileData: any = {};
-    const igErrors: string[] = [];
 
     if (platform === 'instagram') {
-      const igUserId = tokenData.user_id;
-      console.log(`[${platform}] Token exchange response keys: ${Object.keys(tokenData).join(', ')}`);
-      console.log(`[${platform}] Token exchange response: ${JSON.stringify(tokenData)}`);
-      console.log(`[${platform}] user_id from token exchange: ${igUserId}`);
+      // Fetch via Facebook Graph API to get the linked Instagram Business Account
+      console.log(`[${platform}] Fetching Instagram Business Account via Facebook Graph API`);
+      console.log(`[${platform}] Profile URL: ${finalProfileUrl}`);
+      const fbRes = await fetch(finalProfileUrl, { headers: finalProfileHeaders });
 
-      // Strategy 1: Use Facebook Graph API with IG Business Account ID from token exchange
-      if (igUserId) {
-        const fbUrl = `https://graph.facebook.com/v22.0/${igUserId}?fields=id,username,name,profile_picture_url&access_token=${accessToken}`;
-        console.log(`[${platform}] Strategy 1: Facebook Graph API with IG user_id`);
-        const fbRes = await fetch(fbUrl);
-        if (fbRes.ok) {
-          profileData = await fbRes.json();
-          console.log(`[${platform}] Strategy 1 succeeded`);
+      if (fbRes.ok) {
+        const fbData = await fbRes.json() as any;
+        console.log(`[${platform}] FB response keys: ${Object.keys(fbData).join(', ')}`);
+        if (fbData.instagram_business_account) {
+          profileData = fbData.instagram_business_account;
+          igAccountType = 'BUSINESS';
+          console.log(`[${platform}] Instagram Business Account found: ${profileData.username} (${profileData.id})`);
         } else {
-          const errBody = await fbRes.text().catch(() => '(unable to read)');
-          console.warn(`[${platform}] Strategy 1 failed: HTTP ${fbRes.status} - ${errBody}`);
-          igErrors.push(`Strategy 1 (FB /{id}): HTTP ${fbRes.status} - ${errBody.substring(0, 200)}`);
+          console.warn(`[${platform}] FB response: ${JSON.stringify(fbData)}`);
+          throw new Error(
+            `No Instagram Business Account linked to this Facebook account. ` +
+            `Make sure your Instagram account is a Business/Creator account ` +
+            `and is connected to a Facebook Page.`
+          );
         }
       } else {
-        console.warn(`[${platform}] No user_id in token exchange — skipping Strategy 1`);
-        igErrors.push('Strategy 1: No user_id in token exchange response');
+        const errBody = await fbRes.text().catch(() => '(unable to read)');
+        console.error(`[${platform}] Facebook Graph API failed: HTTP ${fbRes.status} - ${errBody}`);
+        throw new Error(
+          `Facebook Graph API failed: HTTP ${fbRes.status} - ${errBody.substring(0, 300)}. ` +
+          `Make sure the Facebook app has "Instagram API with Instagram Login" product added ` +
+          `and the callback URL is authorized in Meta Developer Console.`
+        );
       }
-
-      // Strategy 2: Try Facebook Graph API /me endpoint (works if token has FB identity)
-      if (!profileData || !profileData.id) {
-        const fbMeUrl = `https://graph.facebook.com/v22.0/me?fields=id,name,picture&access_token=${accessToken}`;
-        console.log(`[${platform}] Strategy 2: Facebook Graph API /me`);
-        const fbMeRes = await fetch(fbMeUrl);
-        if (fbMeRes.ok) {
-          profileData = await fbMeRes.json();
-          console.log(`[${platform}] Strategy 2 succeeded — got id: ${profileData.id}`);
-        } else {
-          const errBody = await fbMeRes.text().catch(() => '(unable to read)');
-          console.warn(`[${platform}] Strategy 2 failed: HTTP ${fbMeRes.status} - ${errBody}`);
-          igErrors.push(`Strategy 2 (FB /me): HTTP ${fbMeRes.status} - ${errBody.substring(0, 200)}`);
-        }
-      }
-
-      // Strategy 3: Instagram API for Business Login — graph.instagram.com/{userId}
-      if (!profileData || !profileData.id && igUserId) {
-        const igUserUrl = `https://graph.instagram.com/${igUserId}?fields=id,username,account_type,profile_picture_url&access_token=${accessToken}`;
-        console.log(`[${platform}] Strategy 3: Instagram API with IG user_id`);
-        const igUserRes = await fetch(igUserUrl);
-        if (igUserRes.ok) {
-          profileData = await igUserRes.json();
-          console.log(`[${platform}] Strategy 3 succeeded`);
-        } else {
-          const errBody = await igUserRes.text().catch(() => '(unable to read)');
-          console.warn(`[${platform}] Strategy 3 failed: HTTP ${igUserRes.status} - ${errBody}`);
-          igErrors.push(`Strategy 3 (IG /{id}): HTTP ${igUserRes.status} - ${errBody.substring(0, 200)}`);
-        }
-      }
-
-      // Strategy 4: Fall back to Instagram Basic Display API /me (last resort — only works for Basic Display tokens)
-      if (!profileData || !profileData.id) {
-        const igMeUrl = `https://graph.instagram.com/me?fields=id,username,account_type,profile_picture_url&access_token=${accessToken}`;
-        console.log(`[${platform}] Strategy 4: Instagram Basic Display /me (last resort)`);
-        const igMeRes = await fetch(igMeUrl);
-        if (igMeRes.ok) {
-          profileData = await igMeRes.json();
-          console.log(`[${platform}] Strategy 4 succeeded`);
-        } else {
-          const errBody = await igMeRes.text().catch(() => '(unable to read)');
-          console.warn(`[${platform}] Strategy 4 failed: HTTP ${igMeRes.status} - ${errBody}`);
-          igErrors.push(`Strategy 4 (IG /me): HTTP ${igMeRes.status} - ${errBody.substring(0, 200)}`);
-        }
-      }
-
-      // If ALL strategies failed, throw the error
-      if (!profileData || !profileData.id) {
-        throw new Error(`Failed to fetch Instagram profile — all strategies failed:\n${igErrors.join('\n')}`);
-      }
-
-      // Handle data[] response wrapping
-      if (Array.isArray(profileData.data) && profileData.data.length > 0) {
-        profileData = profileData.data[0];
-      }
-
-      finalProfileHeaders = {};
-      igAccountType = profileData.account_type || 'BUSINESS';
-      console.log(`[${platform}] account_type: ${igAccountType}, profile id: ${profileData.id}`);
     } else {
       // Non-Instagram platforms: standard fetch
       const profileRes = await fetch(finalProfileUrl, {
@@ -605,11 +519,6 @@ router.get('/:platform/callback', async (req: any, res) => {
       }
 
       profileData = await profileRes.json() as any;
-    }
-
-    // For Instagram, store the page access token for publishing
-    if (platform === 'instagram') {
-      accessToken = pageAccessToken;
     }
     
     // Normalize profile structure per platform
@@ -631,8 +540,8 @@ router.get('/:platform/callback', async (req: any, res) => {
       profile.displayName = profileData.name || 'YouTube User';
       profile.avatarUrl = profileData.picture || null;
     } else if (platform === 'instagram') {
-      // profileData is from Facebook Graph API (graph.facebook.com) or Instagram Basic Display fallback
-      profile.id = profileData.id || profileData.user_id;
+      // profileData is from Facebook Graph API instagram_business_account object
+      profile.id = profileData.id;
       profile.username = profileData.username;
       profile.displayName = profileData.name || profileData.username;
       profile.avatarUrl = profileData.profile_picture_url || null;

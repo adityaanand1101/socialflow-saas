@@ -509,11 +509,12 @@ router.get('/:platform/callback', async (req: any, res) => {
     // with Instagram Basic Display API (graph.instagram.com/me).
     // Strategy: try user_id from token exchange → try FB Graph API /me → fallback
     let profileData: any = {};
-    let profileFetchError: Error | null = null;
+    const igErrors: string[] = [];
 
     if (platform === 'instagram') {
       const igUserId = tokenData.user_id;
       console.log(`[${platform}] Token exchange response keys: ${Object.keys(tokenData).join(', ')}`);
+      console.log(`[${platform}] Token exchange response: ${JSON.stringify(tokenData)}`);
       console.log(`[${platform}] user_id from token exchange: ${igUserId}`);
 
       // Strategy 1: Use Facebook Graph API with IG Business Account ID from token exchange
@@ -527,11 +528,11 @@ router.get('/:platform/callback', async (req: any, res) => {
         } else {
           const errBody = await fbRes.text().catch(() => '(unable to read)');
           console.warn(`[${platform}] Strategy 1 failed: HTTP ${fbRes.status} - ${errBody}`);
-          profileFetchError = new Error(`Strategy 1 failed`);
+          igErrors.push(`Strategy 1 (FB /{id}): HTTP ${fbRes.status} - ${errBody.substring(0, 200)}`);
         }
       } else {
         console.warn(`[${platform}] No user_id in token exchange — skipping Strategy 1`);
-        profileFetchError = new Error('No user_id from token exchange');
+        igErrors.push('Strategy 1: No user_id in token exchange response');
       }
 
       // Strategy 2: Try Facebook Graph API /me endpoint (works if token has FB identity)
@@ -545,7 +546,7 @@ router.get('/:platform/callback', async (req: any, res) => {
         } else {
           const errBody = await fbMeRes.text().catch(() => '(unable to read)');
           console.warn(`[${platform}] Strategy 2 failed: HTTP ${fbMeRes.status} - ${errBody}`);
-          if (!profileFetchError) profileFetchError = new Error(`Strategy 2 failed`);
+          igErrors.push(`Strategy 2 (FB /me): HTTP ${fbMeRes.status} - ${errBody.substring(0, 200)}`);
         }
       }
 
@@ -560,13 +561,13 @@ router.get('/:platform/callback', async (req: any, res) => {
         } else {
           const errBody = await igRes.text().catch(() => '(unable to read)');
           console.warn(`[${platform}] Strategy 3 failed: HTTP ${igRes.status} - ${errBody}`);
-          if (!profileFetchError) profileFetchError = new Error(`Strategy 3 failed`);
+          igErrors.push(`Strategy 3 (IG /me): HTTP ${igRes.status} - ${errBody.substring(0, 200)}`);
         }
       }
 
       // If ALL strategies failed, throw the error
       if (!profileData || !profileData.id) {
-        throw new Error(`Failed to fetch Instagram profile — all 3 strategies failed. Last error: ${profileFetchError?.message}`);
+        throw new Error(`Failed to fetch Instagram profile — all 3 strategies failed:\n${igErrors.join('\n')}`);
       }
 
       // Handle data[] response wrapping

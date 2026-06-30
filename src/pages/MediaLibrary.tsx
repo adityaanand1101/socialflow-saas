@@ -79,7 +79,7 @@ export const MediaLibrary = () => {
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [deletingTargets, setDeletingTargets] = useState<{ type: 'asset' | 'assets'; ids: string[] } | null>(null)
+  const [deletingTargets, setDeletingTargets] = useState<{ type: 'asset' | 'assets' | 'folder'; ids: string[] } | null>(null)
 
   // Google Drive Import (Picker API)
   const [showDriveModal, setShowDriveModal] = useState(false)

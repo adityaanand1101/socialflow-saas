@@ -61,10 +61,10 @@ interface SocialFlowStore {
   removePost: (token: string, id: string) => Promise<void>
   updatePost: (token: string, id: string, updates: Partial<Post>) => Promise<void>
   uploadMedia: (token: string, file: File, folderId?: string | null) => Promise<any>
-  removeMedia: (token: string, id: string) => Promise<void>
+  removeMedia: (token: string, id: string) => Promise<boolean>
   createFolder: (token: string, name: string, parentId?: string | null) => Promise<void>
   updateFolder: (token: string, id: string, name: string) => Promise<void>
-  removeFolder: (token: string, id: string) => Promise<void>
+  removeFolder: (token: string, id: string) => Promise<boolean>
   moveAsset: (token: string, id: string, folderId: string | null) => Promise<void>
   setCurrentFolder: (folderId: string | null) => void
   workspaces: any[]

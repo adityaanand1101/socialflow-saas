@@ -36,6 +36,8 @@ connection.on('error', (err) => {
     console.error('  → Upgrade your plan at https://console.upstash.com');
     console.error(`  Error: ${msg}`);
     console.error('═══════════════════════════════════════════════════════════');
+    // Disconnect immediately to stop the flood of failed command retries
+    connection.disconnect();
   } else {
     console.warn('Redis connection error. BullMQ tasks will not work.', msg);
   }
@@ -389,7 +391,14 @@ try {
   }, { connection: connection as any });
 
   postWorker.on('error', (err: any) => {
-    console.warn('Worker error:', err.message);
+    const msg = err.message || '';
+    if (msg.includes('max requests limit') || msg.includes('Rate limit')) {
+      redisRateLimited = true;
+      console.error('Worker stopped — Upstash Redis rate limit exceeded. Upgrade at https://console.upstash.com');
+      connection.disconnect();
+    } else {
+      console.warn('Worker error:', msg);
+    }
   });
 } catch (error) {
   console.warn('Failed to initialize BullMQ:', (error as any).message);

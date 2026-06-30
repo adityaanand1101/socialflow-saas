@@ -8,13 +8,37 @@ import { dispatchIntegrations } from '../services/integrationDispatcher';
 import { checkRateLimit, publishWithTokenRefresh } from './publishers/common';
 
 const redisUrl = process.env.REDIS_URL;
-const connection = redisUrl ? new IORedis(redisUrl, { maxRetriesPerRequest: null }) : new IORedis({
+let redisRateLimited = false;
+
+const connection = redisUrl ? new IORedis(redisUrl, {
+  maxRetriesPerRequest: null,
+  retryStrategy: (times) => {
+    if (redisRateLimited) return null;
+    if (times > 10) {
+      console.error('Redis connection failed after 10 retries — giving up.');
+      return null;
+    }
+    return Math.min(times * 500, 3000);
+  },
+}) : new IORedis({
   host: process.env.REDIS_HOST || '127.0.0.1',
   port: parseInt(process.env.REDIS_PORT || '6379'),
   maxRetriesPerRequest: null,
 });
+
 connection.on('error', (err) => {
-  console.warn('Redis connection error. BullMQ tasks will not work.', err.message);
+  const msg = err.message || '';
+  if (msg.includes('max requests limit') || msg.includes('Rate limit')) {
+    redisRateLimited = true;
+    console.error('═══════════════════════════════════════════════════════════');
+    console.error('  UPSTASH REDIS RATE LIMIT EXCEEDED');
+    console.error('  Workers and queue jobs are PAUSED.');
+    console.error('  → Upgrade your plan at https://console.upstash.com');
+    console.error(`  Error: ${msg}`);
+    console.error('═══════════════════════════════════════════════════════════');
+  } else {
+    console.warn('Redis connection error. BullMQ tasks will not work.', msg);
+  }
 });
 
 const prisma = new PrismaClient();
@@ -381,6 +405,11 @@ try {
  * - Token refresh failed silently
  */
 export async function runRecoverySweep(): Promise<number> {
+  if (redisRateLimited) {
+    console.warn('[Recovery] Skipped — Redis is rate-limited');
+    return 0;
+  }
+
   const now = new Date();
   const thresholdMinutes = 5; // only re-queue posts scheduled at least 5 minutes ago
   const cutoff = new Date(now.getTime() - thresholdMinutes * 60 * 1000);

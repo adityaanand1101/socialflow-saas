@@ -433,6 +433,12 @@ router.get('/:platform/callback', async (req: any, res) => {
     refreshToken = tokenData.refresh_token || tokenData.refreshToken || null;
     tokenExpiresIn = tokenData.expires_in || 3600;
 
+    // Instagram Business Login token exchange returns user_id (the IG Business Account ID)
+    const igBusinessUserId = platform === 'instagram' ? tokenData.user_id || null : null;
+    if (platform === 'instagram') {
+      debugLog('instagram', `IG Business Account ID from token exchange: ${igBusinessUserId}`);
+    }
+
     if (!accessToken) throw new Error('No access token received from provider');
 
     // Threads: Exchange short-lived token (1 hour) for long-lived token (60 days)
@@ -505,12 +511,17 @@ router.get('/:platform/callback', async (req: any, res) => {
     let igAccountType: string | null = null;
     
     if (platform === 'instagram') {
-      // Instagram Login API returns user profile directly with account_type
-      // No Facebook Pages lookup needed
-      // Instagram Basic Display API requires access_token as URL query param, not Authorization header
-      finalProfileUrl += `&access_token=${accessToken}`;
+      // Instagram Business Login token works with Facebook Graph API, not Instagram Basic Display API
+      // The user_id from the token exchange is the Instagram Business Account ID (e.g. 17841405822304917)
+      if (igBusinessUserId) {
+        finalProfileUrl = `https://graph.facebook.com/v22.0/${igBusinessUserId}?fields=id,username,name,profile_picture_url&access_token=${accessToken}`;
+        console.log(`[${platform}] Using Facebook Graph API with IG Business Account ID: ${igBusinessUserId}`);
+      } else {
+        // Fallback (unlikely): try Instagram Basic Display API
+        finalProfileUrl += `&access_token=${accessToken}`;
+        console.log(`[${platform}] No IG Business Account ID — fallback to Basic Display API`);
+      }
       finalProfileHeaders = {};
-      console.log(`[${platform}] Using Instagram Login API - fetching profile`);
     }
 
     let profileData: any = {};
@@ -539,7 +550,9 @@ router.get('/:platform/callback', async (req: any, res) => {
     // Normalize profile structure per platform
     // For Instagram, detect account_type from profile response
     if (platform === 'instagram') {
-      igAccountType = profileData.user_id || profileData.account_type ? (profileData.account_type || null) : null;
+      // Facebook Graph API doesn't return account_type; only Basic Display API does.
+      // Since Business Login only works with Business/Creator accounts, default to BUSINESS.
+      igAccountType = profileData.account_type || 'BUSINESS';
       console.log(`[${platform}] Instagram account_type: ${igAccountType}`);
     }
 
@@ -560,10 +573,10 @@ router.get('/:platform/callback', async (req: any, res) => {
       profile.displayName = profileData.name || 'YouTube User';
       profile.avatarUrl = profileData.picture || null;
     } else if (platform === 'instagram') {
-      // profileData is from Instagram Login API (graph.instagram.com)
-      profile.id = profileData.user_id || profileData.id; // user_id in newer API versions
+      // profileData is from Facebook Graph API (graph.facebook.com) or Instagram Basic Display fallback
+      profile.id = profileData.id || profileData.user_id;
       profile.username = profileData.username;
-      profile.displayName = profileData.username;
+      profile.displayName = profileData.name || profileData.username;
       profile.avatarUrl = profileData.profile_picture_url || null;
     } else if (platform === 'threads') {
       // profileData is from Threads API

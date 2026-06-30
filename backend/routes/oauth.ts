@@ -550,24 +550,39 @@ router.get('/:platform/callback', async (req: any, res) => {
         }
       }
 
-      // Strategy 3: Fall back to Instagram Basic Display API (last resort)
-      if (!profileData || !profileData.id) {
-        const igUrl = `${provider.profileUrl}&access_token=${accessToken}`;
-        console.log(`[${platform}] Strategy 3: Instagram Basic Display API (last resort)`);
-        const igRes = await fetch(igUrl);
-        if (igRes.ok) {
-          profileData = await igRes.json();
+      // Strategy 3: Instagram API for Business Login — graph.instagram.com/{userId}
+      if (!profileData || !profileData.id && igUserId) {
+        const igUserUrl = `https://graph.instagram.com/${igUserId}?fields=id,username,account_type,profile_picture_url&access_token=${accessToken}`;
+        console.log(`[${platform}] Strategy 3: Instagram API with IG user_id`);
+        const igUserRes = await fetch(igUserUrl);
+        if (igUserRes.ok) {
+          profileData = await igUserRes.json();
           console.log(`[${platform}] Strategy 3 succeeded`);
         } else {
-          const errBody = await igRes.text().catch(() => '(unable to read)');
-          console.warn(`[${platform}] Strategy 3 failed: HTTP ${igRes.status} - ${errBody}`);
-          igErrors.push(`Strategy 3 (IG /me): HTTP ${igRes.status} - ${errBody.substring(0, 200)}`);
+          const errBody = await igUserRes.text().catch(() => '(unable to read)');
+          console.warn(`[${platform}] Strategy 3 failed: HTTP ${igUserRes.status} - ${errBody}`);
+          igErrors.push(`Strategy 3 (IG /{id}): HTTP ${igUserRes.status} - ${errBody.substring(0, 200)}`);
+        }
+      }
+
+      // Strategy 4: Fall back to Instagram Basic Display API /me (last resort — only works for Basic Display tokens)
+      if (!profileData || !profileData.id) {
+        const igMeUrl = `https://graph.instagram.com/me?fields=id,username,account_type,profile_picture_url&access_token=${accessToken}`;
+        console.log(`[${platform}] Strategy 4: Instagram Basic Display /me (last resort)`);
+        const igMeRes = await fetch(igMeUrl);
+        if (igMeRes.ok) {
+          profileData = await igMeRes.json();
+          console.log(`[${platform}] Strategy 4 succeeded`);
+        } else {
+          const errBody = await igMeRes.text().catch(() => '(unable to read)');
+          console.warn(`[${platform}] Strategy 4 failed: HTTP ${igMeRes.status} - ${errBody}`);
+          igErrors.push(`Strategy 4 (IG /me): HTTP ${igMeRes.status} - ${errBody.substring(0, 200)}`);
         }
       }
 
       // If ALL strategies failed, throw the error
       if (!profileData || !profileData.id) {
-        throw new Error(`Failed to fetch Instagram profile — all 3 strategies failed:\n${igErrors.join('\n')}`);
+        throw new Error(`Failed to fetch Instagram profile — all strategies failed:\n${igErrors.join('\n')}`);
       }
 
       // Handle data[] response wrapping
